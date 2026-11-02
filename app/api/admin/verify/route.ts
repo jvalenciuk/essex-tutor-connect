@@ -1,0 +1,2 @@
+import {db} from '../../../../lib/db';import {identity,fail} from '../../../../lib/security';import {z} from 'zod';
+export async function POST(req:Request){const who=await identity();if(who?.role!=='ADMIN')return fail('Forbidden',403);try{const {tutorId,verification}=z.object({tutorId:z.string(),verification:z.enum(['APPROVED','REJECTED','PENDING'])}).parse(await req.json());const p=await db.tutorProfile.update({where:{id:tutorId},data:{verification}});return Response.json({id:p.id,verification:p.verification});}catch{return fail('Invalid verification request');}}
