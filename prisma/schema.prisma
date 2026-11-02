@@ -1,63 +1,97 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
-enum Role { PARENT TUTOR ADMIN }
-enum Verification { PENDING APPROVED REJECTED }
-enum InquiryStatus { OPEN ACCEPTED DECLINED }
-enum BookingStatus { PENDING_PAYMENT PAID COMPLETED CANCELLED REFUNDED }
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PARENT
+  TUTOR
+  ADMIN
+}
+
+enum Verification {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InquiryStatus {
+  OPEN
+  ACCEPTED
+  DECLINED
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  PAID
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
 model User {
- id String @id @default(cuid())
- name String
- email String @unique
- passwordHash String
- role Role @default(PARENT)
- createdAt DateTime @default(now())
- tutor TutorProfile?
- sentInquiries Inquiry[] @relation("ParentInquiries")
- bookings Booking[] @relation("ParentBookings")
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  passwordHash  String
+  role          Role          @default(PARENT)
+  createdAt     DateTime      @default(now())
+  tutor         TutorProfile?
+  sentInquiries Inquiry[]     @relation("ParentInquiries")
+  bookings      Booking[]     @relation("ParentBookings")
 }
+
 model TutorProfile {
- id String @id @default(cuid())
- userId String @unique
- user User @relation(fields:[userId],references:[id])
- bio String @default("")
- subjects String[]
- grades String[]
- cities String[]
- languages String[]
- hourlyRateCents Int
- online Boolean @default(false)
- verification Verification @default(PENDING)
- qualifications String @default("")
- stripeAccountId String? @unique
- inquiries Inquiry[]
- bookings Booking[]
- createdAt DateTime @default(now())
+  id               String       @id @default(cuid())
+  userId           String       @unique
+  user             User         @relation(fields: [userId], references: [id])
+  bio              String       @default("")
+  subjects         String[]
+  grades           String[]
+  cities           String[]
+  languages        String[]
+  hourlyRateCents  Int
+  online           Boolean      @default(false)
+  verification     Verification @default(PENDING)
+  qualifications   String       @default("")
+  stripeAccountId  String?      @unique
+  inquiries        Inquiry[]
+  bookings         Booking[]
+  createdAt        DateTime     @default(now())
 }
+
 model Inquiry {
- id String @id @default(cuid())
- parentId String
- parent User @relation("ParentInquiries",fields:[parentId],references:[id])
- tutorId String
- tutor TutorProfile @relation(fields:[tutorId],references:[id])
- subject String
- grade String
- message String
- status InquiryStatus @default(OPEN)
- createdAt DateTime @default(now())
- @@index([tutorId,status])
+  id        String        @id @default(cuid())
+  parentId  String
+  parent    User          @relation("ParentInquiries", fields: [parentId], references: [id])
+  tutorId   String
+  tutor     TutorProfile  @relation(fields: [tutorId], references: [id])
+  subject   String
+  grade     String
+  message   String
+  status    InquiryStatus @default(OPEN)
+  createdAt DateTime      @default(now())
+
+  @@index([tutorId, status])
 }
+
 model Booking {
- id String @id @default(cuid())
- parentId String
- parent User @relation("ParentBookings",fields:[parentId],references:[id])
- tutorId String
- tutor TutorProfile @relation(fields:[tutorId],references:[id])
- startsAt DateTime
- durationMinutes Int
- amountCents Int
- platformFeeCents Int
- status BookingStatus @default(PENDING_PAYMENT)
- stripeSessionId String? @unique
- createdAt DateTime @default(now())
- @@index([tutorId,startsAt])
+  id               String        @id @default(cuid())
+  parentId         String
+  parent           User          @relation("ParentBookings", fields: [parentId], references: [id])
+  tutorId          String
+  tutor            TutorProfile  @relation(fields: [tutorId], references: [id])
+  startsAt         DateTime
+  durationMinutes  Int
+  amountCents      Int
+  platformFeeCents Int
+  status           BookingStatus @default(PENDING_PAYMENT)
+  stripeSessionId  String?       @unique
+  createdAt        DateTime      @default(now())
+
+  @@index([tutorId, startsAt])
 }
