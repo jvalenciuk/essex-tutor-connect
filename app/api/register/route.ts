@@ -1,0 +1,3 @@
+import {db} from '../../../lib/db';import {fail} from '../../../lib/security';import {z} from 'zod';import bcrypt from 'bcryptjs';
+const schema=z.object({name:z.string().min(2).max(100),email:z.string().email().max(200),password:z.string().min(12).max(128),role:z.enum(['PARENT','TUTOR'])});
+export async function POST(req:Request){try{const v=schema.parse(await req.json());const email=v.email.toLowerCase();if(await db.user.findUnique({where:{email}}))return fail('Email already registered',409);const u=await db.user.create({data:{name:v.name,email,passwordHash:await bcrypt.hash(v.password,12),role:v.role}});return Response.json({id:u.id},{status:201});}catch(e){return fail('Invalid registration details');}}
