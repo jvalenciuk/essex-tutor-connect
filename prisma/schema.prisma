@@ -43,6 +43,7 @@ model User {
   tutor         TutorProfile?
   sentInquiries Inquiry[]     @relation("ParentInquiries")
   bookings      Booking[]     @relation("ParentBookings")
+  messages      Message[]
 }
 
 model TutorProfile {
@@ -75,8 +76,21 @@ model Inquiry {
   message   String
   status    InquiryStatus @default(OPEN)
   createdAt DateTime      @default(now())
+  messages  Message[]
 
   @@index([tutorId, status])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  inquiryId String
+  inquiry   Inquiry  @relation(fields: [inquiryId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  body      String   @db.VarChar(2000)
+  createdAt DateTime @default(now())
+
+  @@index([inquiryId, createdAt])
 }
 
 model Booking {
