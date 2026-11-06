@@ -1,35 +1,32 @@
 
-name: Set Up Neon Database
+name: Setup Database
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  setup-database:
+  setup:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - name: Download project files
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Validate Prisma schema
-        run: npx prisma validate
+      - name: Generate Prisma Client
+        run: npx prisma generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Create database tables
+      - name: Update database schema
         run: npx prisma db push
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
