@@ -4,13 +4,16 @@ import { db } from '../../lib/db';
 import { redirect } from 'next/navigation';
 import DashboardForm from './profile-form';
 import ConnectButton from './connect-button';
+import InquiryActions from './inquiry-actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
   const who = await identity();
 
-  if (!who) redirect('/login');
+  if (!who) {
+    redirect('/login');
+  }
 
   const profile =
     who.role === 'TUTOR'
@@ -22,18 +25,40 @@ export default async function Dashboard() {
   const inquiries =
     who.role === 'TUTOR'
       ? await db.inquiry.findMany({
-          where: { tutor: { userId: who.id } },
-          include: { parent: { select: { name: true } } },
+          where: {
+            tutor: {
+              userId: who.id,
+            },
+          },
+          include: {
+            parent: {
+              select: {
+                name: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
           take: 50,
         })
       : await db.inquiry.findMany({
-          where: { parentId: who.id },
+          where: {
+            parentId: who.id,
+          },
           include: {
             tutor: {
               include: {
-                user: { select: { name: true } },
+                user: {
+                  select: {
+                    name: true,
+                  },
+                },
               },
             },
+          },
+          orderBy: {
+            createdAt: 'desc',
           },
           take: 50,
         });
@@ -47,7 +72,8 @@ export default async function Dashboard() {
       {who.role === 'TUTOR' && (
         <>
           <p>
-            Verification: {profile?.verification || 'Profile not submitted'}
+            Verification:{' '}
+            {profile?.verification || 'Profile not submitted'}
           </p>
 
           <DashboardForm
@@ -70,10 +96,12 @@ export default async function Dashboard() {
           {profile?.verification === 'APPROVED' && (
             <div className="card">
               <h2>Receive payments</h2>
+
               <p>
-                Complete secure Stripe Connect onboarding before
-                accepting paid sessions.
+                Complete secure Stripe Connect onboarding
+                before accepting paid sessions.
               </p>
+
               <ConnectButton />
             </div>
           )}
@@ -82,18 +110,48 @@ export default async function Dashboard() {
 
       {who.role === 'PARENT' && (
         <p>
-          Browse approved tutors and send inquiries using their
-          profile IDs. Booking management requires further configuration.
+          Browse approved tutors and send inquiries
+          through their profiles. Booking management
+          requires further configuration.
         </p>
       )}
 
       <h2>Inquiries</h2>
 
-      {inquiries.map(i => (
-        <div className="card" key={i.id}>
-          <b>{i.subject} — {i.grade}</b>
-          <p>{i.message}</p>
-          <p className="muted">{i.status}</p>
+      {inquiries.length === 0 && (
+        <p>No inquiries yet.</p>
+      )}
+
+      {inquiries.map((inquiry) => (
+        <div className="card" key={inquiry.id}>
+          <h3>
+            {inquiry.subject} — {inquiry.grade}
+          </h3>
+
+          <p>{inquiry.message}</p>
+
+          {who.role === 'TUTOR' ? (
+            <>
+              <p>
+                From: {inquiry.parent.name}
+              </p>
+
+              <InquiryActions
+                inquiryId={inquiry.id}
+                status={inquiry.status}
+              />
+            </>
+          ) : (
+            <>
+              <p>
+                Tutor: {inquiry.tutor.user.name}
+              </p>
+
+              <p className="muted">
+                Status: {inquiry.status}
+              </p>
+            </>
+          )}
         </div>
       ))}
     </main>
