@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import DashboardForm from './profile-form';
 import ConnectButton from './connect-button';
 import InquiryActions from './inquiry-actions';
+import InquiryMessages from './inquiry-messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +23,6 @@ export default async function Dashboard() {
         })
       : null;
 
-  // Load both relationships for every inquiry.
-  // This avoids the TypeScript error from the last build.
   const inquiries = await db.inquiry.findMany({
     where:
       who.role === 'TUTOR'
@@ -99,8 +98,7 @@ export default async function Dashboard() {
       {who.role === 'PARENT' && (
         <p>
           Browse approved tutors and send inquiries
-          through their profiles. Booking management
-          requires further configuration.
+          through their profiles.
         </p>
       )}
 
@@ -135,6 +133,10 @@ export default async function Dashboard() {
                 Status: {inquiry.status}
               </p>
             </>
+          )}
+
+          {inquiry.status === 'ACCEPTED' && (
+            <InquiryMessages inquiryId={inquiry.id} />
           )}
         </div>
       ))}
