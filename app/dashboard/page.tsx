@@ -22,46 +22,34 @@ export default async function Dashboard() {
         })
       : null;
 
-  const inquiries =
-    who.role === 'TUTOR'
-      ? await db.inquiry.findMany({
-          where: {
-            tutor: {
-              userId: who.id,
+  // Load both relationships for every inquiry.
+  // This avoids the TypeScript error from the last build.
+  const inquiries = await db.inquiry.findMany({
+    where:
+      who.role === 'TUTOR'
+        ? { tutor: { userId: who.id } }
+        : { parentId: who.id },
+    include: {
+      parent: {
+        select: {
+          name: true,
+        },
+      },
+      tutor: {
+        include: {
+          user: {
+            select: {
+              name: true,
             },
           },
-          include: {
-            parent: {
-              select: {
-                name: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 50,
-        })
-      : await db.inquiry.findMany({
-          where: {
-            parentId: who.id,
-          },
-          include: {
-            tutor: {
-              include: {
-                user: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 50,
-        });
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: 50,
+  });
 
   return (
     <main>
@@ -132,9 +120,7 @@ export default async function Dashboard() {
 
           {who.role === 'TUTOR' ? (
             <>
-              <p>
-                From: {inquiry.parent.name}
-              </p>
+              <p>From: {inquiry.parent.name}</p>
 
               <InquiryActions
                 inquiryId={inquiry.id}
@@ -143,9 +129,7 @@ export default async function Dashboard() {
             </>
           ) : (
             <>
-              <p>
-                Tutor: {inquiry.tutor.user.name}
-              </p>
+              <p>Tutor: {inquiry.tutor.user.name}</p>
 
               <p className="muted">
                 Status: {inquiry.status}
