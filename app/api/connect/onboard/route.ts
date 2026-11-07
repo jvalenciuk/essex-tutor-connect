@@ -5,7 +5,7 @@ import { identity, fail } from '../../../../lib/security';
 export const dynamic = 'force-dynamic';
 
 const STRIPE_API = 'https://api.stripe.com';
-const STRIPE_VERSION = '2026-10-28.endive';
+const STRIPE_VERSION = '2026-10-28.preview';
 
 async function stripeRequest(
   path: string,
@@ -95,7 +95,7 @@ export async function POST() {
           defaults: {
             responsibilities: {
               fees_collector: 'application',
-              losses_collector: 'application',
+              losses_collector: 'stripe',
             },
           },
           configuration: {
@@ -119,12 +119,16 @@ export async function POST() {
       accountId = account.id;
 
       if (!accountId) {
-        throw new Error('Stripe did not return an account ID');
+        throw new Error(
+          'Stripe did not return an account ID'
+        );
       }
 
       await db.tutorProfile.update({
         where: { id: profile.id },
-        data: { stripeAccountId: accountId },
+        data: {
+          stripeAccountId: accountId,
+        },
       });
     }
 
@@ -148,15 +152,23 @@ export async function POST() {
     );
 
     if (!accountLink.url) {
-      throw new Error('Stripe did not return an onboarding URL');
+      throw new Error(
+        'Stripe did not return an onboarding URL'
+      );
     }
 
     return Response.json({
       url: accountLink.url,
     });
   } catch (error) {
-    console.error('Stripe Connect onboarding failed', error);
+    console.error(
+      'Stripe Connect onboarding failed',
+      error
+    );
 
-    return fail('Unable to start Stripe onboarding', 500);
+    return fail(
+      'Unable to start Stripe onboarding',
+      500
+    );
   }
 }
