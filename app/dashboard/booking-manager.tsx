@@ -64,7 +64,9 @@ export default function BookingManager({
   const [startsAt, setStartsAt] = useState('');
   const [duration, setDuration] = useState('60');
   const [note, setNote] = useState('');
-  const [changingId, setChangingId] = useState<string | null>(null);
+  const [changingId, setChangingId] = useState<string | null>(
+    null
+  );
 
   const loadBookings = useCallback(async () => {
     try {
@@ -120,6 +122,7 @@ export default function BookingManager({
 
       if (!response.ok) {
         const result = await response.json().catch(() => null);
+
         throw new Error(
           result?.error || 'Unable to update booking'
         );
@@ -145,10 +148,13 @@ export default function BookingManager({
     setNotice('');
 
     try {
-      const response = await fetch(
-        `/api/bookings/${encodeURIComponent(bookingId)}/checkout`,
-        { method: 'POST' }
-      );
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ bookingId }),
+      });
 
       const result = await response.json().catch(() => null);
 
@@ -160,7 +166,9 @@ export default function BookingManager({
 
       if (
         typeof result?.url !== 'string' ||
-        !result.url.startsWith('https://checkout.stripe.com/')
+        !result.url.startsWith(
+          'https://checkout.stripe.com/'
+        )
       ) {
         throw new Error('The payment link was not valid.');
       }
@@ -198,7 +206,9 @@ export default function BookingManager({
       minutes < 30 ||
       minutes > 180
     ) {
-      setError('Choose a duration between 30 and 180 minutes.');
+      setError(
+        'Choose a duration between 30 and 180 minutes.'
+      );
       return null;
     }
 
@@ -210,6 +220,7 @@ export default function BookingManager({
 
   function submitProposal() {
     const details = datePayload();
+
     if (!details) return;
 
     void sendRequest('/api/bookings', 'POST', {
@@ -220,6 +231,7 @@ export default function BookingManager({
 
   function submitChange(bookingId: string) {
     const details = datePayload();
+
     if (!details) return;
 
     void sendRequest(
@@ -267,10 +279,13 @@ export default function BookingManager({
       <div style={{ marginTop: 12 }}>
         <label>
           <strong>Date and time</strong>
+
           <input
             type="datetime-local"
             value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
+            onChange={(e) =>
+              setStartsAt(e.target.value)
+            }
             required
             style={{
               display: 'block',
@@ -282,9 +297,12 @@ export default function BookingManager({
 
         <label>
           <strong>Session duration</strong>
+
           <select
             value={duration}
-            onChange={(e) => setDuration(e.target.value)}
+            onChange={(e) =>
+              setDuration(e.target.value)
+            }
             style={{
               display: 'block',
               padding: 10,
@@ -350,10 +368,24 @@ export default function BookingManager({
           </p>
 
           {role === 'TUTOR' && (
-            <p>
-              <strong>Platform commission (15%):</strong>{' '}
-              {formatMoney(booking.platformFeeCents)}
-            </p>
+            <>
+              <p>
+                <strong>
+                  Platform commission (15%):
+                </strong>{' '}
+                {formatMoney(booking.platformFeeCents)}
+              </p>
+
+              <p>
+                <strong>
+                  Tutor portion before processing fees:
+                </strong>{' '}
+                {formatMoney(
+                  booking.amountCents -
+                    booking.platformFeeCents
+                )}
+              </p>
+            </>
           )}
 
           {booking.status === 'PROPOSED' &&
@@ -378,6 +410,7 @@ export default function BookingManager({
                         ? null
                         : booking.id
                     );
+
                     setStartsAt('');
                     setDuration(
                       String(booking.durationMinutes)
@@ -403,7 +436,9 @@ export default function BookingManager({
           {booking.status === 'CHANGE_REQUESTED' && (
             <div>
               <p>
-                <strong>Parent's requested time:</strong>{' '}
+                <strong>
+                  Parent&apos;s requested time:
+                </strong>{' '}
                 {booking.requestedStartsAt
                   ? formatDate(
                       booking.requestedStartsAt
@@ -412,13 +447,17 @@ export default function BookingManager({
               </p>
 
               <p>
-                <strong>Requested duration:</strong>{' '}
+                <strong>
+                  Requested duration:
+                </strong>{' '}
                 {booking.requestedDurationMinutes} minutes
               </p>
 
               {booking.requestNote && (
                 <p>
-                  <strong>Parent's note:</strong>{' '}
+                  <strong>
+                    Parent&apos;s note:
+                  </strong>{' '}
                   {booking.requestNote}
                 </p>
               )}
@@ -500,6 +539,7 @@ export default function BookingManager({
                   <strong>
                     Note for tutor (optional)
                   </strong>
+
                   <textarea
                     value={note}
                     onChange={(e) =>
@@ -524,7 +564,9 @@ export default function BookingManager({
                   submitChange(booking.id)
                 }
               >
-                {busy ? 'Saving...' : 'Submit new time'}
+                {busy
+                  ? 'Saving...'
+                  : 'Submit new time'}
               </button>{' '}
 
               <button
