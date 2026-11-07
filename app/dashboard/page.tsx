@@ -2,10 +2,12 @@
 import { identity } from '../../lib/security';
 import { db } from '../../lib/db';
 import { redirect } from 'next/navigation';
+
 import DashboardForm from './profile-form';
 import ConnectButton from './connect-button';
 import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
+import BookingManager from './booking-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,16 +32,12 @@ export default async function Dashboard() {
         : { parentId: who.id },
     include: {
       parent: {
-        select: {
-          name: true,
-        },
+        select: { name: true },
       },
       tutor: {
         include: {
           user: {
-            select: {
-              name: true,
-            },
+            select: { name: true },
           },
         },
       },
@@ -136,7 +134,14 @@ export default async function Dashboard() {
           )}
 
           {inquiry.status === 'ACCEPTED' && (
-            <InquiryMessages inquiryId={inquiry.id} />
+            <>
+              <InquiryMessages inquiryId={inquiry.id} />
+
+              <BookingManager
+                inquiryId={inquiry.id}
+                role={who.role}
+              />
+            </>
           )}
         </div>
       ))}
