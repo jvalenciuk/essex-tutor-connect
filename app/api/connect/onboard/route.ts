@@ -14,6 +14,13 @@ export async function POST() {
 
   const profile = await db.tutorProfile.findUnique({
     where: { userId: who.id },
+    include: {
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
   });
 
   if (!profile || profile.verification !== 'APPROVED') {
@@ -39,7 +46,7 @@ export async function POST() {
       const account = await stripe.accounts.create({
         type: 'express',
         country: 'CA',
-        email: who.email,
+        email: profile.user.email,
         capabilities: {
           transfers: { requested: true },
         },
@@ -52,7 +59,9 @@ export async function POST() {
 
       await db.tutorProfile.update({
         where: { id: profile.id },
-        data: { stripeAccountId: accountId },
+        data: {
+          stripeAccountId: accountId,
+        },
       });
     }
 
