@@ -81,75 +81,66 @@ export async function POST() {
   ).replace(/\/$/, '');
 
   try {
-    // Do not reuse an account created for a different
-    // Connect configuration.
-    if (profile.stripeAccountId) {
-      console.error(
-        'Existing Stripe account requires review',
-        { tutorProfileId: profile.id }
-      );
+    let accountId = profile.stripeAccountId;
 
-      return fail(
-        'A Stripe account is already linked. Its configuration must be reviewed before continuing.',
-        409
-      );
-    }
-
-    const account = await stripeRequest(
-      '/v2/core/accounts',
-      secretKey,
-      {
-        contact_email: profile.user.email,
-        identity: {
-          country: 'CA',
-        },
-        dashboard: 'full',
-        defaults: {
-          responsibilities: {
-            fees_collector: 'stripe',
-            losses_collector: 'stripe',
+    if (!accountId) {
+      const account = await stripeRequest(
+        '/v2/core/accounts',
+        secretKey,
+        {
+          contact_email: profile.user.email,
+          identity: {
+            country: 'CA',
           },
-        },
-        configuration: {
-          merchant: {
-            capabilities: {
-              card_payments: {
-                requested: true,
+          dashboard: 'full',
+          defaults: {
+            responsibilities: {
+              fees_collector: 'stripe',
+              losses_collector: 'stripe',
+            },
+          },
+          configuration: {
+            merchant: {
+              capabilities: {
+                card_payments: {
+                  requested: true,
+                },
               },
             },
           },
+          metadata: {
+            tutorProfileId: profile.id,
+          },
         },
-        metadata: {
-          tutorProfileId: profile.id,
-        },
-      },
-      `tutor-merchant-v1-${profile.id}`
-    );
-
-    if (!account.id) {
-      throw new Error(
-        'Stripe did not return an account ID'
+        `tutor-merchant-v1-${profile.id}`
       );
+
+      accountId = account.id;
+
+      if (!accountId) {
+        throw new Error(
+          'Stripe did not return an account ID'
+        );
+      }
+
+      await db.tutorProfile.update({
+        where: { id: profile.id },
+        data: {
+          stripeAccountId: accountId,
+        },
+      });
     }
 
-    // Save the ID before creating the onboarding link.
-    // This avoids creating a duplicate if link creation fails.
-    await db.tutorProfile.update({
-      where: { id: profile.id },
-      data: {
-        stripeAccountId: account.id,
-      },
-    });
-
+    // Reuse the existing Stripe account.
+    // The API now determines onboarding configurations.
     const accountLink = await stripeRequest(
       '/v2/core/account_links',
       secretKey,
       {
-        account: account.id,
+        account: accountId,
         use_case: {
           type: 'account_onboarding',
           account_onboarding: {
-            configurations: ['merchant'],
             return_url: `${baseUrl}/dashboard`,
             refresh_url: `${baseUrl}/dashboard`,
             collection_options: {
