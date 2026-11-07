@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 
 type CheckoutSession = {
   id: string;
+  object?: string;
   payment_status?: string;
   amount_total?: number;
   currency?: string;
@@ -16,6 +17,7 @@ type CheckoutSession = {
 };
 
 type StripeEvent = {
+  id: string;
   type: string;
   account?: string;
   data: {
@@ -28,7 +30,8 @@ function verifySignature(
   header: string,
   secret: string
 ): boolean {
-  const parts = header.split(',');
+  const parts = header.split(',').map((p) => p.trim());
+
   const timestamp = parts
     .find((part) => part.startsWith('t='))
     ?.slice(2);
@@ -44,7 +47,7 @@ function verifySignature(
   const timestampNumber = Number(timestamp);
 
   if (
-    !Number.isFinite(timestampNumber) ||
+    !Number.isSafeInteger(timestampNumber) ||
     Math.abs(Date.now() / 1000 - timestampNumber) > 300
   ) {
     return false;
@@ -52,21 +55,16 @@ function verifySignature(
 
   const expected = createHmac('sha256', secret)
     .update(`${timestamp}.${payload}`)
-    .digest('hex');
-
-  const expectedBuffer = Buffer.from(expected, 'hex');
+    .digest();
 
   return signatures.some((signature) => {
     if (!/^[a-f0-9]{64}$/i.test(signature)) {
       return false;
     }
 
-    const actualBuffer = Buffer.from(signature, 'hex');
+    const actual = Buffer.from(signature, 'hex');
 
-    return timingSafeEqual(
-      expectedBuffer,
-      actualBuffer
-    );
+    return timingSafeEqual(expected, actual);
   });
 }
 
@@ -98,11 +96,12 @@ export async function POST(req: Request) {
     });
   }
 
-  if (
-    event.type !== 'checkout.session.completed' &&
-    event.type !==
-      'checkout.session.async_payment_succeeded'
-  ) {
+  const successfulEvents = [
+    'checkout.session.completed',
+    'checkout.session.async_payment_succeeded',
+  ];
+
+  if (!successfulEvents.includes(event.type)) {
     return Response.json({ received: true });
   }
 
@@ -110,6 +109,7 @@ export async function POST(req: Request) {
 
   if (
     !session ||
+    session.object !== 'checkout.session' ||
     typeof session.id !== 'string' ||
     session.payment_status !== 'paid'
   ) {
@@ -118,8 +118,8 @@ export async function POST(req: Request) {
 
   const bookingId = session.metadata?.bookingId;
 
-  if (!bookingId || !event.account) {
-    return new Response('Missing booking or account', {
+  if (!bookingId) {
+    return new Response('Missing booking ID', {
       status: 400,
     });
   }
@@ -143,17 +143,37 @@ export async function POST(req: Request) {
     }
 
     if (
-      booking.tutor.stripeAccountId !== event.account ||
       booking.stripeSessionId !== session.id ||
       session.currency?.toLowerCase() !== 'cad' ||
       session.amount_total !== booking.amountCents
     ) {
+      console.error('Stripe payment details mismatch', {
+        bookingId,
+        sessionId: session.id,
+      });
+
       return new Response('Payment details mismatch', {
         status: 400,
       });
     }
 
-    await db.booking.updateMany({
+    // Connected-account webhooks contain event.account.
+    // Platform-account webhooks generally do not.
+    // When present, verify that the connected account
+    // belongs to the tutor for this booking.
+    if (
+      event.account &&
+      booking.tutor.stripeAccountId !== event.account
+    ) {
+      return new Response('Connected account mismatch', {
+        status: 400,
+      });
+    }
+
+    // Update only bookings still awaiting payment.
+    // Duplicate webhook deliveries will not update
+    // the booking again.
+    const result = await db.booking.updateMany({
       where: {
         id: booking.id,
         status: 'PENDING_PAYMENT',
@@ -162,6 +182,12 @@ export async function POST(req: Request) {
       data: {
         status: 'PAID',
       },
+    });
+
+    console.log('Stripe webhook processed', {
+      bookingId,
+      updated: result.count,
+      eventType: event.type,
     });
 
     return Response.json({ received: true });
