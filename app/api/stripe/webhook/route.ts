@@ -5,23 +5,21 @@ import { db } from '../../../../lib/db';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-type StripeSession = {
+type CheckoutSession = {
   id: string;
-  object: string;
-  mode?: string;
   payment_status?: string;
-  amount_total?: number | null;
-  currency?: string | null;
-  metadata?: Record<string, string> | null;
+  amount_total?: number;
+  currency?: string;
+  metadata?: {
+    bookingId?: string;
+  };
 };
 
 type StripeEvent = {
-  id: string;
   type: string;
-  livemode: boolean;
   account?: string;
   data: {
-    object: StripeSession;
+    object: CheckoutSession;
   };
 };
 
@@ -29,7 +27,7 @@ function verifySignature(
   payload: string,
   header: string,
   secret: string
-) {
+): boolean {
   const parts = header.split(',');
   const timestamp = parts
     .find((part) => part.startsWith('t='))
@@ -43,11 +41,11 @@ function verifySignature(
     return false;
   }
 
-  const time = Number(timestamp);
+  const timestampNumber = Number(timestamp);
 
   if (
-    !Number.isFinite(time) ||
-    Math.abs(Date.now() / 1000 - time) > 300
+    !Number.isFinite(timestampNumber) ||
+    Math.abs(Date.now() / 1000 - timestampNumber) > 300
   ) {
     return false;
   }
@@ -63,18 +61,18 @@ function verifySignature(
       return false;
     }
 
-    const received = Buffer.from(signature, 'hex');
+    const actualBuffer = Buffer.from(signature, 'hex');
 
-    return (
-      received.length === expectedBuffer.length &&
-      timingSafeEqual(received, expectedBuffer)
+    return timingSafeEqual(
+      expectedBuffer,
+      actualBuffer
     );
   });
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  const signature = request.headers.get('stripe-signature');
+  const signature = req.headers.get('stripe-signature');
 
   if (!secret || !signature) {
     return new Response('Webhook not configured', {
@@ -82,7 +80,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const payload = await request.text();
+  const payload = await req.text();
 
   if (!verifySignature(payload, signature, secret)) {
     return new Response('Invalid signature', {
@@ -95,40 +93,33 @@ export async function POST(request: Request) {
   try {
     event = JSON.parse(payload) as StripeEvent;
   } catch {
-    return new Response('Invalid JSON', { status: 400 });
+    return new Response('Invalid event', {
+      status: 400,
+    });
   }
 
   if (
     event.type !== 'checkout.session.completed' &&
-    event.type !== 'checkout.session.async_payment_succeeded'
+    event.type !==
+      'checkout.session.async_payment_succeeded'
   ) {
     return Response.json({ received: true });
-  }
-
-  if (event.livemode) {
-    return new Response('Live payments not enabled', {
-      status: 400,
-    });
   }
 
   const session = event.data?.object;
 
   if (
-    session?.object !== 'checkout.session' ||
-    session.mode !== 'payment' ||
-    session.payment_status !== 'paid' ||
+    !session ||
     typeof session.id !== 'string' ||
-    !event.account
+    session.payment_status !== 'paid'
   ) {
-    return new Response('Invalid checkout event', {
-      status: 400,
-    });
+    return Response.json({ received: true });
   }
 
   const bookingId = session.metadata?.bookingId;
 
-  if (!bookingId) {
-    return new Response('Missing booking ID', {
+  if (!bookingId || !event.account) {
+    return new Response('Missing booking or account', {
       status: 400,
     });
   }
@@ -138,19 +129,26 @@ export async function POST(request: Request) {
       where: { id: bookingId },
       include: {
         tutor: {
-          select: { stripeAccountId: true },
+          select: {
+            stripeAccountId: true,
+          },
         },
       },
     });
 
+    if (!booking) {
+      return new Response('Booking not found', {
+        status: 404,
+      });
+    }
+
     if (
-      !booking ||
       booking.tutor.stripeAccountId !== event.account ||
       booking.stripeSessionId !== session.id ||
-      booking.amountCents !== session.amount_total ||
-      session.currency?.toLowerCase() !== 'cad'
+      session.currency?.toLowerCase() !== 'cad' ||
+      session.amount_total !== booking.amountCents
     ) {
-      return new Response('Booking mismatch', {
+      return new Response('Payment details mismatch', {
         status: 400,
       });
     }
@@ -168,7 +166,7 @@ export async function POST(request: Request) {
 
     return Response.json({ received: true });
   } catch (error) {
-    console.error('Stripe webhook processing failed', error);
+    console.error('Webhook processing failed', error);
 
     return new Response('Webhook processing failed', {
       status: 500,
