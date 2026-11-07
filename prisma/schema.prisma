@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -26,6 +27,9 @@ enum InquiryStatus {
 }
 
 enum BookingStatus {
+  PROPOSED
+  CHANGE_REQUESTED
+  DECLINED
   PENDING_PAYMENT
   PAID
   COMPLETED
@@ -40,6 +44,7 @@ model User {
   passwordHash  String
   role          Role          @default(PARENT)
   createdAt     DateTime      @default(now())
+
   tutor         TutorProfile?
   sentInquiries Inquiry[]     @relation("ParentInquiries")
   bookings      Booking[]     @relation("ParentBookings")
@@ -50,6 +55,7 @@ model TutorProfile {
   id               String       @id @default(cuid())
   userId           String       @unique
   user             User         @relation(fields: [userId], references: [id])
+
   bio              String       @default("")
   subjects         String[]
   grades           String[]
@@ -60,8 +66,10 @@ model TutorProfile {
   verification     Verification @default(PENDING)
   qualifications   String       @default("")
   stripeAccountId  String?      @unique
+
   inquiries        Inquiry[]
   bookings         Booking[]
+
   createdAt        DateTime     @default(now())
 }
 
@@ -69,14 +77,18 @@ model Inquiry {
   id        String        @id @default(cuid())
   parentId  String
   parent    User          @relation("ParentInquiries", fields: [parentId], references: [id])
+
   tutorId   String
   tutor     TutorProfile  @relation(fields: [tutorId], references: [id])
+
   subject   String
   grade     String
   message   String
   status    InquiryStatus @default(OPEN)
   createdAt DateTime      @default(now())
+
   messages  Message[]
+  bookings  Booking[]
 
   @@index([tutorId, status])
 }
@@ -85,8 +97,10 @@ model Message {
   id        String   @id @default(cuid())
   inquiryId String
   inquiry   Inquiry  @relation(fields: [inquiryId], references: [id])
+
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id])
+
   body      String   @db.VarChar(2000)
   createdAt DateTime @default(now())
 
@@ -95,17 +109,34 @@ model Message {
 
 model Booking {
   id               String        @id @default(cuid())
+
+  inquiryId        String?
+  inquiry          Inquiry?      @relation(fields: [inquiryId], references: [id])
+
   parentId         String
   parent           User          @relation("ParentBookings", fields: [parentId], references: [id])
+
   tutorId          String
   tutor            TutorProfile  @relation(fields: [tutorId], references: [id])
+
   startsAt         DateTime
   durationMinutes  Int
+
+  requestedStartsAt        DateTime?
+  requestedDurationMinutes Int?
+  requestNote              String? @db.VarChar(1000)
+
   amountCents      Int
   platformFeeCents Int
-  status           BookingStatus @default(PENDING_PAYMENT)
+
+  status           BookingStatus @default(PROPOSED)
+
   stripeSessionId  String?       @unique
+
   createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   @@index([tutorId, startsAt])
+  @@index([inquiryId])
+  @@index([parentId, status])
 }
