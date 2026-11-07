@@ -75,68 +75,81 @@ export async function POST() {
     return fail('Stripe sandbox is not configured', 503);
   }
 
-  const baseUrl =
+  const baseUrl = (
     process.env.NEXTAUTH_URL ||
-    'https://essex-tutor-connect.vercel.app';
+    'https://essex-tutor-connect.vercel.app'
+  ).replace(/\/$/, '');
 
   try {
-    let accountId = profile.stripeAccountId;
+    // Do not reuse an account created for a different
+    // Connect configuration.
+    if (profile.stripeAccountId) {
+      console.error(
+        'Existing Stripe account requires review',
+        { tutorProfileId: profile.id }
+      );
 
-    if (!accountId) {
-      const account = await stripeRequest(
-        '/v2/core/accounts',
-        secretKey,
-        {
-          contact_email: profile.user.email,
-          identity: {
-            country: 'CA',
+      return fail(
+        'A Stripe account is already linked. Its configuration must be reviewed before continuing.',
+        409
+      );
+    }
+
+    const account = await stripeRequest(
+      '/v2/core/accounts',
+      secretKey,
+      {
+        contact_email: profile.user.email,
+        identity: {
+          country: 'CA',
+        },
+        dashboard: 'full',
+        defaults: {
+          responsibilities: {
+            fees_collector: 'stripe',
+            losses_collector: 'stripe',
           },
-          dashboard: 'full',
-          defaults: {
-            responsibilities: {
-              fees_collector: 'stripe',
-              losses_collector: 'stripe',
-            },
-          },
-          configuration: {
-            recipient: {
-              capabilities: {
-                stripe_balance: {
-                  stripe_transfers: {
-                    requested: true,
-                  },
-                },
+        },
+        configuration: {
+          merchant: {
+            capabilities: {
+              card_payments: {
+                requested: true,
               },
             },
           },
-          metadata: {
-            tutorProfileId: profile.id,
-          },
         },
-        `tutor-connect-v2-full-${profile.id}`
+        metadata: {
+          tutorProfileId: profile.id,
+        },
+      },
+      `tutor-merchant-v1-${profile.id}`
+    );
+
+    if (!account.id) {
+      throw new Error(
+        'Stripe did not return an account ID'
       );
-
-      accountId = account.id;
-
-      if (!accountId) {
-        throw new Error('Stripe did not return an account ID');
-      }
-
-      await db.tutorProfile.update({
-        where: { id: profile.id },
-        data: { stripeAccountId: accountId },
-      });
     }
+
+    // Save the ID before creating the onboarding link.
+    // This avoids creating a duplicate if link creation fails.
+    await db.tutorProfile.update({
+      where: { id: profile.id },
+      data: {
+        stripeAccountId: account.id,
+      },
+    });
 
     const accountLink = await stripeRequest(
       '/v2/core/account_links',
       secretKey,
       {
-        account: accountId,
+        account: account.id,
         use_case: {
           type: 'account_onboarding',
           account_onboarding: {
-            configurations: ['recipient'],
+            configurations: ['merchant'],
             return_url: `${baseUrl}/dashboard`,
             refresh_url: `${baseUrl}/dashboard`,
             collection_options: {
@@ -153,9 +166,14 @@ export async function POST() {
       );
     }
 
-    return Response.json({ url: accountLink.url });
+    return Response.json({
+      url: accountLink.url,
+    });
   } catch (error) {
-    console.error('Stripe Connect onboarding failed', error);
+    console.error(
+      'Stripe Connect onboarding failed',
+      error
+    );
 
     return fail(
       'Unable to start Stripe onboarding',
