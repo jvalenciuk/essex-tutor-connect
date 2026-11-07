@@ -1,14 +1,58 @@
 
-import Stripe from 'stripe';
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
 
 export const dynamic = 'force-dynamic';
 
+const STRIPE_API = 'https://api.stripe.com';
+const STRIPE_VERSION = '2026-10-28.endive';
+
+async function stripeRequest(
+  path: string,
+  secretKey: string,
+  body: Record<string, unknown>,
+  idempotencyKey?: string
+) {
+  const response = await fetch(`${STRIPE_API}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      'Stripe-Version': STRIPE_VERSION,
+      'Content-Type': 'application/json',
+      ...(idempotencyKey
+        ? { 'Idempotency-Key': idempotencyKey }
+        : {}),
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    console.error('Stripe API error', {
+      status: response.status,
+      code: result.error?.code,
+      message: result.error?.message,
+      requestId: response.headers.get('request-id'),
+    });
+
+    throw new Error(
+      result.error?.message || 'Stripe request failed'
+    );
+  }
+
+  return result;
+}
+
 export async function POST() {
   const who = await identity();
 
-  if (!who || who.role !== 'TUTOR') {
+  if (!who) {
+    return fail('Sign in required', 401);
+  }
+
+  if (who.role !== 'TUTOR') {
     return fail('Tutor account required', 403);
   }
 
@@ -16,9 +60,7 @@ export async function POST() {
     where: { userId: who.id },
     include: {
       user: {
-        select: {
-          email: true,
-        },
+        select: { email: true },
       },
     },
   });
@@ -33,8 +75,6 @@ export async function POST() {
     return fail('Stripe sandbox is not configured', 503);
   }
 
-  const stripe = new Stripe(secretKey);
-
   const baseUrl =
     process.env.NEXTAUTH_URL ||
     'https://essex-tutor-connect.vercel.app';
@@ -43,34 +83,73 @@ export async function POST() {
     let accountId = profile.stripeAccountId;
 
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'CA',
-        email: profile.user.email,
-        capabilities: {
-          transfers: { requested: true },
+      const account = await stripeRequest(
+        '/v2/core/accounts',
+        secretKey,
+        {
+          contact_email: profile.user.email,
+          identity: {
+            country: 'CA',
+          },
+          dashboard: 'express',
+          defaults: {
+            responsibilities: {
+              fees_collector: 'application',
+              losses_collector: 'application',
+            },
+          },
+          configuration: {
+            recipient: {
+              capabilities: {
+                stripe_balance: {
+                  stripe_transfers: {
+                    requested: true,
+                  },
+                },
+              },
+            },
+          },
+          metadata: {
+            tutorProfileId: profile.id,
+          },
         },
-        metadata: {
-          tutorProfileId: profile.id,
-        },
-      });
+        `tutor-connect-v2-${profile.id}`
+      );
 
       accountId = account.id;
 
+      if (!accountId) {
+        throw new Error('Stripe did not return an account ID');
+      }
+
       await db.tutorProfile.update({
         where: { id: profile.id },
-        data: {
-          stripeAccountId: accountId,
-        },
+        data: { stripeAccountId: accountId },
       });
     }
 
-    const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: `${baseUrl}/dashboard`,
-      return_url: `${baseUrl}/dashboard`,
-      type: 'account_onboarding',
-    });
+    const accountLink = await stripeRequest(
+      '/v2/core/account_links',
+      secretKey,
+      {
+        account: accountId,
+        use_case: {
+          type: 'account_onboarding',
+          account_onboarding: {
+            configurations: ['recipient'],
+            return_url: `${baseUrl}/dashboard`,
+            refresh_url: `${baseUrl}/dashboard`,
+            collection_options: {
+              fields: 'eventually_due',
+            },
+          },
+        },
+      }
+    );
+
+    if (!accountLink.url) {
+      throw new Error('Stripe did not return an onboarding URL');
+    }
 
     return Response.json({
       url: accountLink.url,
