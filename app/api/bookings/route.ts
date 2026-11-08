@@ -1,6 +1,7 @@
 
 import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
+import { hasBookingConflict } from '../../../lib/booking-conflicts';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -50,9 +51,20 @@ export async function POST(req: Request) {
     return fail('Accepted inquiry not found', 403);
   }
 
-  // Prevent duplicate active bookings at the same time.
-  // Other paid or proposed sessions are allowed.
-  const existing = await db.booking.findFirst({
+  const conflict = await hasBookingConflict(
+    inquiry.tutorId,
+    startsAt,
+    data.durationMinutes
+  );
+
+  if (conflict) {
+    return fail(
+      'This time overlaps another confirmed or awaiting-payment session. Choose a different time.',
+      409
+    );
+  }
+
+  const duplicate = await db.booking.findFirst({
     where: {
       inquiryId: inquiry.id,
       startsAt,
@@ -67,7 +79,7 @@ export async function POST(req: Request) {
     },
   });
 
-  if (existing) {
+  if (duplicate) {
     return fail(
       'A booking already exists for this date and time',
       409
