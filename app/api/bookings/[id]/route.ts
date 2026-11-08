@@ -1,6 +1,7 @@
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
+import { notifyBooking } from '../../../../lib/email';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -56,6 +57,7 @@ async function stripeGet(
       status: response.status,
       code: result.error?.code,
     });
+
     throw new Error('Unable to verify the Stripe payment');
   }
 
@@ -104,6 +106,19 @@ async function stripeRefund(
   }
 
   return result;
+}
+
+async function sendBookingNotification(
+  bookingId: string,
+  type: 'CANCELLED' | 'REFUNDED'
+) {
+  try {
+    await notifyBooking(bookingId, type);
+  } catch (error) {
+    // An email problem must not reverse a successful
+    // booking update or Stripe refund.
+    console.error('Booking notification error', error);
+  }
 }
 
 export async function PATCH(
@@ -346,16 +361,14 @@ export async function PATCH(
       );
     }
 
-    if (
-      isParent &&
-      startsAt - now < DAY_MS
-    ) {
+    if (isParent && startsAt - now < DAY_MS) {
       return fail(
         'Parents must cancel at least 24 hours before the session',
         409
       );
     }
 
+    // Unpaid proposals do not require Stripe refunds.
     if (
       booking.status === 'PROPOSED' ||
       booking.status === 'CHANGE_REQUESTED'
@@ -364,9 +377,7 @@ export async function PATCH(
         where: {
           id,
           status: booking.status,
-          startsAt: {
-            gt: new Date(),
-          },
+          startsAt: { gt: new Date() },
         },
         data: {
           status: 'CANCELLED',
@@ -374,11 +385,13 @@ export async function PATCH(
       });
 
       if (!result.count) {
-        return fail(
-          'Booking has already changed',
-          409
-        );
+        return fail('Booking has already changed', 409);
       }
+
+      await sendBookingNotification(
+        booking.id,
+        'CANCELLED'
+      );
 
       return Response.json({
         success: true,
@@ -395,10 +408,7 @@ export async function PATCH(
     }
 
     if (booking.status !== 'PAID') {
-      return fail(
-        'This booking cannot be cancelled',
-        409
-      );
+      return fail('This booking cannot be cancelled', 409);
     }
 
     const accountId = booking.tutor.stripeAccountId;
@@ -475,6 +485,11 @@ export async function PATCH(
           409
         );
       }
+
+      await sendBookingNotification(
+        booking.id,
+        'REFUNDED'
+      );
 
       return Response.json({
         success: true,
