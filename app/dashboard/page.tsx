@@ -236,7 +236,12 @@ export default async function Dashboard() {
                 <PaymentStatus status={stripeStatus} />
               )}
 
-              <ConnectButton />
+              <ConnectButton
+                connected={stripeStatus?.connected ?? false}
+                payoutsEnabled={
+                  stripeStatus?.payoutsEnabled ?? false
+                }
+              />
             </div>
           )}
         </>
