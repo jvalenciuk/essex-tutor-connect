@@ -20,6 +20,37 @@ type StripeAccountStatus = {
   error?: string;
 };
 
+type EarningsBooking = {
+  id: string;
+  startsAt: Date;
+  durationMinutes: number;
+  amountCents: number;
+  platformFeeCents: number;
+  status: string;
+  parent: {
+    name: string;
+  };
+  inquiry: {
+    subject: string;
+    grade: string;
+  } | null;
+};
+
+function formatCAD(cents: number): string {
+  return new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+  }).format(cents / 100);
+}
+
+function formatSessionDate(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'America/Toronto',
+  }).format(date);
+}
+
 async function getStripeAccountStatus(
   accountId: string | null | undefined
 ): Promise<StripeAccountStatus> {
@@ -76,7 +107,9 @@ async function getStripeAccountStatus(
       paymentsEnabled: account.charges_enabled === true,
       payoutsEnabled: account.payouts_enabled === true,
       detailsSubmitted: account.details_submitted === true,
-      requirements: Array.isArray(account.requirements?.currently_due)
+      requirements: Array.isArray(
+        account.requirements?.currently_due
+      )
         ? account.requirements.currently_due
         : [],
     };
@@ -155,6 +188,159 @@ function PaymentStatus({
   );
 }
 
+function TutorEarnings({
+  bookings,
+}: {
+  bookings: EarningsBooking[];
+}) {
+  const totalPaidCents = bookings.reduce(
+    (total, booking) => total + booking.amountCents,
+    0
+  );
+
+  const totalCommissionCents = bookings.reduce(
+    (total, booking) => total + booking.platformFeeCents,
+    0
+  );
+
+  const tutorEarningsCents =
+    totalPaidCents - totalCommissionCents;
+
+  const upcomingBookings = bookings
+    .filter(
+      (booking) =>
+        booking.startsAt.getTime() > Date.now()
+    )
+    .sort(
+      (a, b) =>
+        a.startsAt.getTime() - b.startsAt.getTime()
+    );
+
+  return (
+    <section className="card">
+      <h2>Tutor Earnings</h2>
+
+      <p className="muted">
+        Earnings from paid tutoring bookings.
+        All amounts are in Canadian dollars.
+      </p>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns:
+            'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '16px',
+          marginTop: '20px',
+          marginBottom: '20px',
+        }}
+      >
+        <div className="card">
+          <h3>Total Paid Bookings</h3>
+          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+            {formatCAD(totalPaidCents)}
+          </p>
+        </div>
+
+        <div className="card">
+          <h3>Platform Commission</h3>
+          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+            {formatCAD(totalCommissionCents)}
+          </p>
+        </div>
+
+        <div className="card">
+          <h3>Your Earnings</h3>
+          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+            {formatCAD(tutorEarningsCents)}
+          </p>
+        </div>
+
+        <div className="card">
+          <h3>Paid Sessions</h3>
+          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+            {bookings.length}
+          </p>
+        </div>
+      </div>
+
+      <p className="muted">
+        Your earnings are calculated after the
+        platform commission but before Stripe
+        processing fees, refunds, disputes, or
+        other adjustments. These figures do not
+        represent money deposited into your bank.
+      </p>
+
+      <h3>Upcoming Paid Sessions</h3>
+
+      {upcomingBookings.length === 0 ? (
+        <p>No upcoming paid sessions.</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              textAlign: 'left',
+            }}
+          >
+            <thead>
+              <tr>
+                <th style={{ padding: '10px' }}>
+                  Date
+                </th>
+                <th style={{ padding: '10px' }}>
+                  Parent
+                </th>
+                <th style={{ padding: '10px' }}>
+                  Subject
+                </th>
+                <th style={{ padding: '10px' }}>
+                  Duration
+                </th>
+                <th style={{ padding: '10px' }}>
+                  Your Earnings
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {upcomingBookings.map((booking) => (
+                <tr key={booking.id}>
+                  <td style={{ padding: '10px' }}>
+                    {formatSessionDate(booking.startsAt)}
+                  </td>
+
+                  <td style={{ padding: '10px' }}>
+                    {booking.parent.name}
+                  </td>
+
+                  <td style={{ padding: '10px' }}>
+                    {booking.inquiry?.subject ||
+                      'Tutoring'}
+                  </td>
+
+                  <td style={{ padding: '10px' }}>
+                    {booking.durationMinutes} min
+                  </td>
+
+                  <td style={{ padding: '10px' }}>
+                    {formatCAD(
+                      booking.amountCents -
+                        booking.platformFeeCents
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default async function Dashboard() {
   const who = await identity();
 
@@ -172,8 +358,44 @@ export default async function Dashboard() {
   const stripeStatus =
     who.role === 'TUTOR' &&
     profile?.verification === 'APPROVED'
-      ? await getStripeAccountStatus(profile.stripeAccountId)
+      ? await getStripeAccountStatus(
+          profile.stripeAccountId
+        )
       : null;
+
+  const earningsBookings =
+    who.role === 'TUTOR' && profile
+      ? await db.booking.findMany({
+          where: {
+            tutorId: profile.id,
+            status: {
+              in: ['PAID', 'COMPLETED'],
+            },
+          },
+          select: {
+            id: true,
+            startsAt: true,
+            durationMinutes: true,
+            amountCents: true,
+            platformFeeCents: true,
+            status: true,
+            parent: {
+              select: {
+                name: true,
+              },
+            },
+            inquiry: {
+              select: {
+                subject: true,
+                grade: true,
+              },
+            },
+          },
+          orderBy: {
+            startsAt: 'desc',
+          },
+        })
+      : [];
 
   const inquiries = await db.inquiry.findMany({
     where:
@@ -208,7 +430,8 @@ export default async function Dashboard() {
         <>
           <p>
             Verification:{' '}
-            {profile?.verification || 'Profile not submitted'}
+            {profile?.verification ||
+              'Profile not submitted'}
           </p>
 
           <DashboardForm
@@ -216,12 +439,14 @@ export default async function Dashboard() {
               profile
                 ? {
                     bio: profile.bio,
-                    qualifications: profile.qualifications,
+                    qualifications:
+                      profile.qualifications,
                     subjects: profile.subjects,
                     grades: profile.grades,
                     cities: profile.cities,
                     languages: profile.languages,
-                    hourlyRateCents: profile.hourlyRateCents,
+                    hourlyRateCents:
+                      profile.hourlyRateCents,
                     online: profile.online,
                   }
                 : null
@@ -229,20 +454,31 @@ export default async function Dashboard() {
           />
 
           {profile?.verification === 'APPROVED' && (
-            <div className="card">
-              <h2>Receive payments</h2>
+            <>
+              <div className="card">
+                <h2>Receive payments</h2>
 
-              {stripeStatus && (
-                <PaymentStatus status={stripeStatus} />
-              )}
+                {stripeStatus && (
+                  <PaymentStatus
+                    status={stripeStatus}
+                  />
+                )}
 
-              <ConnectButton
-                connected={stripeStatus?.connected ?? false}
-                payoutsEnabled={
-                  stripeStatus?.payoutsEnabled ?? false
-                }
+                <ConnectButton
+                  connected={
+                    stripeStatus?.connected ?? false
+                  }
+                  payoutsEnabled={
+                    stripeStatus?.payoutsEnabled ??
+                    false
+                  }
+                />
+              </div>
+
+              <TutorEarnings
+                bookings={earningsBookings}
               />
-            </div>
+            </>
           )}
         </>
       )}
@@ -279,7 +515,9 @@ export default async function Dashboard() {
             </>
           ) : (
             <>
-              <p>Tutor: {inquiry.tutor.user.name}</p>
+              <p>
+                Tutor: {inquiry.tutor.user.name}
+              </p>
 
               <p className="muted">
                 Status: {inquiry.status}
@@ -289,7 +527,9 @@ export default async function Dashboard() {
 
           {inquiry.status === 'ACCEPTED' && (
             <>
-              <InquiryMessages inquiryId={inquiry.id} />
+              <InquiryMessages
+                inquiryId={inquiry.id}
+              />
 
               <BookingManager
                 inquiryId={inquiry.id}
