@@ -23,6 +23,9 @@ const actionSchema = z.discriminatedUnion('action', [
     startsAt: z.string().datetime({ offset: true }),
     durationMinutes: z.number().int().min(30).max(180),
   }),
+  z.object({
+    action: z.literal('COMPLETE'),
+  }),
 ]);
 
 export async function PATCH(
@@ -56,7 +59,9 @@ export async function PATCH(
     return fail('Booking not found', 404);
   }
 
-  const isParent = booking.parentId === who.id;
+  const isParent =
+    booking.parentId === who.id &&
+    who.role === 'PARENT';
 
   const isTutor =
     booking.tutor.userId === who.id &&
@@ -200,6 +205,54 @@ export async function PATCH(
     return Response.json({
       success: true,
       status: 'PROPOSED',
+    });
+  }
+
+  if (data.action === 'COMPLETE') {
+    if (!isTutor || booking.status !== 'PAID') {
+      return fail('Only the assigned tutor can complete a paid session', 409);
+    }
+
+    const sessionEndsAt = new Date(
+      booking.startsAt.getTime() +
+        booking.durationMinutes * 60 * 1000
+    );
+
+    if (sessionEndsAt.getTime() > Date.now()) {
+      return fail(
+        'The session must finish before it can be marked completed',
+        409
+      );
+    }
+
+    const result = await db.booking.updateMany({
+      where: {
+        id,
+        status: 'PAID',
+        tutor: {
+          userId: who.id,
+        },
+        startsAt: {
+          lte: new Date(
+            Date.now() - booking.durationMinutes * 60 * 1000
+          ),
+        },
+      },
+      data: {
+        status: 'COMPLETED',
+      },
+    });
+
+    if (!result.count) {
+      return fail(
+        'The session is not eligible for completion',
+        409
+      );
+    }
+
+    return Response.json({
+      success: true,
+      status: 'COMPLETED',
     });
   }
 
