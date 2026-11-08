@@ -21,6 +21,8 @@ type Props = {
   role: string;
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function formatDate(value: string) {
   return new Date(value).toLocaleString('en-CA', {
     dateStyle: 'full',
@@ -83,6 +85,7 @@ export default function BookingManager({
       setBookings(
         data.filter((item) => item.inquiryId === inquiryId)
       );
+
       setError('');
     } catch {
       setError('Unable to load bookings.');
@@ -105,7 +108,8 @@ export default function BookingManager({
   async function sendRequest(
     url: string,
     method: 'POST' | 'PATCH',
-    payload: object
+    payload: object,
+    successMessage = 'Booking updated successfully.'
   ) {
     setBusy(true);
     setError('');
@@ -130,7 +134,7 @@ export default function BookingManager({
 
       resetForm();
       await loadBookings();
-      setNotice('Booking updated successfully.');
+      setNotice(successMessage);
     } catch (err) {
       setError(
         err instanceof Error
@@ -259,6 +263,27 @@ export default function BookingManager({
     );
   }
 
+  function cancelBooking(booking: Booking) {
+    const isPaid = booking.status === 'PAID';
+
+    const message = isPaid
+      ? 'Cancel this tutoring session and request a full refund through Stripe?'
+      : 'Cancel this tutoring session proposal?';
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    void sendRequest(
+      `/api/bookings/${encodeURIComponent(booking.id)}`,
+      'PATCH',
+      { action: 'CANCEL' },
+      isPaid
+        ? 'Cancellation processed. Stripe refund confirmed.'
+        : 'Booking cancelled successfully.'
+    );
+  }
+
   const activeBooking = bookings.find((item) =>
     [
       'PROPOSED',
@@ -337,14 +362,35 @@ export default function BookingManager({
       )}
 
       {bookings.map((booking) => {
+        const startTime =
+          new Date(booking.startsAt).getTime();
+
         const sessionEndsAt =
-          new Date(booking.startsAt).getTime() +
+          startTime +
           booking.durationMinutes * 60 * 1000;
 
         const canComplete =
           role === 'TUTOR' &&
           booking.status === 'PAID' &&
           sessionEndsAt <= Date.now();
+
+        const beforeSession =
+          startTime > Date.now();
+
+        const parentCanCancel =
+          role === 'PARENT' &&
+          startTime - Date.now() >= DAY_MS;
+
+        const tutorCanCancel =
+          role === 'TUTOR' && beforeSession;
+
+        const canCancel =
+          (parentCanCancel || tutorCanCancel) &&
+          [
+            'PROPOSED',
+            'CHANGE_REQUESTED',
+            'PAID',
+          ].includes(booking.status);
 
         return (
           <div
@@ -561,6 +607,44 @@ export default function BookingManager({
                 This tutoring session has been marked completed.
               </p>
             )}
+
+            {booking.status === 'CANCELLED' && (
+              <p>
+                This session was cancelled before payment.
+              </p>
+            )}
+
+            {booking.status === 'REFUNDED' && (
+              <p>
+                This session was cancelled and the refund
+                was confirmed by Stripe.
+              </p>
+            )}
+
+            {canCancel && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => cancelBooking(booking)}
+                >
+                  {booking.status === 'PAID'
+                    ? 'Cancel session and refund'
+                    : 'Cancel session'}
+                </button>
+              </div>
+            )}
+
+            {role === 'PARENT' &&
+              booking.status === 'PAID' &&
+              beforeSession &&
+              !parentCanCancel && (
+                <p className="muted">
+                  The 24-hour cancellation deadline
+                  has passed. Contact support if you
+                  need assistance.
+                </p>
+              )}
 
             {changingId === booking.id && (
               <div style={{ marginTop: 16 }}>
