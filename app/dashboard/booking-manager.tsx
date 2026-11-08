@@ -170,9 +170,7 @@ export default function BookingManager({
 
       if (
         typeof result?.url !== 'string' ||
-        !result.url.startsWith(
-          'https://checkout.stripe.com/'
-        )
+        !result.url.startsWith('https://checkout.stripe.com/')
       ) {
         throw new Error('The payment link was not valid.');
       }
@@ -227,10 +225,15 @@ export default function BookingManager({
 
     if (!details) return;
 
-    void sendRequest('/api/bookings', 'POST', {
-      inquiryId,
-      ...details,
-    });
+    void sendRequest(
+      '/api/bookings',
+      'POST',
+      {
+        inquiryId,
+        ...details,
+      },
+      'New session proposed successfully.'
+    );
   }
 
   function submitChange(bookingId: string) {
@@ -270,9 +273,7 @@ export default function BookingManager({
       ? 'Cancel this tutoring session and request a full refund through Stripe?'
       : 'Cancel this tutoring session proposal?';
 
-    if (!window.confirm(message)) {
-      return;
-    }
+    if (!window.confirm(message)) return;
 
     void sendRequest(
       `/api/bookings/${encodeURIComponent(booking.id)}`,
@@ -284,27 +285,16 @@ export default function BookingManager({
     );
   }
 
-  const activeBooking = bookings.find((item) =>
-    [
-      'PROPOSED',
-      'CHANGE_REQUESTED',
-      'PENDING_PAYMENT',
-      'PAID',
-    ].includes(item.status)
-  );
-
   const canPropose =
     role === 'TUTOR' &&
     !loading &&
-    !error &&
-    !activeBooking;
+    !busy;
 
   function dateFields() {
     return (
       <div style={{ marginTop: 12 }}>
         <label>
           <strong>Date and time</strong>
-
           <input
             type="datetime-local"
             value={startsAt}
@@ -322,7 +312,6 @@ export default function BookingManager({
 
         <label>
           <strong>Session duration</strong>
-
           <select
             value={duration}
             onChange={(e) =>
@@ -374,8 +363,7 @@ export default function BookingManager({
           booking.status === 'PAID' &&
           sessionEndsAt <= Date.now();
 
-        const beforeSession =
-          startTime > Date.now();
+        const beforeSession = startTime > Date.now();
 
         const parentCanCancel =
           role === 'PARENT' &&
@@ -466,7 +454,6 @@ export default function BookingManager({
                           ? null
                           : booking.id
                       );
-
                       setStartsAt('');
                       setDuration(
                         String(booking.durationMinutes)
@@ -496,24 +483,18 @@ export default function BookingManager({
                     Parent&apos;s requested time:
                   </strong>{' '}
                   {booking.requestedStartsAt
-                    ? formatDate(
-                        booking.requestedStartsAt
-                      )
+                    ? formatDate(booking.requestedStartsAt)
                     : 'Not provided'}
                 </p>
 
                 <p>
-                  <strong>
-                    Requested duration:
-                  </strong>{' '}
+                  <strong>Requested duration:</strong>{' '}
                   {booking.requestedDurationMinutes} minutes
                 </p>
 
                 {booking.requestNote && (
                   <p>
-                    <strong>
-                      Parent&apos;s note:
-                    </strong>{' '}
+                    <strong>Parent&apos;s note:</strong>{' '}
                     {booking.requestNote}
                   </p>
                 )}
@@ -528,7 +509,6 @@ export default function BookingManager({
                           ? null
                           : booking.id
                       );
-
                       setStartsAt('');
                       setDuration(
                         String(
@@ -640,9 +620,8 @@ export default function BookingManager({
               beforeSession &&
               !parentCanCancel && (
                 <p className="muted">
-                  The 24-hour cancellation deadline
-                  has passed. Contact support if you
-                  need assistance.
+                  The 24-hour cancellation deadline has
+                  passed. Contact support if you need assistance.
                 </p>
               )}
 
@@ -661,7 +640,6 @@ export default function BookingManager({
                     <strong>
                       Note for tutor (optional)
                     </strong>
-
                     <textarea
                       value={note}
                       onChange={(e) =>
@@ -686,9 +664,7 @@ export default function BookingManager({
                     submitChange(booking.id)
                   }
                 >
-                  {busy
-                    ? 'Saving...'
-                    : 'Submit new time'}
+                  {busy ? 'Saving...' : 'Submit new time'}
                 </button>{' '}
 
                 <button
@@ -706,7 +682,11 @@ export default function BookingManager({
 
       {canPropose && (
         <div style={{ marginTop: 16 }}>
-          <h4>Propose a tutoring session</h4>
+          <h4>Propose another tutoring session</h4>
+          <p>
+            You can schedule multiple sessions with this parent.
+            Choose a different date and time for each session.
+          </p>
 
           {dateFields()}
 
@@ -715,9 +695,7 @@ export default function BookingManager({
             disabled={busy}
             onClick={submitProposal}
           >
-            {busy
-              ? 'Submitting...'
-              : 'Propose session'}
+            {busy ? 'Submitting...' : 'Propose session'}
           </button>
         </div>
       )}
@@ -732,19 +710,13 @@ export default function BookingManager({
       </button>
 
       {notice && (
-        <p
-          role="status"
-          style={{ color: '#166534' }}
-        >
+        <p role="status" style={{ color: '#166534' }}>
           {notice}
         </p>
       )}
 
       {error && (
-        <p
-          role="alert"
-          style={{ color: '#b42318' }}
-        >
+        <p role="alert" style={{ color: '#b42318' }}>
           {error}
         </p>
       )}
