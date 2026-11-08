@@ -2,6 +2,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import SessionCalendar from './session-calendar';
 
 type Booking = {
   id: string;
@@ -344,6 +345,9 @@ export default function BookingManager({
     >
       <h3>Session bookings</h3>
 
+      {/* NEW: Monthly tutoring calendar */}
+      <SessionCalendar role={role} />
+
       {loading && <p>Loading bookings...</p>}
 
       {!loading && bookings.length === 0 && (
@@ -683,6 +687,7 @@ export default function BookingManager({
       {canPropose && (
         <div style={{ marginTop: 16 }}>
           <h4>Propose another tutoring session</h4>
+
           <p>
             You can schedule multiple sessions with this parent.
             Choose a different date and time for each session.
