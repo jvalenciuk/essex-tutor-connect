@@ -2,6 +2,7 @@
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
 import { notifyBooking } from '../../../../lib/email';
+import { hasBookingConflict } from '../../../../lib/booking-conflicts';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -164,9 +165,28 @@ export async function PATCH(
     return fail('Not authorized', 403);
   }
 
+  // --------------------------------------------
+  // PARENT ACCEPTS A SESSION
+  // --------------------------------------------
+
   if (data.action === 'ACCEPT') {
     if (!isParent || booking.status !== 'PROPOSED') {
       return fail('Cannot accept this booking', 409);
+    }
+
+    // NEW: Prevent accepting an overlapping session.
+    const conflict = await hasBookingConflict(
+      booking.tutorId,
+      booking.startsAt,
+      booking.durationMinutes,
+      booking.id
+    );
+
+    if (conflict) {
+      return fail(
+        'This tutor already has a session at this time. Please request another time.',
+        409
+      );
     }
 
     const result = await db.booking.updateMany({
@@ -190,6 +210,10 @@ export async function PATCH(
       status: 'PENDING_PAYMENT',
     });
   }
+
+  // --------------------------------------------
+  // PARENT DECLINES A SESSION
+  // --------------------------------------------
 
   if (data.action === 'DECLINE') {
     if (!isParent || booking.status !== 'PROPOSED') {
@@ -216,6 +240,10 @@ export async function PATCH(
       status: 'DECLINED',
     });
   }
+
+  // --------------------------------------------
+  // PARENT REQUESTS A DIFFERENT TIME
+  // --------------------------------------------
 
   if (data.action === 'REQUEST_CHANGE') {
     if (!isParent || booking.status !== 'PROPOSED') {
@@ -252,6 +280,10 @@ export async function PATCH(
     });
   }
 
+  // --------------------------------------------
+  // TUTOR REVISES A SESSION PROPOSAL
+  // --------------------------------------------
+
   if (data.action === 'REVISE') {
     if (!isTutor || booking.status !== 'CHANGE_REQUESTED') {
       return fail('Cannot revise this booking', 409);
@@ -261,6 +293,21 @@ export async function PATCH(
 
     if (startsAt.getTime() <= Date.now()) {
       return fail('Choose a future date and time', 400);
+    }
+
+    // NEW: Check the revised time for conflicts.
+    const conflict = await hasBookingConflict(
+      booking.tutorId,
+      startsAt,
+      data.durationMinutes,
+      booking.id
+    );
+
+    if (conflict) {
+      return fail(
+        'The revised time overlaps another confirmed or awaiting-payment session.',
+        409
+      );
     }
 
     const amountCents = Math.round(
@@ -300,6 +347,10 @@ export async function PATCH(
       status: 'PROPOSED',
     });
   }
+
+  // --------------------------------------------
+  // TUTOR COMPLETES A PAID SESSION
+  // --------------------------------------------
 
   if (data.action === 'COMPLETE') {
     if (!isTutor || booking.status !== 'PAID') {
@@ -349,6 +400,10 @@ export async function PATCH(
       status: 'COMPLETED',
     });
   }
+
+  // --------------------------------------------
+  // CANCEL A SESSION / PROCESS STRIPE REFUND
+  // --------------------------------------------
 
   if (data.action === 'CANCEL') {
     const now = Date.now();
