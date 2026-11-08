@@ -50,15 +50,18 @@ export async function POST(req: Request) {
     return fail('Accepted inquiry not found', 403);
   }
 
-  // Prevent multiple active proposals for one inquiry.
+  // Prevent duplicate active bookings at the same time.
+  // Other paid or proposed sessions are allowed.
   const existing = await db.booking.findFirst({
     where: {
       inquiryId: inquiry.id,
+      startsAt,
       status: {
         in: [
           'PROPOSED',
           'CHANGE_REQUESTED',
           'PENDING_PAYMENT',
+          'PAID',
         ],
       },
     },
@@ -66,18 +69,20 @@ export async function POST(req: Request) {
 
   if (existing) {
     return fail(
-      'This inquiry already has an active booking proposal',
+      'A booking already exists for this date and time',
       409
     );
   }
 
-  // Calculate the price using the tutor's saved hourly rate.
   const amountCents = Math.round(
-    (inquiry.tutor.hourlyRateCents * data.durationMinutes) / 60
+    (inquiry.tutor.hourlyRateCents *
+      data.durationMinutes) /
+      60
   );
 
-  // Essex Tutor Connect commission: 15%.
-  const platformFeeCents = Math.round(amountCents * 0.15);
+  const platformFeeCents = Math.round(
+    amountCents * 0.15
+  );
 
   const booking = await db.booking.create({
     data: {
@@ -111,7 +116,10 @@ export async function GET() {
     return fail('Sign in required', 401);
   }
 
-  if (who.role !== 'PARENT' && who.role !== 'TUTOR') {
+  if (
+    who.role !== 'PARENT' &&
+    who.role !== 'TUTOR'
+  ) {
     return Response.json([]);
   }
 
