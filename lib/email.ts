@@ -1,9 +1,12 @@
 
 import { db } from './db';
 
-type EmailKind = 'CONFIRMED' | 'CANCELLED' | 'REFUNDED';
+type NotificationType =
+  | 'CONFIRMED'
+  | 'CANCELLED'
+  | 'REFUNDED';
 
-function formatDate(date: Date) {
+function formatDate(date: Date): string {
   return date.toLocaleString('en-CA', {
     timeZone: 'America/Toronto',
     dateStyle: 'full',
@@ -11,7 +14,7 @@ function formatDate(date: Date) {
   });
 }
 
-function money(cents: number) {
+function formatMoney(cents: number): string {
   return new Intl.NumberFormat('en-CA', {
     style: 'currency',
     currency: 'CAD',
@@ -21,50 +24,63 @@ function money(cents: number) {
 async function sendEmail(
   to: string,
   subject: string,
-  message: string
-) {
-  const key = process.env.RESEND_API_KEY;
+  body: string
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
+  const testRecipient = process.env.EMAIL_TEST_TO;
 
-  if (!key || !from) {
-    console.warn('Email configuration is missing');
-    return;
+  if (!apiKey || !from) {
+    throw new Error('Resend email configuration is missing');
   }
 
-  const recipient = process.env.EMAIL_TEST_TO || to;
+  // Use only the verified Resend account email during testing.
+  // Never send to actual users while using the testing domain.
+  if (!testRecipient) {
+    throw new Error(
+      'EMAIL_TEST_TO must be configured for sandbox email testing'
+    );
+  }
 
   const response = await fetch(
     'https://api.resend.com/emails',
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${key}`,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         from,
-        to: [recipient],
+        to: [testRecipient],
         subject,
-        text: message,
+        text:
+          `Intended recipient: ${to}\n` +
+          `Testing mode: no email was sent to the ` +
+          `intended recipient.\n\n` +
+          body,
       }),
       cache: 'no-store',
     }
   );
 
   if (!response.ok) {
-    const details = await response.text();
-    console.error('Resend email failed', {
+    const result = await response.json().catch(() => null);
+
+    console.error('Resend delivery error', {
       status: response.status,
-      details,
+      code: result?.name,
+      message: result?.message,
     });
-    throw new Error('Email delivery request failed');
+
+    throw new Error('Resend did not accept the email');
   }
 }
 
 export async function notifyBooking(
   bookingId: string,
-  kind: EmailKind
-) {
+  type: NotificationType
+): Promise<void> {
   const booking = await db.booking.findUnique({
     where: { id: bookingId },
     include: {
@@ -94,115 +110,127 @@ export async function notifyBooking(
   });
 
   if (!booking) {
-    console.warn('Email skipped: booking not found');
-    return;
+    throw new Error('Booking not found for email notification');
   }
 
-  const tutorName = booking.tutor.user.name;
-  const parentName = booking.parent.name;
-  const date = formatDate(booking.startsAt);
-  const price = money(booking.amountCents);
-  const subjectName = booking.inquiry?.subject || 'Tutoring';
+  const parent = booking.parent;
+  const tutor = booking.tutor.user;
+
+  const sessionDate = formatDate(booking.startsAt);
+  const price = formatMoney(booking.amountCents);
+  const subject = booking.inquiry?.subject || 'Tutoring';
+  const grade = booking.inquiry?.grade || 'Not specified';
   const dashboard =
-    'https://essex-tutor-connect.vercel.app/dashboard';
+    (process.env.NEXTAUTH_URL ||
+      'https://essex-tutor-connect.vercel.app'
+    ).replace(/\/$/, '') + '/dashboard';
 
-  let heading = '';
-  let parentMessage = '';
-  let tutorMessage = '';
+  const sessionDetails =
+    `Subject: ${subject}\n` +
+    `Grade: ${grade}\n` +
+    `Date and time: ${sessionDate}\n` +
+    `Duration: ${booking.durationMinutes} minutes\n` +
+    `Session price: ${price}\n`;
 
-  if (kind === 'CONFIRMED') {
-    heading = 'Tutoring session confirmed';
+  let emailSubject = '';
+  let parentBody = '';
+  let tutorBody = '';
 
-    parentMessage =
-      `Hello ${parentName},\n\n` +
-      `Your tutoring session has been confirmed.\n\n` +
-      `Tutor: ${tutorName}\n` +
-      `Subject: ${subjectName}\n` +
-      `Date: ${date}\n` +
-      `Duration: ${booking.durationMinutes} minutes\n` +
-      `Amount paid: ${price}\n\n` +
-      `View your booking: ${dashboard}`;
+  if (type === 'CONFIRMED') {
+    emailSubject = 'Tutoring session confirmed';
 
-    tutorMessage =
-      `Hello ${tutorName},\n\n` +
+    parentBody =
+      `Hello ${parent.name},\n\n` +
+      `Your tutoring session has been confirmed ` +
+      `and your payment was received.\n\n` +
+      `Tutor: ${tutor.name}\n` +
+      sessionDetails +
+      `\nView your booking:\n${dashboard}\n\n` +
+      `Thank you for using Essex Tutor Connect.`;
+
+    tutorBody =
+      `Hello ${tutor.name},\n\n` +
       `A parent has paid for your tutoring session.\n\n` +
-      `Parent: ${parentName}\n` +
-      `Subject: ${subjectName}\n` +
-      `Date: ${date}\n` +
-      `Duration: ${booking.durationMinutes} minutes\n` +
-      `Session price: ${price}\n\n` +
-      `View your booking: ${dashboard}`;
+      `Parent: ${parent.name}\n` +
+      sessionDetails +
+      `Platform commission: ` +
+      `${formatMoney(booking.platformFeeCents)}\n` +
+      `Tutor portion before Stripe processing fees: ` +
+      `${formatMoney(
+        booking.amountCents - booking.platformFeeCents
+      )}\n\n` +
+      `View your booking:\n${dashboard}`;
   }
 
-  if (kind === 'CANCELLED') {
-    heading = 'Tutoring session cancelled';
+  if (type === 'CANCELLED') {
+    emailSubject = 'Tutoring session cancelled';
 
-    parentMessage =
-      `Hello ${parentName},\n\n` +
+    parentBody =
+      `Hello ${parent.name},\n\n` +
       `Your tutoring session has been cancelled.\n\n` +
-      `Tutor: ${tutorName}\n` +
-      `Subject: ${subjectName}\n` +
-      `Date: ${date}\n\n` +
-      `No refund was required for this booking.\n\n` +
-      `View your dashboard: ${dashboard}`;
+      `Tutor: ${tutor.name}\n` +
+      sessionDetails +
+      `\nNo payment refund was required.\n\n` +
+      `View your dashboard:\n${dashboard}`;
 
-    tutorMessage =
-      `Hello ${tutorName},\n\n` +
+    tutorBody =
+      `Hello ${tutor.name},\n\n` +
       `A tutoring session has been cancelled.\n\n` +
-      `Parent: ${parentName}\n` +
-      `Subject: ${subjectName}\n` +
-      `Date: ${date}\n\n` +
-      `View your dashboard: ${dashboard}`;
+      `Parent: ${parent.name}\n` +
+      sessionDetails +
+      `\nView your dashboard:\n${dashboard}`;
   }
 
-  if (kind === 'REFUNDED') {
-    heading = 'Tutoring session refund confirmed';
+  if (type === 'REFUNDED') {
+    emailSubject = 'Tutoring session refund confirmed';
 
-    parentMessage =
-      `Hello ${parentName},\n\n` +
-      `Your tutoring session was cancelled and ` +
-      `Stripe confirmed a full refund.\n\n` +
-      `Tutor: ${tutorName}\n` +
-      `Subject: ${subjectName}\n` +
-      `Date: ${date}\n` +
+    parentBody =
+      `Hello ${parent.name},\n\n` +
+      `Your tutoring session has been cancelled ` +
+      `and Stripe has confirmed your full refund.\n\n` +
+      `Tutor: ${tutor.name}\n` +
+      sessionDetails +
       `Refund amount: ${price}\n\n` +
-      `The refund may take additional time to ` +
+      `Your refund may take additional time to ` +
       `appear on your payment method.\n\n` +
-      `View your dashboard: ${dashboard}`;
+      `View your dashboard:\n${dashboard}`;
 
-    tutorMessage =
-      `Hello ${tutorName},\n\n` +
+    tutorBody =
+      `Hello ${tutor.name},\n\n` +
       `A tutoring session was cancelled and ` +
-      `Stripe confirmed a refund.\n\n` +
-      `Parent: ${parentName}\n` +
-      `Subject: ${subjectName}\n` +
-      `Date: ${date}\n` +
+      `the parent's payment was refunded.\n\n` +
+      `Parent: ${parent.name}\n` +
+      sessionDetails +
       `Refund amount: ${price}\n\n` +
-      `View your dashboard: ${dashboard}`;
+      `View your dashboard:\n${dashboard}`;
   }
 
-  const messages = [
+  const notifications = [
     {
-      to: booking.parent.email,
-      subject: `${heading} — Parent notification`,
-      message: parentMessage,
+      to: parent.email,
+      subject: `${emailSubject} — Parent`,
+      body: parentBody,
     },
     {
-      to: booking.tutor.user.email,
-      subject: `${heading} — Tutor notification`,
-      message: tutorMessage,
+      to: tutor.email,
+      subject: `${emailSubject} — Tutor`,
+      body: tutorBody,
     },
   ];
 
+  // Attempt both emails even if one request fails.
   const results = await Promise.allSettled(
-    messages.map((item) =>
-      sendEmail(item.to, item.subject, item.message)
+    notifications.map((item) =>
+      sendEmail(item.to, item.subject, item.body)
     )
   );
 
   for (const result of results) {
     if (result.status === 'rejected') {
-      console.error('Booking notification failed', result.reason);
+      console.error(
+        'Booking email notification failed',
+        result.reason
+      );
     }
   }
 }
