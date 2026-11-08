@@ -1,6 +1,7 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from '../../../../lib/db';
+import { notifyBooking } from '../../../../lib/email';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,12 +34,12 @@ function verifySignature(
   const parts = header.split(',').map((p) => p.trim());
 
   const timestamp = parts
-    .find((part) => part.startsWith('t='))
+    .find((p) => p.startsWith('t='))
     ?.slice(2);
 
   const signatures = parts
-    .filter((part) => part.startsWith('v1='))
-    .map((part) => part.slice(3));
+    .filter((p) => p.startsWith('v1='))
+    .map((p) => p.slice(3));
 
   if (!timestamp || signatures.length === 0) {
     return false;
@@ -157,12 +158,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // Connected-account webhooks contain event.account.
-    // Platform-account webhooks generally do not.
-    // When present, verify that the connected account
-    // belongs to the tutor for this booking.
     if (
-      event.account &&
+      !event.account ||
       booking.tutor.stripeAccountId !== event.account
     ) {
       return new Response('Connected account mismatch', {
@@ -170,9 +167,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Update only bookings still awaiting payment.
-    // Duplicate webhook deliveries will not update
-    // the booking again.
     const result = await db.booking.updateMany({
       where: {
         id: booking.id,
@@ -189,6 +183,17 @@ export async function POST(req: Request) {
       updated: result.count,
       eventType: event.type,
     });
+
+    if (result.count === 1) {
+      try {
+        await notifyBooking(booking.id, 'CONFIRMED');
+      } catch (error) {
+        console.error(
+          'Booking confirmation email error',
+          error
+        );
+      }
+    }
 
     return Response.json({ received: true });
   } catch (error) {
