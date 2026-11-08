@@ -11,6 +11,150 @@ import BookingManager from './booking-manager';
 
 export const dynamic = 'force-dynamic';
 
+type StripeAccountStatus = {
+  connected: boolean;
+  paymentsEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  requirements: string[];
+  error?: string;
+};
+
+async function getStripeAccountStatus(
+  accountId: string | null | undefined
+): Promise<StripeAccountStatus> {
+  const emptyStatus: StripeAccountStatus = {
+    connected: false,
+    paymentsEnabled: false,
+    payoutsEnabled: false,
+    detailsSubmitted: false,
+    requirements: [],
+  };
+
+  if (!accountId) {
+    return emptyStatus;
+  }
+
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+
+  if (!secretKey) {
+    return {
+      ...emptyStatus,
+      connected: true,
+      error: 'Stripe configuration is unavailable.',
+    };
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.stripe.com/v1/accounts/${encodeURIComponent(accountId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+        },
+        cache: 'no-store',
+      }
+    );
+
+    if (!response.ok) {
+      console.error(
+        'Unable to retrieve Stripe account status',
+        response.status
+      );
+
+      return {
+        ...emptyStatus,
+        connected: true,
+        error: 'Stripe account status is temporarily unavailable.',
+      };
+    }
+
+    const account = await response.json();
+
+    return {
+      connected: true,
+      paymentsEnabled: account.charges_enabled === true,
+      payoutsEnabled: account.payouts_enabled === true,
+      detailsSubmitted: account.details_submitted === true,
+      requirements: Array.isArray(account.requirements?.currently_due)
+        ? account.requirements.currently_due
+        : [],
+    };
+  } catch (error) {
+    console.error('Stripe status request failed', error);
+
+    return {
+      ...emptyStatus,
+      connected: true,
+      error: 'Unable to check Stripe account status.',
+    };
+  }
+}
+
+function PaymentStatus({
+  status,
+}: {
+  status: StripeAccountStatus;
+}) {
+  if (!status.connected) {
+    return (
+      <p>
+        <strong>Stripe status:</strong> Not connected
+      </p>
+    );
+  }
+
+  if (status.error) {
+    return (
+      <p>
+        <strong>Stripe status:</strong> {status.error}
+      </p>
+    );
+  }
+
+  return (
+    <>
+      <p>
+        <strong>Stripe connection:</strong> Connected
+      </p>
+
+      <p>
+        <strong>Accepting payments:</strong>{' '}
+        {status.paymentsEnabled
+          ? 'Enabled'
+          : 'Not yet enabled'}
+      </p>
+
+      <p>
+        <strong>Bank payouts:</strong>{' '}
+        {status.payoutsEnabled
+          ? 'Enabled'
+          : 'Restricted or pending verification'}
+      </p>
+
+      {!status.detailsSubmitted && (
+        <p className="muted">
+          Stripe onboarding is not yet complete.
+        </p>
+      )}
+
+      {status.requirements.length > 0 && (
+        <p className="muted">
+          Stripe requires additional account information.
+          Use the button below to continue onboarding.
+        </p>
+      )}
+
+      {status.paymentsEnabled && status.payoutsEnabled && (
+        <p>
+          Your Stripe account is ready to accept payments
+          and receive payouts.
+        </p>
+      )}
+    </>
+  );
+}
+
 export default async function Dashboard() {
   const who = await identity();
 
@@ -23,6 +167,12 @@ export default async function Dashboard() {
       ? await db.tutorProfile.findUnique({
           where: { userId: who.id },
         })
+      : null;
+
+  const stripeStatus =
+    who.role === 'TUTOR' &&
+    profile?.verification === 'APPROVED'
+      ? await getStripeAccountStatus(profile.stripeAccountId)
       : null;
 
   const inquiries = await db.inquiry.findMany({
@@ -82,10 +232,9 @@ export default async function Dashboard() {
             <div className="card">
               <h2>Receive payments</h2>
 
-              <p>
-                Complete secure Stripe Connect onboarding
-                before accepting paid sessions.
-              </p>
+              {stripeStatus && (
+                <PaymentStatus status={stripeStatus} />
+              )}
 
               <ConnectButton />
             </div>
