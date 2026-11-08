@@ -97,12 +97,10 @@ export async function POST(req: Request) {
     });
   }
 
-  const successfulEvents = [
-    'checkout.session.completed',
-    'checkout.session.async_payment_succeeded',
-  ];
-
-  if (!successfulEvents.includes(event.type)) {
+  if (
+    event.type !== 'checkout.session.completed' &&
+    event.type !== 'checkout.session.async_payment_succeeded'
+  ) {
     return Response.json({ received: true });
   }
 
@@ -158,6 +156,7 @@ export async function POST(req: Request) {
       });
     }
 
+    // Payments use direct charges on connected accounts.
     if (
       !event.account ||
       booking.tutor.stripeAccountId !== event.account
@@ -184,12 +183,14 @@ export async function POST(req: Request) {
       eventType: event.type,
     });
 
+    // Only notify when this event actually changed the status.
+    // Stripe may deliver the same event more than once.
     if (result.count === 1) {
       try {
         await notifyBooking(booking.id, 'CONFIRMED');
       } catch (error) {
         console.error(
-          'Booking confirmation email error',
+          'Booking confirmation notification failed',
           error
         );
       }
