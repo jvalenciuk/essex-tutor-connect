@@ -43,6 +43,7 @@ export default async function Admin() {
           createdAt: 'desc',
         },
       }),
+
       db.booking.findMany({
         include: {
           parent: {
@@ -70,6 +71,7 @@ export default async function Admin() {
         },
         take: 100,
       }),
+
       db.booking.groupBy({
         by: ['status'],
         _count: {
@@ -96,7 +98,8 @@ export default async function Admin() {
   const pendingPayments =
     counts['PENDING_PAYMENT'] || 0;
 
-  const paidBookings = counts['PAID'] || 0;
+  const paidBookings =
+    counts['PAID'] || 0;
 
   const completedBookings =
     counts['COMPLETED'] || 0;
@@ -104,10 +107,12 @@ export default async function Admin() {
   const refundedBookings =
     counts['REFUNDED'] || 0;
 
+  const now = new Date();
+
   const upcoming = bookings
     .filter(
       booking =>
-        booking.startsAt > new Date() &&
+        booking.startsAt > now &&
         (booking.status === 'PAID' ||
           booking.status === 'PENDING_PAYMENT')
     )
@@ -120,7 +125,7 @@ export default async function Admin() {
   const attention = bookings.filter(
     booking =>
       booking.status === 'PENDING_PAYMENT' &&
-      booking.startsAt <= new Date()
+      booking.startsAt <= now
   );
 
   return (
@@ -160,7 +165,10 @@ export default async function Admin() {
           },
         ].map(item => (
           <div className="card" key={item.title}>
-            <p className="muted">{item.title}</p>
+            <p className="muted">
+              {item.title}
+            </p>
+
             <h2 style={{ fontSize: 30 }}>
               {item.value}
             </h2>
@@ -178,12 +186,19 @@ export default async function Admin() {
         </p>
 
         {attention.length === 0 ? (
-          <p>No overdue payments in the recent booking list.</p>
+          <p>
+            No overdue payments in the recent
+            booking list.
+          </p>
         ) : (
           attention.map(booking => (
-            <div className="card" key={booking.id}>
+            <div
+              className="card"
+              key={booking.id}
+            >
               <h3>
-                {booking.inquiry?.subject || 'Tutoring'}
+                {booking.inquiry?.subject ||
+                  'Tutoring'}
               </h3>
 
               <p>
@@ -193,15 +208,19 @@ export default async function Admin() {
               </p>
 
               <p>
-                Scheduled: {dateTime(booking.startsAt)}
+                Scheduled:{' '}
+                {dateTime(booking.startsAt)}
               </p>
 
               <p>
-                Amount: {money(booking.amountCents)}
+                Amount:{' '}
+                {money(booking.amountCents)}
               </p>
 
               <p>
-                <strong>Status: {booking.status}</strong>
+                <strong>
+                  Status: {booking.status}
+                </strong>
               </p>
 
               <p className="muted">
@@ -216,12 +235,19 @@ export default async function Admin() {
         <h2>Upcoming bookings</h2>
 
         {upcoming.length === 0 ? (
-          <p>No upcoming paid or pending-payment sessions.</p>
+          <p>
+            No upcoming paid or pending-payment
+            sessions.
+          </p>
         ) : (
           upcoming.slice(0, 20).map(booking => (
-            <div className="card" key={booking.id}>
+            <div
+              className="card"
+              key={booking.id}
+            >
               <h3>
-                {booking.inquiry?.subject || 'Tutoring'}
+                {booking.inquiry?.subject ||
+                  'Tutoring'}
               </h3>
 
               <p>
@@ -230,12 +256,16 @@ export default async function Admin() {
                 {booking.tutor.user.name}
               </p>
 
-              <p>{dateTime(booking.startsAt)}</p>
+              <p>
+                {dateTime(booking.startsAt)}
+              </p>
 
               <p>
                 {money(booking.amountCents)}
                 {' · '}
-                <strong>{booking.status}</strong>
+                <strong>
+                  {booking.status}
+                </strong>
               </p>
             </div>
           ))
@@ -247,8 +277,8 @@ export default async function Admin() {
 
         <p className="muted">
           Verify qualifications and required
-          safeguarding documents outside the platform
-          before approving tutors.
+          safeguarding documents outside the
+          platform before approving tutors.
         </p>
 
         <h3>
@@ -256,19 +286,29 @@ export default async function Admin() {
         </h3>
 
         {pendingTutors.length === 0 && (
-          <p>No tutor applications awaiting review.</p>
+          <p>
+            No tutor applications awaiting review.
+          </p>
         )}
 
         {[
           ...pendingTutors,
           ...tutors.filter(
-            tutor => tutor.verification !== 'PENDING'
+            tutor =>
+              tutor.verification !== 'PENDING'
           ),
         ].map(tutor => (
-          <div className="card" key={tutor.id}>
-            <h3>{tutor.user.name}</h3>
+          <div
+            className="card"
+            key={tutor.id}
+          >
+            <h3>
+              {tutor.user.name}
+            </h3>
 
-            <p>{tutor.user.email}</p>
+            <p>
+              {tutor.user.email}
+            </p>
 
             <p>
               <strong>Status:</strong>{' '}
@@ -307,37 +347,50 @@ export default async function Admin() {
         ))}
       </section>
 
-      <section className="card" style={{ marginTop: 28 }}>
-        <h2>Administrator checklist</h2>
+      <section
+        className="card"
+        style={{ marginTop: 28 }}
+      >
+        <h2>
+          Administrator checklist
+        </h2>
 
         <ol>
           <li>
             Review pending tutor applications.
           </li>
+
           <li>
             Verify credentials and safeguarding
             documentation outside the platform.
           </li>
+
           <li>
-            Confirm tutors have configured availability.
+            Confirm tutors have configured
+            availability.
           </li>
+
           <li>
             Check that tutors have completed
-            Stripe onboarding before accepting payments.
+            Stripe onboarding before accepting
+            payments.
           </li>
+
           <li>
-            Review overdue pending payments against
-            Stripe before making changes.
+            Review overdue pending payments
+            against Stripe before making changes.
           </li>
+
           <li>
             Monitor cancellations and refunds.
           </li>
         </ol>
 
         <p className="muted">
-          A linked Stripe account does not necessarily
-          mean payouts are enabled. Confirm the account's
-          status in Stripe before treating it as ready.
+          A linked Stripe account does not
+          necessarily mean payouts are enabled.
+          Confirm the account status in Stripe
+          before treating it as ready.
         </p>
       </section>
     </main>
