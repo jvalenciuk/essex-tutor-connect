@@ -13,16 +13,36 @@ type Filters = {
   maxRate?: string;
 };
 
-function tags(items: string[]) {
-  return items.map(item => (
-    <span
-      key={item}
-      className="tag"
-      style={{ margin: '3px' }}
-    >
-      {item}
-    </span>
-  ));
+function uniqueOptions(values: string[][]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .flat()
+        .map(value => value.trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) =>
+    a.localeCompare(b, 'en-CA', {
+      numeric: true,
+      sensitivity: 'base',
+    })
+  );
+}
+
+function Tags({ items }: { items: string[] }) {
+  if (!items.length) {
+    return <p className="muted">Not specified</p>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {items.map(item => (
+        <span className="tag" key={item}>
+          {item}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default async function Tutors({
@@ -32,55 +52,91 @@ export default async function Tutors({
 }) {
   const q = await searchParams;
 
-  const maxRate = Number(q.maxRate);
-
-  const validRate =
-    q.maxRate &&
-    Number.isFinite(maxRate) &&
-    maxRate > 0;
-
-  const tutors = await db.tutorProfile.findMany({
+  // Load approved profiles once, so dropdown choices
+  // always reflect the tutors currently on the site.
+  const approvedTutors = await db.tutorProfile.findMany({
     where: {
       verification: 'APPROVED',
-      ...(q.subject
-        ? { subjects: { has: q.subject } }
-        : {}),
-      ...(q.grade
-        ? { grades: { has: q.grade } }
-        : {}),
-      ...(q.city
-        ? { cities: { has: q.city } }
-        : {}),
-      ...(q.online === 'yes'
-        ? { online: true }
-        : {}),
-      ...(validRate
-        ? {
-            hourlyRateCents: {
-              lte: Math.round(maxRate * 100),
-            },
-          }
-        : {}),
     },
     include: {
       user: {
-        select: { name: true },
+        select: {
+          name: true,
+        },
       },
     },
     orderBy: {
       hourlyRateCents: 'asc',
     },
-    take: 100,
   });
+
+  const subjects = uniqueOptions(
+    approvedTutors.map(tutor => tutor.subjects)
+  );
+
+  const grades = uniqueOptions(
+    approvedTutors.map(tutor => tutor.grades)
+  );
+
+  const cities = uniqueOptions(
+    approvedTutors.map(tutor => tutor.cities)
+  );
+
+  const subject = subjects.includes(q.subject || '')
+    ? q.subject || ''
+    : '';
+
+  const grade = grades.includes(q.grade || '')
+    ? q.grade || ''
+    : '';
+
+  const city = cities.includes(q.city || '')
+    ? q.city || ''
+    : '';
+
+  const maxRate = Number(q.maxRate);
+
+  const hasValidMaxRate =
+    Boolean(q.maxRate) &&
+    Number.isFinite(maxRate) &&
+    maxRate > 0;
+
+  const tutors = approvedTutors
+    .filter(tutor => {
+      if (subject && !tutor.subjects.includes(subject)) {
+        return false;
+      }
+
+      if (grade && !tutor.grades.includes(grade)) {
+        return false;
+      }
+
+      if (city && !tutor.cities.includes(city)) {
+        return false;
+      }
+
+      if (q.online === 'yes' && !tutor.online) {
+        return false;
+      }
+
+      if (
+        hasValidMaxRate &&
+        tutor.hourlyRateCents > Math.round(maxRate * 100)
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .slice(0, 100);
 
   return (
     <main style={{ maxWidth: 1150, margin: '0 auto' }}>
       <h1>Find your tutor</h1>
 
       <p className="muted">
-        Explore approved tutors in Windsor and
-        Essex County. Compare qualifications,
-        subjects, rates, and availability.
+        Explore approved tutors in Windsor and Essex County.
+        Compare qualifications, subjects, rates, and availability.
       </p>
 
       <form
@@ -102,32 +158,50 @@ export default async function Tutors({
         >
           <label>
             Subject
-            <input
+            <select
               className="field"
               name="subject"
-              defaultValue={q.subject || ''}
-              placeholder="e.g. French"
-            />
+              defaultValue={subject}
+            >
+              <option value="">All subjects</option>
+              {subjects.map(value => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
             Grade
-            <input
+            <select
               className="field"
               name="grade"
-              defaultValue={q.grade || ''}
-              placeholder="e.g. Grade 7"
-            />
+              defaultValue={grade}
+            >
+              <option value="">All grades</option>
+              {grades.map(value => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
             City
-            <input
+            <select
               className="field"
               name="city"
-              defaultValue={q.city || ''}
-              placeholder="e.g. Windsor"
-            />
+              defaultValue={city}
+            >
+              <option value="">All cities</option>
+              {cities.map(value => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
@@ -148,11 +222,9 @@ export default async function Tutors({
             <select
               className="field"
               name="online"
-              defaultValue={q.online || ''}
+              defaultValue={q.online === 'yes' ? 'yes' : ''}
             >
-              <option value="">
-                All tutors
-              </option>
+              <option value="">All tutors</option>
               <option value="yes">
                 Online available
               </option>
@@ -166,6 +238,7 @@ export default async function Tutors({
             gap: 10,
             flexWrap: 'wrap',
             marginTop: 16,
+            alignItems: 'center',
           }}
         >
           <button type="submit">
@@ -178,6 +251,7 @@ export default async function Tutors({
               padding: '10px 16px',
               border: '1px solid #ccc',
               borderRadius: 8,
+              textDecoration: 'none',
             }}
           >
             Clear filters
@@ -228,13 +302,8 @@ export default async function Tutors({
               </div>
 
               <div>
-                <strong
-                  style={{ fontSize: '1.3rem' }}
-                >
-                  $
-                  {(
-                    tutor.hourlyRateCents / 100
-                  ).toFixed(2)}
+                <strong style={{ fontSize: '1.3rem' }}>
+                  ${(tutor.hourlyRateCents / 100).toFixed(2)}
                 </strong>
 
                 <div className="muted">
@@ -250,28 +319,28 @@ export default async function Tutors({
             </p>
 
             <h3>About this tutor</h3>
+
             <p style={{ whiteSpace: 'pre-wrap' }}>
               {tutor.bio}
             </p>
 
             <h3>Qualifications and experience</h3>
+
             <p style={{ whiteSpace: 'pre-wrap' }}>
               {tutor.qualifications ||
                 'Contact this tutor for details.'}
             </p>
 
             <h3>Subjects</h3>
-            <div>{tags(tutor.subjects)}</div>
+            <Tags items={tutor.subjects} />
 
             <h3>Grades</h3>
-            <div>{tags(tutor.grades)}</div>
+            <Tags items={tutor.grades} />
 
             <h3>Languages</h3>
-            <div>{tags(tutor.languages)}</div>
+            <Tags items={tutor.languages} />
 
-            <TutorAvailability
-              tutorId={tutor.id}
-            />
+            <TutorAvailability tutorId={tutor.id} />
 
             <div
               style={{
@@ -283,9 +352,8 @@ export default async function Tutors({
               <h3>Interested in tutoring?</h3>
 
               <p className="muted">
-                Contact this tutor to discuss your
-                learning goals. No payment is
-                required to send an inquiry.
+                Contact this tutor to discuss your learning
+                goals. No payment is required to send an inquiry.
               </p>
 
               <InquiryForm
@@ -299,10 +367,12 @@ export default async function Tutors({
         {tutors.length === 0 && (
           <div className="card">
             <h2>No matching tutors</h2>
+
             <p>
-              Try removing a filter or
-              increasing your maximum hourly rate.
+              Try removing a filter or increasing
+              your maximum hourly rate.
             </p>
+
             <a href="/tutors">
               View all tutors
             </a>
