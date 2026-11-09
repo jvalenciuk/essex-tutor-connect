@@ -1,15 +1,21 @@
 
 import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
-import { hasBookingConflict } from '../../../lib/booking-conflicts';
+import { checkTutorSlot } from '../../../lib/booking-conflicts';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
 const bookingSchema = z.object({
   inquiryId: z.string().min(1),
-  startsAt: z.string().datetime({ offset: true }),
-  durationMinutes: z.number().int().min(30).max(180),
+  startsAt: z.string().datetime({
+    offset: true,
+  }),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(30)
+    .max(180),
 });
 
 export async function POST(req: Request) {
@@ -22,7 +28,9 @@ export async function POST(req: Request) {
   let data: z.infer<typeof bookingSchema>;
 
   try {
-    data = bookingSchema.parse(await req.json());
+    data = bookingSchema.parse(
+      await req.json()
+    );
   } catch {
     return fail('Invalid booking details', 400);
   }
@@ -30,7 +38,10 @@ export async function POST(req: Request) {
   const startsAt = new Date(data.startsAt);
 
   if (startsAt.getTime() <= Date.now()) {
-    return fail('Choose a future date and time', 400);
+    return fail(
+      'Choose a future date and time',
+      400
+    );
   }
 
   const inquiry = await db.inquiry.findFirst({
@@ -48,20 +59,20 @@ export async function POST(req: Request) {
   });
 
   if (!inquiry) {
-    return fail('Accepted inquiry not found', 403);
+    return fail(
+      'Accepted inquiry not found',
+      403
+    );
   }
 
-  const conflict = await hasBookingConflict(
+  const issue = await checkTutorSlot(
     inquiry.tutorId,
     startsAt,
     data.durationMinutes
   );
 
-  if (conflict) {
-    return fail(
-      'This time overlaps another confirmed or awaiting-payment session. Choose a different time.',
-      409
-    );
+  if (issue) {
+    return fail(issue, 409);
   }
 
   const duplicate = await db.booking.findFirst({
@@ -87,8 +98,8 @@ export async function POST(req: Request) {
   }
 
   const amountCents = Math.round(
-    (inquiry.tutor.hourlyRateCents *
-      data.durationMinutes) /
+    inquiry.tutor.hourlyRateCents *
+      data.durationMinutes /
       60
   );
 
@@ -118,7 +129,10 @@ export async function POST(req: Request) {
     },
   });
 
-  return Response.json(booking, { status: 201 });
+  return Response.json(
+    booking,
+    { status: 201 }
+  );
 }
 
 export async function GET() {
@@ -138,16 +152,26 @@ export async function GET() {
   const bookings = await db.booking.findMany({
     where:
       who.role === 'TUTOR'
-        ? { tutor: { userId: who.id } }
-        : { parentId: who.id },
+        ? {
+            tutor: {
+              userId: who.id,
+            },
+          }
+        : {
+            parentId: who.id,
+          },
     include: {
       parent: {
-        select: { name: true },
+        select: {
+          name: true,
+        },
       },
       tutor: {
         include: {
           user: {
-            select: { name: true },
+            select: {
+              name: true,
+            },
           },
         },
       },
