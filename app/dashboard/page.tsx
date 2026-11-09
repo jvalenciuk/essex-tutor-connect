@@ -8,6 +8,7 @@ import ConnectButton from './connect-button';
 import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
 import BookingManager from './booking-manager';
+import AvailabilityManager from './availability-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -208,7 +209,7 @@ function TutorEarnings({
 
   const upcomingBookings = bookings
     .filter(
-      (booking) =>
+      booking =>
         booking.startsAt.getTime() > Date.now()
     )
     .sort(
@@ -237,28 +238,48 @@ function TutorEarnings({
       >
         <div className="card">
           <h3>Total Paid Bookings</h3>
-          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+          <p
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+            }}
+          >
             {formatCAD(totalPaidCents)}
           </p>
         </div>
 
         <div className="card">
           <h3>Platform Commission</h3>
-          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+          <p
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+            }}
+          >
             {formatCAD(totalCommissionCents)}
           </p>
         </div>
 
         <div className="card">
           <h3>Your Earnings</h3>
-          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+          <p
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+            }}
+          >
             {formatCAD(tutorEarningsCents)}
           </p>
         </div>
 
         <div className="card">
           <h3>Paid Sessions</h3>
-          <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
+          <p
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 'bold',
+            }}
+          >
             {bookings.length}
           </p>
         </div>
@@ -306,10 +327,12 @@ function TutorEarnings({
             </thead>
 
             <tbody>
-              {upcomingBookings.map((booking) => (
+              {upcomingBookings.map(booking => (
                 <tr key={booking.id}>
                   <td style={{ padding: '10px' }}>
-                    {formatSessionDate(booking.startsAt)}
+                    {formatSessionDate(
+                      booking.startsAt
+                    )}
                   </td>
 
                   <td style={{ padding: '10px' }}>
@@ -453,6 +476,8 @@ export default async function Dashboard() {
             }
           />
 
+          {profile && <AvailabilityManager />}
+
           {profile?.verification === 'APPROVED' && (
             <>
               <div className="card">
@@ -496,7 +521,7 @@ export default async function Dashboard() {
         <p>No inquiries yet.</p>
       )}
 
-      {inquiries.map((inquiry) => (
+      {inquiries.map(inquiry => (
         <div className="card" key={inquiry.id}>
           <h3>
             {inquiry.subject} — {inquiry.grade}
