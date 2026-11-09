@@ -1,34 +1,111 @@
 
 import { db } from './db';
 
-const MINUTE_MS = 60 * 1000;
-const MAX_SESSION_MINUTES = 180;
+const MINUTE = 60_000;
+const ZONE = 'America/Toronto';
 
-export async function hasBookingConflict(
+function localParts(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const part = (name: string) =>
+    parts.find(p => p.type === name)?.value || '';
+
+  const weekday = [
+    'Sun', 'Mon', 'Tue', 'Wed',
+    'Thu', 'Fri', 'Sat',
+  ].indexOf(part('weekday'));
+
+  return {
+    dateKey:
+      `${part('year')}-${part('month')}-${part('day')}`,
+    weekday,
+    minute:
+      Number(part('hour')) * 60 +
+      Number(part('minute')),
+  };
+}
+
+export async function checkTutorSlot(
   tutorId: string,
   startsAt: Date,
   durationMinutes: number,
   excludeBookingId?: string
-): Promise<boolean> {
-  const proposedStart = startsAt.getTime();
-  const proposedEnd =
-    proposedStart + durationMinutes * MINUTE_MS;
+): Promise<string | null> {
+  if (
+    !Number.isInteger(durationMinutes) ||
+    durationMinutes < 30 ||
+    durationMinutes > 180 ||
+    startsAt.getTime() <= Date.now()
+  ) {
+    return 'Choose a future session between 30 and 180 minutes.';
+  }
 
-  const earliestPossibleStart = new Date(
-    proposedStart - MAX_SESSION_MINUTES * MINUTE_MS
+  const end = new Date(
+    startsAt.getTime() + durationMinutes * MINUTE
   );
 
-  const latestPossibleStart = new Date(proposedEnd);
+  const beginning = localParts(startsAt);
+  const lastMinute = localParts(
+    new Date(end.getTime() - 1)
+  );
+  const ending = localParts(end);
 
-  const bookings = await db.booking.findMany({
+  if (beginning.dateKey !== lastMinute.dateKey) {
+    return 'Sessions must start and finish on the same local date.';
+  }
+
+  const [hours, blocks] = await Promise.all([
+    db.tutorAvailability.findMany({
+      where: { tutorId },
+    }),
+    db.tutorBlockedDate.findMany({
+      where: {
+        tutorId,
+        dateKey: beginning.dateKey,
+      },
+    }),
+  ]);
+
+  if (blocks.length) {
+    return 'The tutor has blocked this date.';
+  }
+
+  // Tutors without saved hours retain the previous
+  // booking behaviour until they set a schedule.
+  if (hours.length) {
+    const covered = hours.some(
+      h =>
+        h.dayOfWeek === beginning.weekday &&
+        beginning.minute >= h.startMinute &&
+        ending.minute <= h.endMinute &&
+        ending.dateKey === beginning.dateKey
+    );
+
+    if (!covered) {
+      return 'This session is outside the tutor’s weekly availability.';
+    }
+  }
+
+  const candidates = await db.booking.findMany({
     where: {
       tutorId,
       status: {
         in: ['PAID', 'PENDING_PAYMENT'],
       },
       startsAt: {
-        gte: earliestPossibleStart,
-        lt: latestPossibleStart,
+        gte: new Date(
+          startsAt.getTime() - 180 * MINUTE
+        ),
+        lt: end,
       },
       ...(excludeBookingId
         ? { id: { not: excludeBookingId } }
@@ -40,15 +117,33 @@ export async function hasBookingConflict(
     },
   });
 
-  return bookings.some((booking) => {
-    const existingStart = booking.startsAt.getTime();
-    const existingEnd =
-      existingStart +
-      booking.durationMinutes * MINUTE_MS;
+  const overlapping = candidates.some(
+    b =>
+      startsAt.getTime() <
+        b.startsAt.getTime() +
+          b.durationMinutes * MINUTE &&
+      b.startsAt.getTime() < end.getTime()
+  );
 
-    return (
-      proposedStart < existingEnd &&
-      existingStart < proposedEnd
-    );
-  });
+  if (overlapping) {
+    return 'This time overlaps another confirmed or awaiting-payment session.';
+  }
+
+  return null;
+}
+
+export async function hasBookingConflict(
+  tutorId: string,
+  startsAt: Date,
+  durationMinutes: number,
+  excludeBookingId?: string
+) {
+  return (
+    await checkTutorSlot(
+      tutorId,
+      startsAt,
+      durationMinutes,
+      excludeBookingId
+    )
+  ) !== null;
 }
