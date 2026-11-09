@@ -1,7 +1,11 @@
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import SessionCalendar from './session-calendar';
 
 type Booking = {
@@ -22,78 +26,156 @@ type Props = {
   role: string;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 86400000;
+
+const statusInfo: Record<
+  string,
+  { label: string; color: string }
+> = {
+  PROPOSED: {
+    label: 'Session proposed',
+    color: '#2563eb',
+  },
+  CHANGE_REQUESTED: {
+    label: 'Time change requested',
+    color: '#7c3aed',
+  },
+  PENDING_PAYMENT: {
+    label: 'Awaiting payment',
+    color: '#b45309',
+  },
+  PAID: {
+    label: 'Confirmed and paid',
+    color: '#15803d',
+  },
+  COMPLETED: {
+    label: 'Completed',
+    color: '#475569',
+  },
+  DECLINED: {
+    label: 'Declined',
+    color: '#64748b',
+  },
+  CANCELLED: {
+    label: 'Cancelled',
+    color: '#64748b',
+  },
+  REFUNDED: {
+    label: 'Refunded',
+    color: '#64748b',
+  },
+};
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleString('en-CA', {
-    dateStyle: 'full',
-    timeStyle: 'short',
-    timeZone: 'America/Toronto',
-  });
+  return new Date(value).toLocaleString(
+    'en-CA',
+    {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'America/Toronto',
+    }
+  );
 }
 
-function formatMoney(cents: number) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: 'CAD',
-  }).format(cents / 100);
+function money(cents: number) {
+  return new Intl.NumberFormat(
+    'en-CA',
+    {
+      style: 'currency',
+      currency: 'CAD',
+    }
+  ).format(cents / 100);
 }
 
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    PROPOSED: 'Waiting for parent response',
-    CHANGE_REQUESTED: 'Parent requested a different time',
-    DECLINED: 'Declined',
-    PENDING_PAYMENT: 'Agreed — awaiting payment',
-    PAID: 'Paid',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
-    REFUNDED: 'Refunded',
-  };
-
-  return labels[status] || status;
+function nextStep(
+  status: string,
+  role: string
+) {
+  switch (status) {
+    case 'PROPOSED':
+      return role === 'PARENT'
+        ? 'Review the proposed session. Accept it, request a different time, or decline.'
+        : 'Waiting for the parent to respond to your proposal.';
+    case 'CHANGE_REQUESTED':
+      return role === 'TUTOR'
+        ? 'Review the requested time and send a revised proposal.'
+        : 'Waiting for the tutor to propose a revised session.';
+    case 'PENDING_PAYMENT':
+      return role === 'PARENT'
+        ? 'Your session time has been agreed upon. Complete secure payment to confirm it.'
+        : 'Waiting for the parent to complete payment.';
+    case 'PAID':
+      return 'Your session is confirmed. Check the date and time below.';
+    case 'COMPLETED':
+      return 'This session has been marked completed.';
+    case 'CANCELLED':
+      return 'This session was cancelled before payment.';
+    case 'REFUNDED':
+      return 'This session was cancelled and the Stripe refund was confirmed.';
+    case 'DECLINED':
+      return 'This proposal was declined. The tutor can propose another session.';
+    default:
+      return '';
+  }
 }
 
 export default function BookingManager({
   inquiryId,
   role,
 }: Props) {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [bookings, setBookings] =
+    useState<Booking[]>([]);
+  const [loading, setLoading] =
+    useState(true);
+  const [busy, setBusy] =
+    useState(false);
+  const [error, setError] =
+    useState('');
+  const [notice, setNotice] =
+    useState('');
+  const [startsAt, setStartsAt] =
+    useState('');
+  const [duration, setDuration] =
+    useState('60');
+  const [note, setNote] =
+    useState('');
+  const [changingId, setChangingId] =
+    useState<string | null>(null);
 
-  const [startsAt, setStartsAt] = useState('');
-  const [duration, setDuration] = useState('60');
-  const [note, setNote] = useState('');
-  const [changingId, setChangingId] = useState<string | null>(
-    null
-  );
+  const loadBookings = useCallback(
+    async () => {
+      try {
+        const response = await fetch(
+          '/api/bookings',
+          { cache: 'no-store' }
+        );
 
-  const loadBookings = useCallback(async () => {
-    try {
-      const response = await fetch('/api/bookings', {
-        cache: 'no-store',
-      });
+        if (!response.ok) {
+          throw new Error(
+            'Unable to load bookings'
+          );
+        }
 
-      if (!response.ok) {
-        throw new Error('Could not load bookings');
+        const data: Booking[] =
+          await response.json();
+
+        setBookings(
+          data.filter(
+            item =>
+              item.inquiryId === inquiryId
+          )
+        );
+        setError('');
+      } catch {
+        setError(
+          'Unable to load bookings.'
+        );
+      } finally {
+        setLoading(false);
       }
-
-      const data: Booking[] = await response.json();
-
-      setBookings(
-        data.filter((item) => item.inquiryId === inquiryId)
-      );
-
-      setError('');
-    } catch {
-      setError('Unable to load bookings.');
-    } finally {
-      setLoading(false);
-    }
-  }, [inquiryId]);
+    },
+    [inquiryId]
+  );
 
   useEffect(() => {
     void loadBookings();
@@ -110,26 +192,37 @@ export default function BookingManager({
     url: string,
     method: 'POST' | 'PATCH',
     payload: object,
-    successMessage = 'Booking updated successfully.'
+    successMessage =
+      'Booking updated successfully.'
   ) {
     setBusy(true);
     setError('');
     setNotice('');
 
     try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await fetch(
+        url,
+        {
+          method,
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify(
+            payload
+          ),
+        }
+      );
+
+      const result =
+        await response.json().catch(
+          () => null
+        );
 
       if (!response.ok) {
-        const result = await response.json().catch(() => null);
-
         throw new Error(
-          result?.error || 'Unable to update booking'
+          result?.error ||
+            'Unable to update booking'
         );
       }
 
@@ -147,36 +240,55 @@ export default function BookingManager({
     }
   }
 
-  async function startCheckout(bookingId: string) {
+  async function startCheckout(
+    bookingId: string
+  ) {
     setBusy(true);
     setError('');
     setNotice('');
 
     try {
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ bookingId }),
-      });
+      const response = await fetch(
+        '/api/checkout',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':
+              'application/json',
+          },
+          body: JSON.stringify({
+            bookingId,
+          }),
+        }
+      );
 
-      const result = await response.json().catch(() => null);
+      const result =
+        await response.json().catch(
+          () => null
+        );
 
       if (!response.ok) {
         throw new Error(
-          result?.error || 'Unable to start payment.'
+          result?.error ||
+            'Unable to start payment.'
         );
       }
 
       if (
-        typeof result?.url !== 'string' ||
-        !result.url.startsWith('https://checkout.stripe.com/')
+        typeof result?.url !==
+          'string' ||
+        !result.url.startsWith(
+          'https://checkout.stripe.com/'
+        )
       ) {
-        throw new Error('The payment link was not valid.');
+        throw new Error(
+          'The payment link was not valid.'
+        );
       }
 
-      window.location.assign(result.url);
+      window.location.assign(
+        result.url
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -189,18 +301,26 @@ export default function BookingManager({
 
   function datePayload() {
     if (!startsAt) {
-      setError('Please choose a date and time.');
+      setError(
+        'Please choose a date and time.'
+      );
       return null;
     }
 
-    const date = new Date(startsAt);
-    const minutes = Number(duration);
+    const date =
+      new Date(startsAt);
+    const minutes =
+      Number(duration);
 
     if (
-      Number.isNaN(date.getTime()) ||
+      Number.isNaN(
+        date.getTime()
+      ) ||
       date.getTime() <= Date.now()
     ) {
-      setError('Please choose a future date and time.');
+      setError(
+        'Please choose a future date and time.'
+      );
       return null;
     }
 
@@ -216,13 +336,16 @@ export default function BookingManager({
     }
 
     return {
-      startsAt: date.toISOString(),
-      durationMinutes: minutes,
+      startsAt:
+        date.toISOString(),
+      durationMinutes:
+        minutes,
     };
   }
 
   function submitProposal() {
-    const details = datePayload();
+    const details =
+      datePayload();
 
     if (!details) return;
 
@@ -237,13 +360,18 @@ export default function BookingManager({
     );
   }
 
-  function submitChange(bookingId: string) {
-    const details = datePayload();
+  function submitChange(
+    bookingId: string
+  ) {
+    const details =
+      datePayload();
 
     if (!details) return;
 
     void sendRequest(
-      `/api/bookings/${encodeURIComponent(bookingId)}`,
+      `/api/bookings/${encodeURIComponent(
+        bookingId
+      )}`,
       'PATCH',
       {
         action:
@@ -251,33 +379,49 @@ export default function BookingManager({
             ? 'REVISE'
             : 'REQUEST_CHANGE',
         ...details,
-        ...(role === 'PARENT' ? { note } : {}),
+        ...(role === 'PARENT'
+          ? { note }
+          : {}),
       }
     );
   }
 
   function respond(
     bookingId: string,
-    action: 'ACCEPT' | 'DECLINE' | 'COMPLETE'
+    action:
+      | 'ACCEPT'
+      | 'DECLINE'
+      | 'COMPLETE'
   ) {
     void sendRequest(
-      `/api/bookings/${encodeURIComponent(bookingId)}`,
+      `/api/bookings/${encodeURIComponent(
+        bookingId
+      )}`,
       'PATCH',
       { action }
     );
   }
 
-  function cancelBooking(booking: Booking) {
-    const isPaid = booking.status === 'PAID';
+  function cancelBooking(
+    booking: Booking
+  ) {
+    const isPaid =
+      booking.status === 'PAID';
 
     const message = isPaid
       ? 'Cancel this tutoring session and request a full refund through Stripe?'
       : 'Cancel this tutoring session proposal?';
 
-    if (!window.confirm(message)) return;
+    if (
+      !window.confirm(message)
+    ) {
+      return;
+    }
 
     void sendRequest(
-      `/api/bookings/${encodeURIComponent(booking.id)}`,
+      `/api/bookings/${encodeURIComponent(
+        booking.id
+      )}`,
       'PATCH',
       { action: 'CANCEL' },
       isPaid
@@ -286,442 +430,717 @@ export default function BookingManager({
     );
   }
 
-  const canPropose =
-    role === 'TUTOR' &&
-    !loading &&
-    !busy;
-
   function dateFields() {
     return (
-      <div style={{ marginTop: 12 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns:
+            'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+          gap: 14,
+          marginTop: 12,
+        }}
+      >
         <label>
-          <strong>Date and time</strong>
+          <strong>
+            Date and time
+          </strong>
           <input
+            className="field"
             type="datetime-local"
             value={startsAt}
-            onChange={(e) =>
-              setStartsAt(e.target.value)
+            onChange={e =>
+              setStartsAt(
+                e.target.value
+              )
             }
             required
-            style={{
-              display: 'block',
-              padding: 10,
-              margin: '8px 0',
-            }}
           />
         </label>
 
         <label>
-          <strong>Session duration</strong>
+          <strong>
+            Session duration
+          </strong>
           <select
+            className="field"
             value={duration}
-            onChange={(e) =>
-              setDuration(e.target.value)
+            onChange={e =>
+              setDuration(
+                e.target.value
+              )
             }
-            style={{
-              display: 'block',
-              padding: 10,
-              margin: '8px 0',
-            }}
           >
-            <option value="30">30 minutes</option>
-            <option value="60">60 minutes</option>
-            <option value="90">90 minutes</option>
-            <option value="120">120 minutes</option>
-            <option value="180">180 minutes</option>
+            <option value="30">
+              30 minutes
+            </option>
+            <option value="60">
+              60 minutes
+            </option>
+            <option value="90">
+              90 minutes
+            </option>
+            <option value="120">
+              120 minutes
+            </option>
+            <option value="180">
+              180 minutes
+            </option>
           </select>
         </label>
       </div>
     );
   }
 
+  const sortedBookings = [
+    ...bookings,
+  ].sort(
+    (a, b) =>
+      new Date(
+        b.startsAt
+      ).getTime() -
+      new Date(
+        a.startsAt
+      ).getTime()
+  );
+
   return (
     <section
       style={{
         marginTop: 20,
         paddingTop: 16,
-        borderTop: '1px solid #ddd',
+        borderTop:
+          '1px solid #ddd',
+        minWidth: 0,
       }}
     >
-      <h3>Session bookings</h3>
+      <h3>
+        Tutoring sessions
+      </h3>
 
-      {/* NEW: Monthly tutoring calendar */}
-      <SessionCalendar role={role} />
+      <p className="muted">
+        Manage session proposals,
+        scheduling, and secure
+        payments here.
+      </p>
 
-      {loading && <p>Loading bookings...</p>}
+      <div
+        className="card"
+        style={{
+          marginBottom: 16,
+        }}
+      >
+        <h4>
+          How booking works
+        </h4>
 
-      {!loading && bookings.length === 0 && (
-        <p>No session proposals yet.</p>
+        <ol>
+          <li>
+            The tutor proposes
+            a session.
+          </li>
+          <li>
+            The parent accepts
+            or requests a change.
+          </li>
+          <li>
+            The parent pays
+            securely through Stripe.
+          </li>
+          <li>
+            The session is
+            confirmed after payment.
+          </li>
+        </ol>
+      </div>
+
+      <SessionCalendar
+        role={role}
+      />
+
+      {loading && (
+        <p>
+          Loading bookings...
+        </p>
       )}
 
-      {bookings.map((booking) => {
-        const startTime =
-          new Date(booking.startsAt).getTime();
+      {!loading &&
+        sortedBookings.length ===
+          0 && (
+          <p>
+            No session proposals yet.
+          </p>
+        )}
 
-        const sessionEndsAt =
-          startTime +
-          booking.durationMinutes * 60 * 1000;
+      {sortedBookings.map(
+        booking => {
+          const startTime =
+            new Date(
+              booking.startsAt
+            ).getTime();
 
-        const canComplete =
-          role === 'TUTOR' &&
-          booking.status === 'PAID' &&
-          sessionEndsAt <= Date.now();
+          const sessionEndsAt =
+            startTime +
+            booking.durationMinutes *
+              60 *
+              1000;
 
-        const beforeSession = startTime > Date.now();
+          const beforeSession =
+            startTime >
+            Date.now();
 
-        const parentCanCancel =
-          role === 'PARENT' &&
-          startTime - Date.now() >= DAY_MS;
+          const canComplete =
+            role ===
+              'TUTOR' &&
+            booking.status ===
+              'PAID' &&
+            sessionEndsAt <=
+              Date.now();
 
-        const tutorCanCancel =
-          role === 'TUTOR' && beforeSession;
+          const parentCanCancel =
+            role ===
+              'PARENT' &&
+            startTime -
+              Date.now() >=
+              DAY_MS;
 
-        const canCancel =
-          (parentCanCancel || tutorCanCancel) &&
-          [
-            'PROPOSED',
-            'CHANGE_REQUESTED',
-            'PAID',
-          ].includes(booking.status);
+          const tutorCanCancel =
+            role ===
+              'TUTOR' &&
+            beforeSession;
 
-        return (
-          <div
-            key={booking.id}
-            style={{
-              padding: 16,
-              margin: '12px 0',
-              border: '1px solid #ddd',
-              borderRadius: 8,
-            }}
-          >
-            <p>
-              <strong>
-                Status: {statusLabel(booking.status)}
-              </strong>
-            </p>
+          const canCancel =
+            (parentCanCancel ||
+              tutorCanCancel) &&
+            [
+              'PROPOSED',
+              'CHANGE_REQUESTED',
+              'PAID',
+            ].includes(
+              booking.status
+            );
 
-            <p>
-              <strong>Proposed session:</strong>{' '}
-              {formatDate(booking.startsAt)}
-            </p>
+          const info =
+            statusInfo[
+              booking.status
+            ] || {
+              label:
+                booking.status,
+              color:
+                '#64748b',
+            };
 
-            <p>
-              <strong>Duration:</strong>{' '}
-              {booking.durationMinutes} minutes
-            </p>
-
-            <p>
-              <strong>Session price:</strong>{' '}
-              {formatMoney(booking.amountCents)}
-            </p>
-
-            {role === 'TUTOR' && (
-              <>
-                <p>
-                  <strong>
-                    Platform commission (15%):
-                  </strong>{' '}
-                  {formatMoney(booking.platformFeeCents)}
-                </p>
-
-                <p>
-                  <strong>
-                    Tutor portion before processing fees:
-                  </strong>{' '}
-                  {formatMoney(
-                    booking.amountCents -
-                      booking.platformFeeCents
+          return (
+            <article
+              key={
+                booking.id
+              }
+              className="card"
+              style={{
+                marginBottom: 16,
+                minWidth: 0,
+                overflowWrap:
+                  'anywhere',
+                borderLeft:
+                  `5px solid ${info.color}`,
+              }}
+            >
+              <div
+                style={{
+                  display:
+                    'flex',
+                  justifyContent:
+                    'space-between',
+                  alignItems:
+                    'flex-start',
+                  flexWrap:
+                    'wrap',
+                  gap: 12,
+                }}
+              >
+                <h4>
+                  {formatDate(
+                    booking.startsAt
                   )}
-                </p>
-              </>
-            )}
+                </h4>
 
-            {booking.status === 'PROPOSED' &&
-              role === 'PARENT' && (
-                <div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      respond(booking.id, 'ACCEPT')
-                    }
-                  >
-                    Accept session
-                  </button>{' '}
+                <span
+                  style={{
+                    color:
+                      info.color,
+                    fontWeight:
+                      700,
+                  }}
+                >
+                  {info.label}
+                </span>
+              </div>
 
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      setChangingId(
-                        changingId === booking.id
-                          ? null
-                          : booking.id
-                      );
-                      setStartsAt('');
-                      setDuration(
-                        String(booking.durationMinutes)
-                      );
-                      setError('');
+              <p>
+                <strong>
+                  Next step:
+                </strong>{' '}
+                {nextStep(
+                  booking.status,
+                  role
+                )}
+              </p>
+
+              <p>
+                <strong>
+                  Duration:
+                </strong>{' '}
+                {
+                  booking.durationMinutes
+                }{' '}
+                minutes
+              </p>
+
+              <p>
+                <strong>
+                  Session price:
+                </strong>{' '}
+                {money(
+                  booking.amountCents
+                )}
+              </p>
+
+              {role ===
+                'TUTOR' && (
+                <>
+                  <p>
+                    <strong>
+                      Platform
+                      commission (15%):
+                    </strong>{' '}
+                    {money(
+                      booking.platformFeeCents
+                    )}
+                  </p>
+
+                  <p>
+                    <strong>
+                      Tutor portion
+                      before processing
+                      fees:
+                    </strong>{' '}
+                    {money(
+                      booking.amountCents -
+                        booking.platformFeeCents
+                    )}
+                  </p>
+                </>
+              )}
+
+              {booking.status ===
+                'PROPOSED' &&
+                role ===
+                  'PARENT' && (
+                  <div
+                    style={{
+                      display:
+                        'flex',
+                      flexWrap:
+                        'wrap',
+                      gap: 8,
                     }}
                   >
-                    Request different time
-                  </button>{' '}
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() =>
+                        respond(
+                          booking.id,
+                          'ACCEPT'
+                        )
+                      }
+                    >
+                      Accept
+                      session
+                    </button>
 
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() => {
+                        setChangingId(
+                          booking.id
+                        );
+                        setStartsAt(
+                          ''
+                        );
+                        setDuration(
+                          String(
+                            booking.durationMinutes
+                          )
+                        );
+                        setError(
+                          ''
+                        );
+                      }}
+                    >
+                      Request
+                      different
+                      time
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() =>
+                        respond(
+                          booking.id,
+                          'DECLINE'
+                        )
+                      }
+                    >
+                      Decline
+                    </button>
+                  </div>
+                )}
+
+              {booking.status ===
+                'CHANGE_REQUESTED' && (
+                <div>
+                  <p>
+                    <strong>
+                      Requested
+                      time:
+                    </strong>{' '}
+                    {booking.requestedStartsAt
+                      ? formatDate(
+                          booking.requestedStartsAt
+                        )
+                      : 'Not provided'}
+                  </p>
+
+                  <p>
+                    <strong>
+                      Requested
+                      duration:
+                    </strong>{' '}
+                    {
+                      booking.requestedDurationMinutes
+                    }{' '}
+                    minutes
+                  </p>
+
+                  {booking.requestNote && (
+                    <p>
+                      <strong>
+                        Parent note:
+                      </strong>{' '}
+                      {
+                        booking.requestNote
+                      }
+                    </p>
+                  )}
+
+                  {role ===
+                    'TUTOR' && (
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() => {
+                        setChangingId(
+                          booking.id
+                        );
+                        setStartsAt(
+                          ''
+                        );
+                        setDuration(
+                          String(
+                            booking.requestedDurationMinutes ||
+                              booking.durationMinutes
+                          )
+                        );
+                      }}
+                    >
+                      Propose
+                      revised
+                      session
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {booking.status ===
+                'PENDING_PAYMENT' && (
+                <div>
+                  {role ===
+                  'PARENT' ? (
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() =>
+                        void startCheckout(
+                          booking.id
+                        )
+                      }
+                    >
+                      {busy
+                        ? 'Opening checkout...'
+                        : `Pay ${money(
+                            booking.amountCents
+                          )} securely`}
+                    </button>
+                  ) : (
+                    <p>
+                      Waiting
+                      for parent
+                      payment.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {booking.status ===
+                'PAID' && (
+                <div>
+                  <p>
+                    Payment received.
+                    Your session
+                    is confirmed.
+                  </p>
+
+                  {canComplete && (
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Confirm this session has been completed?'
+                          )
+                        ) {
+                          respond(
+                            booking.id,
+                            'COMPLETE'
+                          );
+                        }
+                      }}
+                    >
+                      Mark session
+                      completed
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {canCancel && (
+                <div
+                  style={{
+                    marginTop: 12,
+                  }}
+                >
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={
+                      busy
+                    }
                     onClick={() =>
-                      respond(booking.id, 'DECLINE')
+                      cancelBooking(
+                        booking
+                      )
                     }
                   >
-                    Decline
+                    {booking.status ===
+                    'PAID'
+                      ? 'Cancel and refund'
+                      : 'Cancel session'}
                   </button>
                 </div>
               )}
 
-            {booking.status === 'CHANGE_REQUESTED' && (
-              <div>
-                <p>
-                  <strong>
-                    Parent&apos;s requested time:
-                  </strong>{' '}
-                  {booking.requestedStartsAt
-                    ? formatDate(booking.requestedStartsAt)
-                    : 'Not provided'}
-                </p>
-
-                <p>
-                  <strong>Requested duration:</strong>{' '}
-                  {booking.requestedDurationMinutes} minutes
-                </p>
-
-                {booking.requestNote && (
-                  <p>
-                    <strong>Parent&apos;s note:</strong>{' '}
-                    {booking.requestNote}
+              {role ===
+                'PARENT' &&
+                booking.status ===
+                  'PAID' &&
+                beforeSession &&
+                !parentCanCancel && (
+                  <p className="muted">
+                    The 24-hour
+                    cancellation
+                    deadline has
+                    passed. Contact
+                    support for
+                    assistance.
                   </p>
                 )}
 
-                {role === 'TUTOR' && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      setChangingId(
-                        changingId === booking.id
-                          ? null
-                          : booking.id
-                      );
-                      setStartsAt('');
-                      setDuration(
-                        String(
-                          booking.requestedDurationMinutes ||
-                            booking.durationMinutes
-                        )
-                      );
-                      setError('');
-                    }}
-                  >
-                    Propose revised session
-                  </button>
-                )}
-              </div>
-            )}
-
-            {booking.status === 'PENDING_PAYMENT' && (
-              <div>
-                <p>
-                  Both parties have agreed to this session.
-                </p>
-
-                {role === 'PARENT' ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void startCheckout(booking.id)
-                    }
-                  >
-                    {busy
-                      ? 'Opening secure checkout...'
-                      : `Pay ${formatMoney(
-                          booking.amountCents
-                        )} for session`}
-                  </button>
-                ) : (
-                  <p>
-                    Waiting for the parent to pay securely
-                    through Stripe.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {booking.status === 'PAID' && (
-              <div>
-                <p>
-                  Payment received. Your session is confirmed.
-                </p>
-
-                {canComplete && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          'Confirm that this tutoring session has been completed?'
-                        )
-                      ) {
-                        respond(booking.id, 'COMPLETE');
-                      }
-                    }}
-                  >
-                    {busy
-                      ? 'Updating...'
-                      : 'Mark Session Completed'}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {booking.status === 'COMPLETED' && (
-              <p>
-                This tutoring session has been marked completed.
-              </p>
-            )}
-
-            {booking.status === 'CANCELLED' && (
-              <p>
-                This session was cancelled before payment.
-              </p>
-            )}
-
-            {booking.status === 'REFUNDED' && (
-              <p>
-                This session was cancelled and the refund
-                was confirmed by Stripe.
-              </p>
-            )}
-
-            {canCancel && (
-              <div style={{ marginTop: 12 }}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => cancelBooking(booking)}
+              {changingId ===
+                booking.id && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    paddingTop: 12,
+                    borderTop:
+                      '1px solid #ddd',
+                  }}
                 >
-                  {booking.status === 'PAID'
-                    ? 'Cancel session and refund'
-                    : 'Cancel session'}
-                </button>
-              </div>
-            )}
+                  <h4>
+                    {role ===
+                    'TUTOR'
+                      ? 'Revise session'
+                      : 'Request a different time'}
+                  </h4>
 
-            {role === 'PARENT' &&
-              booking.status === 'PAID' &&
-              beforeSession &&
-              !parentCanCancel && (
-                <p className="muted">
-                  The 24-hour cancellation deadline has
-                  passed. Contact support if you need assistance.
-                </p>
+                  {dateFields()}
+
+                  {role ===
+                    'PARENT' && (
+                    <label>
+                      Note for tutor
+                      (optional)
+                      <textarea
+                        className="field"
+                        rows={3}
+                        maxLength={
+                          1000
+                        }
+                        value={
+                          note
+                        }
+                        onChange={
+                          e =>
+                            setNote(
+                              e.target.value
+                            )
+                        }
+                      />
+                    </label>
+                  )}
+
+                  <div
+                    style={{
+                      display:
+                        'flex',
+                      flexWrap:
+                        'wrap',
+                      gap: 8,
+                      marginTop: 12,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={() =>
+                        submitChange(
+                          booking.id
+                        )
+                      }
+                    >
+                      Submit
+                      new time
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={
+                        busy
+                      }
+                      onClick={
+                        resetForm
+                      }
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
-
-            {changingId === booking.id && (
-              <div style={{ marginTop: 16 }}>
-                <h4>
-                  {role === 'TUTOR'
-                    ? 'Revise session proposal'
-                    : 'Request a different time'}
-                </h4>
-
-                {dateFields()}
-
-                {role === 'PARENT' && (
-                  <label>
-                    <strong>
-                      Note for tutor (optional)
-                    </strong>
-                    <textarea
-                      value={note}
-                      onChange={(e) =>
-                        setNote(e.target.value)
-                      }
-                      maxLength={1000}
-                      rows={3}
-                      style={{
-                        display: 'block',
-                        width: '100%',
-                        padding: 10,
-                        margin: '8px 0',
-                      }}
-                    />
-                  </label>
-                )}
-
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    submitChange(booking.id)
-                  }
-                >
-                  {busy ? 'Saving...' : 'Submit new time'}
-                </button>{' '}
-
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={resetForm}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      {canPropose && (
-        <div style={{ marginTop: 16 }}>
-          <h4>Propose another tutoring session</h4>
-
-          <p>
-            You can schedule multiple sessions with this parent.
-            Choose a different date and time for each session.
-          </p>
-
-          {dateFields()}
-
-          <button
-            type="button"
-            disabled={busy}
-            onClick={submitProposal}
-          >
-            {busy ? 'Submitting...' : 'Propose session'}
-          </button>
-        </div>
+            </article>
+          );
+        }
       )}
+
+      {role ===
+        'TUTOR' &&
+        !loading && (
+          <div
+            className="card"
+            style={{
+              marginTop: 16,
+            }}
+          >
+            <h3>
+              Propose another
+              tutoring session
+            </h3>
+
+            <p className="muted">
+              You can schedule
+              multiple sessions
+              with the same parent.
+              Choose a date and
+              time within your
+              availability.
+            </p>
+
+            {dateFields()}
+
+            <button
+              type="button"
+              disabled={
+                busy
+              }
+              onClick={
+                submitProposal
+              }
+            >
+              {busy
+                ? 'Submitting...'
+                : 'Propose session'}
+            </button>
+          </div>
+        )}
 
       <button
         type="button"
-        disabled={busy || loading}
-        onClick={() => void loadBookings()}
-        style={{ marginTop: 12 }}
+        disabled={
+          busy || loading
+        }
+        onClick={() =>
+          void loadBookings()
+        }
+        style={{
+          marginTop: 12,
+        }}
       >
         Refresh bookings
       </button>
 
       {notice && (
-        <p role="status" style={{ color: '#166534' }}>
+        <p
+          role="status"
+          style={{
+            color: '#166534',
+          }}
+        >
           {notice}
         </p>
       )}
 
       {error && (
-        <p role="alert" style={{ color: '#b42318' }}>
+        <p
+          role="alert"
+          style={{
+            color: '#b42318',
+          }}
+        >
           {error}
         </p>
       )}
