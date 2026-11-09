@@ -69,8 +69,32 @@ model TutorProfile {
 
   inquiries        Inquiry[]
   bookings         Booking[]
+  availability     TutorAvailability[]
+  blockedDates     TutorBlockedDate[]
 
   createdAt        DateTime     @default(now())
+}
+
+model TutorAvailability {
+  id          String       @id @default(cuid())
+  tutorId     String
+  tutor       TutorProfile @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+
+  @@index([tutorId, dayOfWeek])
+}
+
+model TutorBlockedDate {
+  id       String       @id @default(cuid())
+  tutorId  String
+  tutor    TutorProfile @relation(fields: [tutorId], references: [id], onDelete: Cascade)
+
+  dateKey  String
+
+  @@unique([tutorId, dateKey])
 }
 
 model Inquiry {
