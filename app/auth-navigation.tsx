@@ -1,6 +1,7 @@
 
 'use client';
 
+import Link from 'next/link';
 import { useSession, signOut } from 'next-auth/react';
 
 export default function AuthNavigation() {
@@ -9,7 +10,7 @@ export default function AuthNavigation() {
   if (status === 'loading') {
     return (
       <>
-        <a href="/tutors">Find tutors</a>
+        <Link href="/tutors">Find tutors</Link>
       </>
     );
   }
@@ -17,27 +18,41 @@ export default function AuthNavigation() {
   if (!session) {
     return (
       <>
-        <a href="/tutors">Find tutors</a>
-        <a href="/login">Sign In</a>
-        <a href="/register">Join</a>
+        <Link href="/tutors">Find tutors</Link>
+        <Link href="/login">Sign In</Link>
+        <Link href="/register">Join</Link>
       </>
     );
   }
 
-  const role = (session.user as { role?: string } | undefined)?.role;
+  const role = (
+    session.user as { role?: string } | undefined
+  )?.role;
+
+  const canManageBookings =
+    role === 'PARENT' || role === 'TUTOR';
 
   return (
     <>
-      <a href="/tutors">Find tutors</a>
-      <a href="/dashboard">Dashboard</a>
+      <Link href="/tutors">Find tutors</Link>
+
+      <Link href="/dashboard">Dashboard</Link>
+
+      {canManageBookings && (
+        <Link href="/dashboard/bookings">
+          My Bookings
+        </Link>
+      )}
 
       {role === 'ADMIN' && (
-        <a href="/admin">Admin</a>
+        <Link href="/admin">Admin</Link>
       )}
 
       <button
         type="button"
-        onClick={() => signOut({ callbackUrl: '/' })}
+        onClick={() =>
+          signOut({ callbackUrl: '/' })
+        }
         style={{
           background: 'transparent',
           border: 'none',
