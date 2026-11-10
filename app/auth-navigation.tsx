@@ -8,11 +8,7 @@ export default function AuthNavigation() {
   const { data: session, status } = useSession();
 
   if (status === 'loading') {
-    return (
-      <>
-        <Link href="/tutors">Find tutors</Link>
-      </>
-    );
+    return <Link href="/tutors">Find tutors</Link>;
   }
 
   if (!session) {
@@ -29,20 +25,15 @@ export default function AuthNavigation() {
     session.user as { role?: string } | undefined
   )?.role;
 
-  const canManageBookings =
-    role === 'PARENT' || role === 'TUTOR';
-
   return (
     <>
       <Link href="/tutors">Find tutors</Link>
 
       <Link href="/dashboard">Dashboard</Link>
 
-      {canManageBookings && (
-        <Link href="/dashboard/bookings">
-          My Bookings
-        </Link>
-      )}
+      <Link href="/dashboard/bookings">
+        My Bookings
+      </Link>
 
       {role === 'ADMIN' && (
         <Link href="/admin">Admin</Link>
