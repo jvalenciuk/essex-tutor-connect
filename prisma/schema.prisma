@@ -37,6 +37,13 @@ enum BookingStatus {
   REFUNDED
 }
 
+enum NotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
 model User {
   id            String        @id @default(cuid())
   name          String
@@ -157,10 +164,35 @@ model Booking {
 
   stripeSessionId  String?       @unique
 
+  notifications    NotificationDelivery[]
+
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   @@index([tutorId, startsAt])
   @@index([inquiryId])
   @@index([parentId, status])
+}
+
+model NotificationDelivery {
+  id             String             @id @default(cuid())
+  bookingId      String
+  booking        Booking            @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  type           String
+  recipientRole  String
+  recipientEmail String
+  status         NotificationStatus @default(PENDING)
+
+  attempts       Int                @default(0)
+  idempotencyKey String             @unique
+  providerId     String?
+  lastError      String?            @db.VarChar(1000)
+  sentAt         DateTime?
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([bookingId, type, recipientRole])
+  @@index([status, updatedAt])
 }
