@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -37,8 +37,9 @@ function dateText(value: string) {
   });
 }
 
-export default function BookingConfirmationPage() {
+function ConfirmationContent() {
   const params = useSearchParams();
+
   const bookingId = params.get('bookingId');
   const checkout = params.get('checkout');
 
@@ -257,5 +258,22 @@ export default function BookingConfirmationPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function BookingConfirmationPage() {
+  return (
+    <Suspense
+      fallback={
+        <main>
+          <h1>Loading Booking Confirmation...</h1>
+          <p className="muted">
+            Preparing your booking details.
+          </p>
+        </main>
+      }
+    >
+      <ConfirmationContent />
+    </Suspense>
   );
 }
