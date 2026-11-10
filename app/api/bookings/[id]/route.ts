@@ -10,12 +10,8 @@ export const dynamic = 'force-dynamic';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const actionSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('ACCEPT'),
-  }),
-  z.object({
-    action: z.literal('DECLINE'),
-  }),
+  z.object({ action: z.literal('ACCEPT') }),
+  z.object({ action: z.literal('DECLINE') }),
   z.object({
     action: z.literal('REQUEST_CHANGE'),
     startsAt: z.string().datetime({ offset: true }),
@@ -27,12 +23,8 @@ const actionSchema = z.discriminatedUnion('action', [
     startsAt: z.string().datetime({ offset: true }),
     durationMinutes: z.number().int().min(30).max(180),
   }),
-  z.object({
-    action: z.literal('COMPLETE'),
-  }),
-  z.object({
-    action: z.literal('CANCEL'),
-  }),
+  z.object({ action: z.literal('COMPLETE') }),
+  z.object({ action: z.literal('CANCEL') }),
 ]);
 
 async function stripeGet(
@@ -58,7 +50,6 @@ async function stripeGet(
       status: response.status,
       code: result.error?.code,
     });
-
     throw new Error('Unable to verify the Stripe payment');
   }
 
@@ -84,10 +75,8 @@ async function stripeRefund(
       headers: {
         Authorization: `Bearer ${secret}`,
         'Stripe-Account': accountId,
-        'Content-Type':
-          'application/x-www-form-urlencoded',
-        'Idempotency-Key':
-          `booking-full-refund-${bookingId}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Idempotency-Key': `booking-full-refund-${bookingId}`,
       },
       body: form.toString(),
       cache: 'no-store',
@@ -118,18 +107,13 @@ async function sendBookingNotification(
   try {
     await notifyBooking(bookingId, type);
   } catch (error) {
-    console.error(
-      'Booking notification error',
-      error
-    );
+    console.error('Booking notification error', error);
   }
 }
 
 export async function PATCH(
   req: Request,
-  context: {
-    params: Promise<{ id: string }>;
-  }
+  context: { params: Promise<{ id: string }> }
 ) {
   const who = await identity();
 
@@ -142,18 +126,14 @@ export async function PATCH(
   let data: z.infer<typeof actionSchema>;
 
   try {
-    data = actionSchema.parse(
-      await req.json()
-    );
+    data = actionSchema.parse(await req.json());
   } catch {
     return fail('Invalid booking action', 400);
   }
 
   const booking = await db.booking.findUnique({
     where: { id },
-    include: {
-      tutor: true,
-    },
+    include: { tutor: true },
   });
 
   if (!booking) {
@@ -172,16 +152,9 @@ export async function PATCH(
     return fail('Not authorized', 403);
   }
 
-  // Parent accepts a proposed session.
   if (data.action === 'ACCEPT') {
-    if (
-      !isParent ||
-      booking.status !== 'PROPOSED'
-    ) {
-      return fail(
-        'Cannot accept this booking',
-        409
-      );
+    if (!isParent || booking.status !== 'PROPOSED') {
+      return fail('Cannot accept this booking', 409);
     }
 
     const issue = await checkTutorSlot(
@@ -200,20 +173,13 @@ export async function PATCH(
         id,
         status: 'PROPOSED',
         parentId: who.id,
-        startsAt: {
-          gt: new Date(),
-        },
+        startsAt: { gt: new Date() },
       },
-      data: {
-        status: 'PENDING_PAYMENT',
-      },
+      data: { status: 'PENDING_PAYMENT' },
     });
 
     if (!result.count) {
-      return fail(
-        'Booking is no longer available',
-        409
-      );
+      return fail('Booking is no longer available', 409);
     }
 
     return Response.json({
@@ -222,16 +188,9 @@ export async function PATCH(
     });
   }
 
-  // Parent declines a proposed session.
   if (data.action === 'DECLINE') {
-    if (
-      !isParent ||
-      booking.status !== 'PROPOSED'
-    ) {
-      return fail(
-        'Cannot decline this booking',
-        409
-      );
+    if (!isParent || booking.status !== 'PROPOSED') {
+      return fail('Cannot decline this booking', 409);
     }
 
     const result = await db.booking.updateMany({
@@ -240,16 +199,11 @@ export async function PATCH(
         status: 'PROPOSED',
         parentId: who.id,
       },
-      data: {
-        status: 'DECLINED',
-      },
+      data: { status: 'DECLINED' },
     });
 
     if (!result.count) {
-      return fail(
-        'Booking has already changed',
-        409
-      );
+      return fail('Booking has already changed', 409);
     }
 
     return Response.json({
@@ -258,28 +212,15 @@ export async function PATCH(
     });
   }
 
-  // Parent requests a different session time.
   if (data.action === 'REQUEST_CHANGE') {
-    if (
-      !isParent ||
-      booking.status !== 'PROPOSED'
-    ) {
-      return fail(
-        'Cannot request a change',
-        409
-      );
+    if (!isParent || booking.status !== 'PROPOSED') {
+      return fail('Cannot request a change', 409);
     }
 
-    const requestedStartsAt =
-      new Date(data.startsAt);
+    const requestedStartsAt = new Date(data.startsAt);
 
-    if (
-      requestedStartsAt.getTime() <= Date.now()
-    ) {
-      return fail(
-        'Choose a future date and time',
-        400
-      );
+    if (requestedStartsAt.getTime() <= Date.now()) {
+      return fail('Choose a future date and time', 400);
     }
 
     const result = await db.booking.updateMany({
@@ -291,17 +232,13 @@ export async function PATCH(
       data: {
         status: 'CHANGE_REQUESTED',
         requestedStartsAt,
-        requestedDurationMinutes:
-          data.durationMinutes,
+        requestedDurationMinutes: data.durationMinutes,
         requestNote: data.note || null,
       },
     });
 
     if (!result.count) {
-      return fail(
-        'Booking has already changed',
-        409
-      );
+      return fail('Booking has already changed', 409);
     }
 
     return Response.json({
@@ -310,29 +247,15 @@ export async function PATCH(
     });
   }
 
-  // Tutor revises a session proposal.
   if (data.action === 'REVISE') {
-    if (
-      !isTutor ||
-      booking.status !== 'CHANGE_REQUESTED'
-    ) {
-      return fail(
-        'Cannot revise this booking',
-        409
-      );
+    if (!isTutor || booking.status !== 'CHANGE_REQUESTED') {
+      return fail('Cannot revise this booking', 409);
     }
 
-    const startsAt = new Date(
-      data.startsAt
-    );
+    const startsAt = new Date(data.startsAt);
 
-    if (
-      startsAt.getTime() <= Date.now()
-    ) {
-      return fail(
-        'Choose a future date and time',
-        400
-      );
+    if (startsAt.getTime() <= Date.now()) {
+      return fail('Choose a future date and time', 400);
     }
 
     const issue = await checkTutorSlot(
@@ -347,9 +270,8 @@ export async function PATCH(
     }
 
     const amountCents = Math.round(
-      booking.tutor.hourlyRateCents *
-        data.durationMinutes /
-        60
+      (booking.tutor.hourlyRateCents *
+        data.durationMinutes) / 60
     );
 
     const platformFeeCents = Math.round(
@@ -360,14 +282,11 @@ export async function PATCH(
       where: {
         id,
         status: 'CHANGE_REQUESTED',
-        tutor: {
-          userId: who.id,
-        },
+        tutor: { userId: who.id },
       },
       data: {
         startsAt,
-        durationMinutes:
-          data.durationMinutes,
+        durationMinutes: data.durationMinutes,
         amountCents,
         platformFeeCents,
         status: 'PROPOSED',
@@ -378,10 +297,7 @@ export async function PATCH(
     });
 
     if (!result.count) {
-      return fail(
-        'Booking has already changed',
-        409
-      );
+      return fail('Booking has already changed', 409);
     }
 
     return Response.json({
@@ -390,12 +306,8 @@ export async function PATCH(
     });
   }
 
-  // Tutor marks a paid session completed.
   if (data.action === 'COMPLETE') {
-    if (
-      !isTutor ||
-      booking.status !== 'PAID'
-    ) {
+    if (!isTutor || booking.status !== 'PAID') {
       return fail(
         'Only the assigned tutor can complete a paid session',
         409
@@ -417,21 +329,15 @@ export async function PATCH(
       where: {
         id,
         status: 'PAID',
-        tutor: {
-          userId: who.id,
-        },
+        tutor: { userId: who.id },
         startsAt: {
           lte: new Date(
             Date.now() -
-              booking.durationMinutes *
-                60 *
-                1000
+              booking.durationMinutes * 60 * 1000
           ),
         },
       },
-      data: {
-        status: 'COMPLETED',
-      },
+      data: { status: 'COMPLETED' },
     });
 
     if (!result.count) {
@@ -447,11 +353,9 @@ export async function PATCH(
     });
   }
 
-  // Cancel session or process a Stripe refund.
   if (data.action === 'CANCEL') {
     const now = Date.now();
-    const startsAt =
-      booking.startsAt.getTime();
+    const startsAt = booking.startsAt.getTime();
 
     if (startsAt <= now) {
       return fail(
@@ -460,38 +364,38 @@ export async function PATCH(
       );
     }
 
-    if (
-      isParent &&
-      startsAt - now < DAY_MS
-    ) {
+    if (isParent && startsAt - now < DAY_MS) {
       return fail(
         'Parents must cancel at least 24 hours before the session',
         409
       );
     }
 
+    // Parents use Decline for proposals.
+    // Only tutors can cancel unpaid proposals.
     if (
       booking.status === 'PROPOSED' ||
       booking.status === 'CHANGE_REQUESTED'
     ) {
+      if (!isTutor) {
+        return fail(
+          'Parents cannot cancel proposed sessions. Use Decline when available.',
+          409
+        );
+      }
+
       const result = await db.booking.updateMany({
         where: {
           id,
           status: booking.status,
-          startsAt: {
-            gt: new Date(),
-          },
+          tutor: { userId: who.id },
+          startsAt: { gt: new Date() },
         },
-        data: {
-          status: 'CANCELLED',
-        },
+        data: { status: 'CANCELLED' },
       });
 
       if (!result.count) {
-        return fail(
-          'Booking has already changed',
-          409
-        );
+        return fail('Booking has already changed', 409);
       }
 
       await sendBookingNotification(
@@ -506,9 +410,7 @@ export async function PATCH(
       });
     }
 
-    if (
-      booking.status === 'PENDING_PAYMENT'
-    ) {
+    if (booking.status === 'PENDING_PAYMENT') {
       return fail(
         'This booking has an outstanding payment step. Contact support to cancel it safely.',
         409
@@ -516,26 +418,14 @@ export async function PATCH(
     }
 
     if (booking.status !== 'PAID') {
-      return fail(
-        'This booking cannot be cancelled',
-        409
-      );
+      return fail('This booking cannot be cancelled', 409);
     }
 
-    const accountId =
-      booking.tutor.stripeAccountId;
+    const accountId = booking.tutor.stripeAccountId;
+    const sessionId = booking.stripeSessionId;
+    const secret = process.env.STRIPE_SECRET_KEY;
 
-    const sessionId =
-      booking.stripeSessionId;
-
-    const secret =
-      process.env.STRIPE_SECRET_KEY;
-
-    if (
-      !accountId ||
-      !sessionId ||
-      !secret
-    ) {
+    if (!accountId || !sessionId || !secret) {
       return fail(
         'Payment details are unavailable. Contact support.',
         503
@@ -544,9 +434,7 @@ export async function PATCH(
 
     try {
       const session = await stripeGet(
-        `/v1/checkout/sessions/${encodeURIComponent(
-          sessionId
-        )}`,
+        `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
         secret,
         accountId
       );
@@ -554,12 +442,9 @@ export async function PATCH(
       if (
         session.payment_status !== 'paid' ||
         session.currency?.toLowerCase() !== 'cad' ||
-        session.amount_total !==
-          booking.amountCents ||
-        session.metadata?.bookingId !==
-          booking.id ||
-        typeof session.payment_intent !==
-          'string'
+        session.amount_total !== booking.amountCents ||
+        session.metadata?.bookingId !== booking.id ||
+        typeof session.payment_intent !== 'string'
       ) {
         return fail(
           'Payment verification failed. Contact support.',
@@ -592,17 +477,12 @@ export async function PATCH(
       });
 
       if (!result.count) {
-        const latest =
-          await db.booking.findUnique({
-            where: { id },
-            select: {
-              status: true,
-            },
-          });
+        const latest = await db.booking.findUnique({
+          where: { id },
+          select: { status: true },
+        });
 
-        if (
-          latest?.status === 'REFUNDED'
-        ) {
+        if (latest?.status === 'REFUNDED') {
           return Response.json({
             success: true,
             status: 'REFUNDED',
@@ -641,8 +521,5 @@ export async function PATCH(
     }
   }
 
-  return fail(
-    'Unsupported booking action',
-    400
-  );
+  return fail('Unsupported booking action', 400);
 }
