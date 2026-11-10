@@ -1,4 +1,5 @@
 
+import Link from 'next/link';
 import { identity } from '../../lib/security';
 import { db } from '../../lib/db';
 import { redirect } from 'next/navigation';
@@ -79,7 +80,9 @@ async function getStripeAccountStatus(
 
   try {
     const response = await fetch(
-      `https://api.stripe.com/v1/accounts/${encodeURIComponent(accountId)}`,
+      `https://api.stripe.com/v1/accounts/${encodeURIComponent(
+        accountId
+      )}`,
       {
         headers: {
           Authorization: `Bearer ${secretKey}`,
@@ -97,7 +100,8 @@ async function getStripeAccountStatus(
       return {
         ...emptyStatus,
         connected: true,
-        error: 'Stripe account status is temporarily unavailable.',
+        error:
+          'Stripe account status is temporarily unavailable.',
       };
     }
 
@@ -105,9 +109,12 @@ async function getStripeAccountStatus(
 
     return {
       connected: true,
-      paymentsEnabled: account.charges_enabled === true,
-      payoutsEnabled: account.payouts_enabled === true,
-      detailsSubmitted: account.details_submitted === true,
+      paymentsEnabled:
+        account.charges_enabled === true,
+      payoutsEnabled:
+        account.payouts_enabled === true,
+      detailsSubmitted:
+        account.details_submitted === true,
       requirements: Array.isArray(
         account.requirements?.currently_due
       )
@@ -115,12 +122,16 @@ async function getStripeAccountStatus(
         : [],
     };
   } catch (error) {
-    console.error('Stripe status request failed', error);
+    console.error(
+      'Stripe status request failed',
+      error
+    );
 
     return {
       ...emptyStatus,
       connected: true,
-      error: 'Unable to check Stripe account status.',
+      error:
+        'Unable to check Stripe account status.',
     };
   }
 }
@@ -174,18 +185,163 @@ function PaymentStatus({
 
       {status.requirements.length > 0 && (
         <p className="muted">
-          Stripe requires additional account information.
-          Use the button below to continue onboarding.
+          Stripe requires additional account
+          information. Use the button below
+          to continue onboarding.
         </p>
       )}
 
-      {status.paymentsEnabled && status.payoutsEnabled && (
+      {status.paymentsEnabled &&
+        status.payoutsEnabled && (
+          <p>
+            Your Stripe account is ready to accept
+            payments and receive payouts.
+          </p>
+        )}
+    </>
+  );
+}
+
+function TutorSetup({
+  profileExists,
+  profileComplete,
+  availabilityComplete,
+  approved,
+  stripeReady,
+}: {
+  profileExists: boolean;
+  profileComplete: boolean;
+  availabilityComplete: boolean;
+  approved: boolean;
+  stripeReady: boolean;
+}) {
+  const steps = [
+    {
+      name: 'Create tutor profile',
+      complete: profileExists,
+    },
+    {
+      name: 'Complete profile information',
+      complete: profileComplete,
+    },
+    {
+      name: 'Set tutoring availability',
+      complete: availabilityComplete,
+    },
+    {
+      name: 'Administrator approval',
+      complete: approved,
+    },
+    {
+      name: 'Complete Stripe setup',
+      complete: stripeReady,
+    },
+  ];
+
+  const completed = steps.filter(
+    step => step.complete
+  ).length;
+
+  const percentage = Math.round(
+    (completed / steps.length) * 100
+  );
+
+  return (
+    <section className="card">
+      <h2>Tutor Setup</h2>
+
+      <p className="muted">
+        Track your progress toward becoming
+        ready to accept paid tutoring bookings.
+      </p>
+
+      <p>
+        <strong>
+          {completed} of {steps.length} steps complete
+        </strong>
+      </p>
+
+      <div
+        role="progressbar"
+        aria-label="Tutor onboarding progress"
+        aria-valuemin={0}
+        aria-valuemax={steps.length}
+        aria-valuenow={completed}
+        style={{
+          width: '100%',
+          height: 14,
+          background: '#e5e7eb',
+          borderRadius: 10,
+          overflow: 'hidden',
+          marginTop: 12,
+        }}
+      >
+        <div
+          style={{
+            width: `${percentage}%`,
+            height: '100%',
+            background: '#167c64',
+            borderRadius: 10,
+          }}
+        />
+      </div>
+
+      <p className="muted">
+        {percentage}% complete
+      </p>
+
+      <div style={{ marginTop: 16 }}>
+        {steps.map(step => (
+          <p key={step.name}>
+            <span
+              aria-hidden="true"
+              style={{
+                color: step.complete
+                  ? '#167c64'
+                  : '#64748b',
+                fontWeight: 'bold',
+              }}
+            >
+              {step.complete ? '✓' : '○'}
+            </span>
+            {' '}
+            {step.name}
+          </p>
+        ))}
+      </div>
+
+      {completed === steps.length ? (
         <p>
-          Your Stripe account is ready to accept payments
-          and receive payouts.
+          <strong>
+            Your onboarding checklist is complete!
+          </strong>
+        </p>
+      ) : (
+        <p className="muted">
+          Complete the remaining steps to prepare
+          your tutor account.
         </p>
       )}
-    </>
+
+      <p style={{ marginTop: 20 }}>
+        <Link
+          href="/dashboard/onboarding"
+          style={{
+            display: 'inline-block',
+            padding: '12px 18px',
+            borderRadius: 8,
+            background: '#123b61',
+            color: '#ffffff',
+            textDecoration: 'none',
+            fontWeight: 600,
+          }}
+        >
+          {completed === steps.length
+            ? 'Review Tutor Setup'
+            : 'Complete Your Tutor Setup'}
+        </Link>
+      </p>
+    </section>
   );
 }
 
@@ -195,12 +351,14 @@ function TutorEarnings({
   bookings: EarningsBooking[];
 }) {
   const totalPaidCents = bookings.reduce(
-    (total, booking) => total + booking.amountCents,
+    (total, booking) =>
+      total + booking.amountCents,
     0
   );
 
   const totalCommissionCents = bookings.reduce(
-    (total, booking) => total + booking.platformFeeCents,
+    (total, booking) =>
+      total + booking.platformFeeCents,
     0
   );
 
@@ -214,7 +372,8 @@ function TutorEarnings({
     )
     .sort(
       (a, b) =>
-        a.startsAt.getTime() - b.startsAt.getTime()
+        a.startsAt.getTime() -
+        b.startsAt.getTime()
     );
 
   return (
@@ -231,9 +390,9 @@ function TutorEarnings({
           display: 'grid',
           gridTemplateColumns:
             'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: '16px',
-          marginTop: '20px',
-          marginBottom: '20px',
+          gap: 16,
+          marginTop: 20,
+          marginBottom: 20,
         }}
       >
         <div className="card">
@@ -308,19 +467,19 @@ function TutorEarnings({
           >
             <thead>
               <tr>
-                <th style={{ padding: '10px' }}>
+                <th style={{ padding: 10 }}>
                   Date
                 </th>
-                <th style={{ padding: '10px' }}>
+                <th style={{ padding: 10 }}>
                   Parent
                 </th>
-                <th style={{ padding: '10px' }}>
+                <th style={{ padding: 10 }}>
                   Subject
                 </th>
-                <th style={{ padding: '10px' }}>
+                <th style={{ padding: 10 }}>
                   Duration
                 </th>
-                <th style={{ padding: '10px' }}>
+                <th style={{ padding: 10 }}>
                   Your Earnings
                 </th>
               </tr>
@@ -329,26 +488,26 @@ function TutorEarnings({
             <tbody>
               {upcomingBookings.map(booking => (
                 <tr key={booking.id}>
-                  <td style={{ padding: '10px' }}>
+                  <td style={{ padding: 10 }}>
                     {formatSessionDate(
                       booking.startsAt
                     )}
                   </td>
 
-                  <td style={{ padding: '10px' }}>
+                  <td style={{ padding: 10 }}>
                     {booking.parent.name}
                   </td>
 
-                  <td style={{ padding: '10px' }}>
+                  <td style={{ padding: 10 }}>
                     {booking.inquiry?.subject ||
                       'Tutoring'}
                   </td>
 
-                  <td style={{ padding: '10px' }}>
+                  <td style={{ padding: 10 }}>
                     {booking.durationMinutes} min
                   </td>
 
-                  <td style={{ padding: '10px' }}>
+                  <td style={{ padding: 10 }}>
                     {formatCAD(
                       booking.amountCents -
                         booking.platformFeeCents
@@ -375,6 +534,13 @@ export default async function Dashboard() {
     who.role === 'TUTOR'
       ? await db.tutorProfile.findUnique({
           where: { userId: who.id },
+          include: {
+            _count: {
+              select: {
+                availability: true,
+              },
+            },
+          },
         })
       : null;
 
@@ -385,6 +551,29 @@ export default async function Dashboard() {
           profile.stripeAccountId
         )
       : null;
+
+  const profileComplete = Boolean(
+    profile &&
+      profile.bio.trim().length >= 30 &&
+      profile.qualifications.trim().length >= 10 &&
+      profile.subjects.length > 0 &&
+      profile.grades.length > 0 &&
+      profile.cities.length > 0 &&
+      profile.languages.length > 0 &&
+      profile.hourlyRateCents >= 2000 &&
+      profile.hourlyRateCents <= 30000
+  );
+
+  const availabilityComplete =
+    (profile?._count.availability ?? 0) > 0;
+
+  const approved =
+    profile?.verification === 'APPROVED';
+
+  const stripeReady = Boolean(
+    stripeStatus?.paymentsEnabled &&
+      stripeStatus?.payoutsEnabled
+  );
 
   const earningsBookings =
     who.role === 'TUTOR' && profile
@@ -427,12 +616,16 @@ export default async function Dashboard() {
         : { parentId: who.id },
     include: {
       parent: {
-        select: { name: true },
+        select: {
+          name: true,
+        },
       },
       tutor: {
         include: {
           user: {
-            select: { name: true },
+            select: {
+              name: true,
+            },
           },
         },
       },
@@ -451,6 +644,16 @@ export default async function Dashboard() {
 
       {who.role === 'TUTOR' && (
         <>
+          <TutorSetup
+            profileExists={Boolean(profile)}
+            profileComplete={profileComplete}
+            availabilityComplete={
+              availabilityComplete
+            }
+            approved={approved}
+            stripeReady={stripeReady}
+          />
+
           <p>
             Verification:{' '}
             {profile?.verification ||
@@ -515,6 +718,14 @@ export default async function Dashboard() {
         </p>
       )}
 
+      {who.role === 'ADMIN' && (
+        <p>
+          <Link href="/admin">
+            Open Administrator Dashboard
+          </Link>
+        </p>
+      )}
+
       <h2>Inquiries</h2>
 
       {inquiries.length === 0 && (
@@ -531,7 +742,9 @@ export default async function Dashboard() {
 
           {who.role === 'TUTOR' ? (
             <>
-              <p>From: {inquiry.parent.name}</p>
+              <p>
+                From: {inquiry.parent.name}
+              </p>
 
               <InquiryActions
                 inquiryId={inquiry.id}
