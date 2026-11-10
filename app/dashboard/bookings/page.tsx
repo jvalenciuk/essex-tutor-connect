@@ -59,8 +59,9 @@ function category(booking: Booking) {
   const end = start + booking.durationMinutes * 60000;
 
   if (
-    ['COMPLETED', 'CANCELLED', 'REFUNDED', 'DECLINED']
-      .includes(booking.status)
+    ['COMPLETED', 'CANCELLED', 'REFUNDED', 'DECLINED'].includes(
+      booking.status
+    )
   ) {
     return 'history';
   }
@@ -108,8 +109,8 @@ export default function MyBookingsPage() {
 
       setRole(
         serverRole === 'PARENT' ||
-        serverRole === 'TUTOR' ||
-        serverRole === 'ADMIN'
+          serverRole === 'TUTOR' ||
+          serverRole === 'ADMIN'
           ? serverRole
           : ''
       );
@@ -170,13 +171,22 @@ export default function MyBookingsPage() {
 
       if (!response.ok) {
         throw new Error(
-          result?.error || 'Unable to update booking.'
+          result?.error ||
+            result?.message ||
+            'Unable to update booking.'
         );
       }
 
       resetEditor();
       await load();
-      setNotice('Booking updated successfully.');
+
+      if (action === 'ACCEPT_REQUESTED_TIME') {
+        setNotice(
+          'Requested time accepted. The parent can now complete payment.'
+        );
+      } else {
+        setNotice('Booking updated successfully.');
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -279,6 +289,34 @@ export default function MyBookingsPage() {
     });
   }
 
+  function acceptRequestedTime(booking: Booking) {
+    if (
+      !booking.requestedStartsAt ||
+      !booking.requestedDurationMinutes
+    ) {
+      setError('The parent has not provided a valid time.');
+      return;
+    }
+
+    const proposed = dateText(booking.requestedStartsAt);
+
+    if (
+      !window.confirm(
+        `Accept the parent's requested time?\n\n` +
+          `${proposed}\n` +
+          `${booking.requestedDurationMinutes} minutes\n\n` +
+          'The parent will then be able to pay for this session.'
+      )
+    ) {
+      return;
+    }
+
+    void updateBooking(
+      booking.id,
+      'ACCEPT_REQUESTED_TIME'
+    );
+  }
+
   function cancelBooking(booking: Booking) {
     const paid = booking.status === 'PAID';
 
@@ -326,8 +364,9 @@ export default function MyBookingsPage() {
     const tutorCanCancel =
       isTutor &&
       start > now &&
-      ['PROPOSED', 'CHANGE_REQUESTED', 'PAID']
-        .includes(booking.status);
+      ['PROPOSED', 'CHANGE_REQUESTED', 'PAID'].includes(
+        booking.status
+      );
 
     const canCancel =
       parentCanCancelPaid || tutorCanCancel;
@@ -419,25 +458,48 @@ export default function MyBookingsPage() {
         )}
 
         {booking.status === 'CHANGE_REQUESTED' && (
-          <div>
+          <div
+            style={{
+              padding: '14px 16px',
+              border: '1px solid #dce3ea',
+              borderRadius: 10,
+              marginBottom: 16,
+            }}
+          >
+            <strong>Parent's requested time</strong>
+
             <p>
-              Requested time:{' '}
               {booking.requestedStartsAt
                 ? dateText(booking.requestedStartsAt)
                 : 'Not provided'}
             </p>
+
             <p>
               Requested duration:{' '}
               {booking.requestedDurationMinutes || '—'} minutes
             </p>
+
             {booking.requestNote && (
               <p>Parent note: {booking.requestNote}</p>
+            )}
+
+            {isParent && (
+              <p className="muted">
+                Waiting for the tutor to accept your requested
+                time or propose an alternative.
+              </p>
             )}
           </div>
         )}
 
         {booking.status === 'PROPOSED' && isParent && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
             <button
               disabled={isBusy}
               onClick={() =>
@@ -465,29 +527,55 @@ export default function MyBookingsPage() {
           </div>
         )}
 
-        {booking.status === 'CHANGE_REQUESTED' && isTutor && (
-          <button
-            disabled={isBusy}
-            onClick={() => beginTimeChange(booking)}
-          >
-            Propose Revised Session
-          </button>
-        )}
+        {booking.status === 'CHANGE_REQUESTED' &&
+          isTutor && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+              }}
+            >
+              <button
+                disabled={
+                  isBusy ||
+                  !booking.requestedStartsAt ||
+                  !booking.requestedDurationMinutes
+                }
+                onClick={() =>
+                  acceptRequestedTime(booking)
+                }
+              >
+                Accept Requested Time
+              </button>
 
-        {booking.status === 'PENDING_PAYMENT' && isParent && (
-          <button
-            disabled={isBusy}
-            onClick={() => void checkout(booking.id)}
-          >
-            Pay {money(booking.amountCents)} Securely
-          </button>
-        )}
+              <button
+                disabled={isBusy}
+                onClick={() => beginTimeChange(booking)}
+              >
+                Propose Another Time
+              </button>
+            </div>
+          )}
 
-        {booking.status === 'PENDING_PAYMENT' && isTutor && (
-          <p className="muted">
-            Waiting for the parent to complete payment.
-          </p>
-        )}
+        {booking.status === 'PENDING_PAYMENT' &&
+          isParent && (
+            <button
+              disabled={isBusy}
+              onClick={() => void checkout(booking.id)}
+            >
+              Pay {money(booking.amountCents)} Securely
+            </button>
+          )}
+
+        {booking.status === 'PENDING_PAYMENT' &&
+          isTutor && (
+            <p className="muted">
+              The requested session time has been accepted.
+              Waiting for the parent to complete payment.
+            </p>
+          )}
 
         {booking.status === 'PAID' && (
           <p className="muted">
@@ -544,7 +632,7 @@ export default function MyBookingsPage() {
           >
             <h4>
               {isTutor
-                ? 'Revise Session'
+                ? 'Propose Another Time'
                 : 'Request Different Time'}
             </h4>
 
@@ -597,7 +685,9 @@ export default function MyBookingsPage() {
                 disabled={isBusy}
                 onClick={() => submitTimeChange(booking)}
               >
-                Submit New Time
+                {isTutor
+                  ? 'Send Alternative Proposal'
+                  : 'Submit New Time'}
               </button>
 
               <button
@@ -624,13 +714,18 @@ export default function MyBookingsPage() {
   }) {
     return (
       <section style={{ marginTop: 32 }}>
-        <h2>{title} ({items.length})</h2>
+        <h2>
+          {title} ({items.length})
+        </h2>
 
         {items.length === 0 ? (
           <p className="muted">{empty}</p>
         ) : (
           items.map(booking => (
-            <BookingCard key={booking.id} booking={booking} />
+            <BookingCard
+              key={booking.id}
+              booking={booking}
+            />
           ))
         )}
       </section>
