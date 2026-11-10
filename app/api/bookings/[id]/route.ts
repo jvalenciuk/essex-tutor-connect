@@ -11,6 +11,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const actionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('ACCEPT') }),
+  z.object({ action: z.literal('ACCEPT_REQUESTED_TIME') }),
   z.object({ action: z.literal('DECLINE') }),
   z.object({
     action: z.literal('REQUEST_CHANGE'),
@@ -157,6 +158,10 @@ export async function PATCH(
       return fail('Cannot accept this booking', 409);
     }
 
+    if (booking.startsAt.getTime() <= Date.now()) {
+      return fail('The proposed session is in the past', 409);
+    }
+
     const issue = await checkTutorSlot(
       booking.tutorId,
       booking.startsAt,
@@ -185,6 +190,100 @@ export async function PATCH(
     return Response.json({
       success: true,
       status: 'PENDING_PAYMENT',
+    });
+  }
+
+  // NEW: Tutor accepts the exact time proposed by the parent.
+  if (data.action === 'ACCEPT_REQUESTED_TIME') {
+    if (!isTutor || booking.status !== 'CHANGE_REQUESTED') {
+      return fail(
+        'Only the assigned tutor can accept a requested time',
+        409
+      );
+    }
+
+    if (
+      !booking.requestedStartsAt ||
+      !booking.requestedDurationMinutes
+    ) {
+      return fail(
+        'This booking has no valid requested time',
+        409
+      );
+    }
+
+    const requestedStartsAt = booking.requestedStartsAt;
+    const requestedDurationMinutes =
+      booking.requestedDurationMinutes;
+
+    if (requestedStartsAt.getTime() <= Date.now()) {
+      return fail(
+        'The requested time has passed. Propose another time.',
+        409
+      );
+    }
+
+    if (
+      requestedDurationMinutes < 30 ||
+      requestedDurationMinutes > 180
+    ) {
+      return fail('Invalid requested duration', 409);
+    }
+
+    const issue = await checkTutorSlot(
+      booking.tutorId,
+      requestedStartsAt,
+      requestedDurationMinutes,
+      booking.id
+    );
+
+    if (issue) {
+      return fail(issue, 409);
+    }
+
+    const amountCents = Math.round(
+      (booking.tutor.hourlyRateCents *
+        requestedDurationMinutes) /
+        60
+    );
+
+    const platformFeeCents = Math.round(
+      amountCents * 0.15
+    );
+
+    const result = await db.booking.updateMany({
+      where: {
+        id,
+        status: 'CHANGE_REQUESTED',
+        tutor: { userId: who.id },
+        requestedStartsAt,
+        requestedDurationMinutes,
+      },
+      data: {
+        startsAt: requestedStartsAt,
+        durationMinutes: requestedDurationMinutes,
+        amountCents,
+        platformFeeCents,
+        status: 'PENDING_PAYMENT',
+        requestedStartsAt: null,
+        requestedDurationMinutes: null,
+        requestNote: null,
+      },
+    });
+
+    if (!result.count) {
+      return fail(
+        'The requested time has already changed. Refresh bookings.',
+        409
+      );
+    }
+
+    return Response.json({
+      success: true,
+      status: 'PENDING_PAYMENT',
+      startsAt: requestedStartsAt.toISOString(),
+      durationMinutes: requestedDurationMinutes,
+      amountCents,
     });
   }
 
@@ -271,7 +370,8 @@ export async function PATCH(
 
     const amountCents = Math.round(
       (booking.tutor.hourlyRateCents *
-        data.durationMinutes) / 60
+        data.durationMinutes) /
+        60
     );
 
     const platformFeeCents = Math.round(
@@ -371,8 +471,6 @@ export async function PATCH(
       );
     }
 
-    // Parents use Decline for proposals.
-    // Only tutors can cancel unpaid proposals.
     if (
       booking.status === 'PROPOSED' ||
       booking.status === 'CHANGE_REQUESTED'
