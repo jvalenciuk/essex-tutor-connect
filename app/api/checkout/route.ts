@@ -30,9 +30,7 @@ async function retrieveSession(
 ): Promise<StripeCheckoutSession | null> {
   try {
     const response = await fetch(
-      `${STRIPE_API}/checkout/sessions/${encodeURIComponent(
-        sessionId
-      )}`,
+      `${STRIPE_API}/checkout/sessions/${encodeURIComponent(sessionId)}`,
       {
         method: 'GET',
         headers: {
@@ -53,10 +51,7 @@ async function retrieveSession(
 
     return (await response.json()) as StripeCheckoutSession;
   } catch (error) {
-    console.error(
-      'Stripe Checkout Session lookup failed',
-      error
-    );
+    console.error('Stripe Checkout Session lookup failed', error);
     return null;
   }
 }
@@ -108,7 +103,7 @@ export async function POST(req: Request) {
 
   if (booking.status === 'PAID') {
     return fail(
-      'This session has already been paid for. Check your dashboard.',
+      'This session has already been paid for. Check My Bookings.',
       409
     );
   }
@@ -122,7 +117,7 @@ export async function POST(req: Request) {
 
   if (booking.status !== 'PENDING_PAYMENT') {
     return fail(
-      'This booking is not awaiting payment. Refresh your dashboard to see its current status.',
+      'This booking is not awaiting payment. Refresh My Bookings to see its current status.',
       409
     );
   }
@@ -165,8 +160,6 @@ export async function POST(req: Request) {
 
   const accountId = booking.tutor.stripeAccountId;
 
-  // Reuse an existing open Checkout Session rather
-  // than generating another payment link.
   if (booking.stripeSessionId) {
     const existing = await retrieveSession(
       booking.stripeSessionId,
@@ -186,7 +179,7 @@ export async function POST(req: Request) {
       existing.status === 'complete'
     ) {
       return fail(
-        'Stripe reports a completed checkout. Refresh your dashboard and allow payment confirmation to finish. Do not pay again.',
+        'Stripe reports a completed checkout. Refresh My Bookings and allow payment confirmation to finish. Do not pay again.',
         409
       );
     }
@@ -206,12 +199,9 @@ export async function POST(req: Request) {
     if (
       existing.status === 'open' &&
       typeof existing.url === 'string' &&
-      existing.url.startsWith(
-        'https://checkout.stripe.com/'
-      ) &&
+      existing.url.startsWith('https://checkout.stripe.com/') &&
       typeof existing.expires_at === 'number' &&
-      existing.expires_at * 1000 >
-        Date.now() + 60 * 1000
+      existing.expires_at * 1000 > Date.now() + 60 * 1000
     ) {
       return Response.json({
         url: existing.url,
@@ -229,7 +219,7 @@ export async function POST(req: Request) {
       )
     ) {
       return fail(
-        'The previous payment attempt is being processed. Please refresh your dashboard or contact support.',
+        'The previous payment attempt is being processed. Please refresh My Bookings or contact support.',
         409
       );
     }
@@ -240,46 +230,37 @@ export async function POST(req: Request) {
     'https://essex-tutor-connect.vercel.app'
   ).replace(/\/$/, '');
 
+  const confirmationUrl =
+    `${baseUrl}/dashboard/bookings/confirmation` +
+    `?bookingId=${encodeURIComponent(booking.id)}`;
+
   const form = new URLSearchParams();
 
   form.set('mode', 'payment');
-  form.set('success_url', `${baseUrl}/dashboard`);
-  form.set('cancel_url', `${baseUrl}/dashboard`);
+  form.set('success_url', `${confirmationUrl}&checkout=success`);
+  form.set('cancel_url', `${confirmationUrl}&checkout=cancelled`);
 
-  form.set(
-    'line_items[0][price_data][currency]',
-    'cad'
-  );
-
+  form.set('line_items[0][price_data][currency]', 'cad');
   form.set(
     'line_items[0][price_data][unit_amount]',
     String(booking.amountCents)
   );
-
   form.set(
     'line_items[0][price_data][product_data][name]',
     `Tutoring with ${booking.tutor.user.name}`
   );
-
   form.set('line_items[0][quantity]', '1');
 
   form.set(
     'payment_intent_data[application_fee_amount]',
     String(booking.platformFeeCents)
   );
-
-  form.set(
-    'metadata[bookingId]',
-    booking.id
-  );
-
+  form.set('metadata[bookingId]', booking.id);
   form.set(
     'payment_intent_data[metadata][bookingId]',
     booking.id
   );
 
-  // A stable key within a short time window reduces
-  // duplicate session creation on rapid repeated clicks.
   const windowNumber = Math.floor(
     Date.now() / (30 * 60 * 1000)
   );
@@ -292,8 +273,7 @@ export async function POST(req: Request) {
         headers: {
           Authorization: `Bearer ${secretKey}`,
           'Stripe-Account': accountId,
-          'Content-Type':
-            'application/x-www-form-urlencoded',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'Idempotency-Key':
             `checkout-${booking.id}-${windowNumber}`,
         },
@@ -320,9 +300,7 @@ export async function POST(req: Request) {
     if (
       typeof session.id !== 'string' ||
       typeof session.url !== 'string' ||
-      !session.url.startsWith(
-        'https://checkout.stripe.com/'
-      )
+      !session.url.startsWith('https://checkout.stripe.com/')
     ) {
       return fail(
         'Stripe did not return a valid checkout link.',
@@ -330,15 +308,12 @@ export async function POST(req: Request) {
       );
     }
 
-    // Only attach the new session if the booking
-    // still awaits payment and has not changed.
     const updated = await db.booking.updateMany({
       where: {
         id: booking.id,
         parentId: who.id,
         status: 'PENDING_PAYMENT',
-        stripeSessionId:
-          booking.stripeSessionId || null,
+        stripeSessionId: booking.stripeSessionId || null,
         startsAt: {
           gt: new Date(),
         },
@@ -350,7 +325,7 @@ export async function POST(req: Request) {
 
     if (!updated.count) {
       return fail(
-        'This booking changed while checkout was starting. Refresh your dashboard before trying again.',
+        'This booking changed while checkout was starting. Refresh My Bookings before trying again.',
         409
       );
     }
