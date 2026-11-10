@@ -11,11 +11,7 @@ const bookingSchema = z.object({
   startsAt: z.string().datetime({
     offset: true,
   }),
-  durationMinutes: z
-    .number()
-    .int()
-    .min(30)
-    .max(180),
+  durationMinutes: z.number().int().min(30).max(180),
 });
 
 export async function POST(req: Request) {
@@ -90,8 +86,8 @@ export async function POST(req: Request) {
   }
 
   const amountCents = Math.round(
-    inquiry.tutor.hourlyRateCents *
-      data.durationMinutes /
+    (inquiry.tutor.hourlyRateCents *
+      data.durationMinutes) /
       60
   );
 
@@ -121,7 +117,9 @@ export async function POST(req: Request) {
     },
   });
 
-  return Response.json(booking, { status: 201 });
+  return Response.json(booking, {
+    status: 201,
+  });
 }
 
 export async function GET() {
@@ -131,7 +129,7 @@ export async function GET() {
     return fail('Sign in required', 401);
   }
 
-  const headers = {
+  const responseHeaders = {
     'X-Account-Role': who.role,
     'Cache-Control': 'private, no-store',
   };
@@ -140,7 +138,9 @@ export async function GET() {
     who.role !== 'PARENT' &&
     who.role !== 'TUTOR'
   ) {
-    return Response.json([], { headers });
+    return Response.json([], {
+      headers: responseHeaders,
+    });
   }
 
   const bookings = await db.booking.findMany({
@@ -182,5 +182,7 @@ export async function GET() {
     take: 100,
   });
 
-  return Response.json(bookings, { headers });
+  return Response.json(bookings, {
+    headers: responseHeaders,
+  });
 }
