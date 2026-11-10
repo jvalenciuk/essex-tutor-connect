@@ -6,10 +6,12 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const HOUR_MS = 60 * 60 * 1000;
+const LOCK_TIMEOUT_MS = 10 * 60 * 1000;
 
 export async function GET(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
-  const authorization = req.headers.get('authorization');
+  const authorization =
+    req.headers.get('authorization');
 
   if (
     !cronSecret ||
@@ -23,33 +25,71 @@ export async function GET(req: Request) {
 
   const now = Date.now();
 
-  // A daily job checks sessions starting 24–48 hours
-  // from the current run.
-  const windowStart = new Date(now + 24 * HOUR_MS);
-  const windowEnd = new Date(now + 48 * HOUR_MS);
+  const windowStart = new Date(
+    now + 24 * HOUR_MS
+  );
+
+  const windowEnd = new Date(
+    now + 48 * HOUR_MS
+  );
+
+  const staleBefore = new Date(
+    now - LOCK_TIMEOUT_MS
+  );
 
   try {
     const bookings = await db.booking.findMany({
       where: {
         status: 'PAID',
         startsAt: {
-          gte: windowStart,
+          gt: new Date(now),
           lt: windowEnd,
         },
+        OR: [
+          {
+            startsAt: {
+              gte: windowStart,
+              lt: windowEnd,
+            },
+          },
+          {
+            notifications: {
+              some: {
+                type: 'REMINDER',
+                OR: [
+                  { status: 'FAILED' },
+                  {
+                    status: 'PROCESSING',
+                    updatedAt: {
+                      lt: staleBefore,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
       },
       select: {
         id: true,
       },
+      orderBy: {
+        startsAt: 'asc',
+      },
       take: 100,
     });
 
-    let sent = 0;
+    let processed = 0;
     let failed = 0;
 
     for (const booking of bookings) {
       try {
-        await notifyBooking(booking.id, 'REMINDER');
-        sent++;
+        await notifyBooking(
+          booking.id,
+          'REMINDER'
+        );
+
+        processed++;
       } catch (error) {
         failed++;
 
@@ -60,14 +100,28 @@ export async function GET(req: Request) {
       }
     }
 
-    return Response.json({
-      success: failed === 0,
+    console.info('Reminder cron completed', {
       bookingsFound: bookings.length,
-      bookingsNotified: sent,
-      failures: failed,
+      processed,
+      failed,
     });
+
+    return Response.json(
+      {
+        success: failed === 0,
+        bookingsFound: bookings.length,
+        processed,
+        failures: failed,
+      },
+      {
+        status: failed > 0 ? 500 : 200,
+      }
+    );
   } catch (error) {
-    console.error('Reminder cron failed', error);
+    console.error(
+      'Reminder cron failed',
+      error
+    );
 
     return Response.json(
       { error: 'Unable to process reminders' },
