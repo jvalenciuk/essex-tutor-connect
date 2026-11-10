@@ -7,6 +7,10 @@ type NotificationType =
   | 'REFUNDED'
   | 'REMINDER';
 
+type RecipientRole = 'parent' | 'tutor';
+
+const LOCK_TIMEOUT_MS = 10 * 60 * 1000;
+
 function formatDate(date: Date): string {
   return date.toLocaleString('en-CA', {
     timeZone: 'America/Toronto',
@@ -27,13 +31,15 @@ async function sendEmail(
   subject: string,
   body: string,
   idempotencyKey?: string
-): Promise<void> {
+): Promise<string | null> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   const testRecipient = process.env.EMAIL_TEST_TO;
 
   if (!apiKey || !from || !testRecipient) {
-    throw new Error('Resend email configuration is missing');
+    throw new Error(
+      'Resend test email configuration is missing'
+    );
   }
 
   const response = await fetch(
@@ -61,16 +67,149 @@ async function sendEmail(
     }
   );
 
-  if (!response.ok) {
-    const result = await response.json().catch(() => null);
+  const result = await response.json().catch(
+    () => null
+  );
 
+  if (!response.ok) {
     console.error('Resend delivery error', {
       status: response.status,
       code: result?.name,
       message: result?.message,
     });
 
-    throw new Error('Resend did not accept the email');
+    throw new Error(
+      `Resend did not accept email (${response.status})`
+    );
+  }
+
+  return typeof result?.id === 'string'
+    ? result.id
+    : null;
+}
+
+async function sendTrackedReminder(
+  bookingId: string,
+  role: RecipientRole,
+  to: string,
+  subject: string,
+  body: string
+): Promise<void> {
+  const type = 'REMINDER';
+  const idempotencyKey =
+    `reminder-${bookingId}-${role}`;
+
+  const existing = await db.notificationDelivery.upsert({
+    where: {
+      bookingId_type_recipientRole: {
+        bookingId,
+        type,
+        recipientRole: role,
+      },
+    },
+    create: {
+      bookingId,
+      type,
+      recipientRole: role,
+      recipientEmail: to,
+      idempotencyKey,
+      status: 'PENDING',
+    },
+    update: {},
+  });
+
+  if (existing.status === 'SENT') {
+    return;
+  }
+
+  // Claim the record atomically. Another cron
+  // execution cannot claim it simultaneously.
+  const staleBefore = new Date(
+    Date.now() - LOCK_TIMEOUT_MS
+  );
+
+  const claimed = await db.notificationDelivery.updateMany({
+    where: {
+      id: existing.id,
+      OR: [
+        { status: 'PENDING' },
+        { status: 'FAILED' },
+        {
+          status: 'PROCESSING',
+          updatedAt: { lt: staleBefore },
+        },
+      ],
+    },
+    data: {
+      status: 'PROCESSING',
+      attempts: { increment: 1 },
+      recipientEmail: to,
+      lastError: null,
+    },
+  });
+
+  if (claimed.count !== 1) {
+    return;
+  }
+
+  try {
+    // Recheck immediately before sending.
+    const booking = await db.booking.findUnique({
+      where: { id: bookingId },
+      select: {
+        status: true,
+        startsAt: true,
+      },
+    });
+
+    if (
+      !booking ||
+      booking.status !== 'PAID' ||
+      booking.startsAt <= new Date()
+    ) {
+      await db.notificationDelivery.update({
+        where: { id: existing.id },
+        data: {
+          status: 'FAILED',
+          lastError:
+            'Booking no longer eligible for reminder',
+        },
+      });
+
+      return;
+    }
+
+    const providerId = await sendEmail(
+      to,
+      subject,
+      body,
+      idempotencyKey
+    );
+
+    await db.notificationDelivery.update({
+      where: { id: existing.id },
+      data: {
+        status: 'SENT',
+        providerId,
+        sentAt: new Date(),
+        lastError: null,
+      },
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unknown email error';
+
+    await db.notificationDelivery.update({
+      where: { id: existing.id },
+      data: {
+        status: 'FAILED',
+        lastError: message.slice(0, 1000),
+      },
+    });
+
+    throw error;
   }
 }
 
@@ -82,34 +221,58 @@ export async function notifyBooking(
     where: { id: bookingId },
     include: {
       parent: {
-        select: { name: true, email: true },
+        select: {
+          name: true,
+          email: true,
+        },
       },
       tutor: {
         include: {
           user: {
-            select: { name: true, email: true },
+            select: {
+              name: true,
+              email: true,
+            },
           },
         },
       },
       inquiry: {
-        select: { subject: true, grade: true },
+        select: {
+          subject: true,
+          grade: true,
+        },
       },
     },
   });
 
   if (!booking) {
-    throw new Error('Booking not found for notification');
+    throw new Error(
+      'Booking not found for notification'
+    );
+  }
+
+  if (
+    type === 'REMINDER' &&
+    (
+      booking.status !== 'PAID' ||
+      booking.startsAt <= new Date()
+    )
+  ) {
+    return;
   }
 
   const parent = booking.parent;
   const tutor = booking.tutor.user;
   const date = formatDate(booking.startsAt);
   const price = formatMoney(booking.amountCents);
-  const subject = booking.inquiry?.subject || 'Tutoring';
-  const grade = booking.inquiry?.grade || 'Not specified';
+  const subject =
+    booking.inquiry?.subject || 'Tutoring';
+  const grade =
+    booking.inquiry?.grade || 'Not specified';
 
   const dashboard =
-    (process.env.NEXTAUTH_URL ||
+    (
+      process.env.NEXTAUTH_URL ||
       'https://essex-tutor-connect.vercel.app'
     ).replace(/\/$/, '') + '/dashboard';
 
@@ -144,7 +307,8 @@ export async function notifyBooking(
       `${formatMoney(booking.platformFeeCents)}\n` +
       `Tutor portion before Stripe fees: ` +
       `${formatMoney(
-        booking.amountCents - booking.platformFeeCents
+        booking.amountCents -
+        booking.platformFeeCents
       )}\n\n` +
       `View your booking:\n${dashboard}`;
   }
@@ -169,7 +333,8 @@ export async function notifyBooking(
   }
 
   if (type === 'REFUNDED') {
-    heading = 'Tutoring session refund confirmed';
+    heading =
+      'Tutoring session refund confirmed';
 
     parentBody =
       `Hello ${parent.name},\n\n` +
@@ -193,7 +358,8 @@ export async function notifyBooking(
   }
 
   if (type === 'REMINDER') {
-    heading = 'Reminder: tutoring session tomorrow';
+    heading =
+      'Reminder: tutoring session tomorrow';
 
     parentBody =
       `Hello ${parent.name},\n\n` +
@@ -215,7 +381,12 @@ export async function notifyBooking(
       `View your dashboard:\n${dashboard}`;
   }
 
-  const notifications = [
+  const notifications: {
+    to: string;
+    subject: string;
+    body: string;
+    role: RecipientRole;
+  }[] = [
     {
       to: parent.email,
       subject: `${heading} — Parent`,
@@ -231,20 +402,25 @@ export async function notifyBooking(
   ];
 
   const results = await Promise.allSettled(
-    notifications.map((item) =>
-      sendEmail(
-        item.to,
-        item.subject,
-        item.body,
-        type === 'REMINDER'
-          ? `reminder-${booking.id}-${item.role}`
-          : undefined
-      )
+    notifications.map(item =>
+      type === 'REMINDER'
+        ? sendTrackedReminder(
+            booking.id,
+            item.role,
+            item.to,
+            item.subject,
+            item.body
+          )
+        : sendEmail(
+            item.to,
+            item.subject,
+            item.body
+          )
     )
   );
 
   const failures = results.filter(
-    (result) => result.status === 'rejected'
+    result => result.status === 'rejected'
   );
 
   for (const result of failures) {
