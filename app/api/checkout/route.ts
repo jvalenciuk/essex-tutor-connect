@@ -225,10 +225,37 @@ export async function POST(req: Request) {
     }
   }
 
-  const baseUrl = (
+  // APP_URL allows Preview and Production to use separate
+  // Stripe Checkout return URLs.
+  const configuredBaseUrl =
+    process.env.APP_URL ||
     process.env.NEXTAUTH_URL ||
-    'https://essex-tutor-connect.vercel.app'
-  ).replace(/\/$/, '');
+    'https://essex-tutor-connect.vercel.app';
+
+  let baseUrl: string;
+
+  try {
+    const parsedUrl = new URL(configuredBaseUrl);
+
+    if (
+      parsedUrl.protocol !== 'https:' ||
+      parsedUrl.username ||
+      parsedUrl.password ||
+      parsedUrl.search ||
+      parsedUrl.hash
+    ) {
+      throw new Error('Invalid application URL');
+    }
+
+    baseUrl = parsedUrl.origin;
+  } catch {
+    console.error('Invalid application base URL configuration');
+
+    return fail(
+      'Payment return URL is not configured correctly.',
+      503
+    );
+  }
 
   const confirmationUrl =
     `${baseUrl}/dashboard/bookings/confirmation` +
