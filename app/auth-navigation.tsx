@@ -25,6 +25,17 @@ export default function AuthNavigation() {
     session.user as { role?: string } | undefined
   )?.role;
 
+  const handleSignOut = async () => {
+    await signOut({
+      redirect: false,
+      callbackUrl: '/',
+    });
+
+    // Navigate within the current website, whether
+    // Production or Preview.
+    window.location.assign(window.location.origin + '/');
+  };
+
   return (
     <>
       <Link href="/tutors">Find tutors</Link>
@@ -41,9 +52,7 @@ export default function AuthNavigation() {
 
       <button
         type="button"
-        onClick={() =>
-          signOut({ callbackUrl: '/' })
-        }
+        onClick={handleSignOut}
         style={{
           background: 'transparent',
           border: 'none',
