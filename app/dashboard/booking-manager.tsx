@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import SessionCalendar from './session-calendar';
+import { useRouter } from 'next/navigation';
 
 type Booking = {
   id: string;
@@ -123,6 +124,7 @@ export default function BookingManager({
   inquiryId,
   role,
 }: Props) {
+  const router = useRouter();
   const [bookings, setBookings] =
     useState<Booking[]>([]);
   const [loading, setLoading] =
@@ -228,6 +230,7 @@ export default function BookingManager({
 
       resetForm();
       await loadBookings();
+      router.refresh();
       setNotice(successMessage);
     } catch (err) {
       setError(
