@@ -1,5 +1,8 @@
 
 import { db } from './db';
+import type { Prisma } from '@prisma/client';
+
+type BookingReader = Pick<Prisma.TransactionClient, 'tutorAvailability' | 'tutorBlockedDate' | 'booking'>;
 
 const MINUTE = 60_000;
 const ZONE = 'America/Toronto';
@@ -38,7 +41,8 @@ export async function checkTutorSlot(
   tutorId: string,
   startsAt: Date,
   durationMinutes: number,
-  excludeBookingId?: string
+  excludeBookingId?: string,
+  reader: BookingReader = db
 ): Promise<string | null> {
   if (
     !Number.isInteger(durationMinutes) ||
@@ -64,10 +68,10 @@ export async function checkTutorSlot(
   }
 
   const [hours, blocks] = await Promise.all([
-    db.tutorAvailability.findMany({
+    reader.tutorAvailability.findMany({
       where: { tutorId },
     }),
-    db.tutorBlockedDate.findMany({
+    reader.tutorBlockedDate.findMany({
       where: {
         tutorId,
         dateKey: beginning.dateKey,
@@ -95,7 +99,7 @@ export async function checkTutorSlot(
     }
   }
 
-  const candidates = await db.booking.findMany({
+  const candidates = await reader.booking.findMany({
     where: {
       tutorId,
       status: {
