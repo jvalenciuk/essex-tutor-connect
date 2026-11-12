@@ -54,7 +54,7 @@ async function getStripeStatus(
     const url = new URL(
       `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
     );
-    url.searchParams.append('include[]', 'configuration.merchant');
+    url.searchParams.append('include[0]', 'configuration.merchant');
 
     const response = await fetch(url.toString(), {
       headers: {
