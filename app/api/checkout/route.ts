@@ -1,3 +1,4 @@
+import { getConfiguredStripeSecret } from '../../../lib/stripe-config';
 
 import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
@@ -150,7 +151,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = getConfiguredStripeSecret();
 
   if (!secretKey) {
     return fail(
