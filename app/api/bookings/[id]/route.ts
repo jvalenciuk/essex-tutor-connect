@@ -375,44 +375,53 @@ export async function PATCH(
       return fail('Choose a future date and time', 400);
     }
 
-    const issue = await checkTutorSlot(
-      booking.tutorId,
-      startsAt,
-      data.durationMinutes,
-      booking.id
-    );
-
-    if (issue) {
-      return fail(issue, 409);
-    }
-
     const amountCents = Math.round(
-      (booking.tutor.hourlyRateCents *
-        data.durationMinutes) /
-        60
+      (booking.tutor.hourlyRateCents * data.durationMinutes) / 60
     );
+    const platformFeeCents = Math.round(amountCents * 0.15);
 
-    const platformFeeCents = Math.round(
-      amountCents * 0.15
-    );
+    // Apply the same per-tutor lock used by both acceptance paths.
+    // A simultaneous ACCEPT cannot reserve this slot between
+    // the availability check and the revised proposal update.
+    let result: { count: number };
+    try {
+      result = await db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
-    const result = await db.booking.updateMany({
-      where: {
-        id,
-        status: 'CHANGE_REQUESTED',
-        tutor: { userId: who.id },
-      },
-      data: {
-        startsAt,
-        durationMinutes: data.durationMinutes,
-        amountCents,
-        platformFeeCents,
-        status: 'PROPOSED',
-        requestedStartsAt: null,
-        requestedDurationMinutes: null,
-        requestNote: null,
-      },
-    });
+        const issue = await checkTutorSlot(
+          booking.tutorId,
+          startsAt,
+          data.durationMinutes,
+          booking.id,
+          tx
+        );
+        if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+        return tx.booking.updateMany({
+          where: {
+            id,
+            status: 'CHANGE_REQUESTED',
+            tutor: { userId: who.id },
+          },
+          data: {
+            startsAt,
+            durationMinutes: data.durationMinutes,
+            amountCents,
+            platformFeeCents,
+            status: 'PROPOSED',
+            requestedStartsAt: null,
+            requestedDurationMinutes: null,
+            requestNote: null,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+        return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+      }
+      console.error('Booking revision transaction failed', error);
+      return fail('Unable to revise the session. Please retry.', 503);
+    }
 
     if (!result.count) {
       return fail('Booking has already changed', 409);
