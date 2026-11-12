@@ -37,3 +37,10 @@ Only after successful build, staging regression, environment separation, live we
 - Dashboard earnings are estimates before Stripe fees, disputes, and adjustments; they are not confirmed payouts.
 - Sandbox payout restrictions on fictional test accounts should not be resolved by submitting real personal identity documents.
 - No credentials or live Stripe settings are included in this document.
+
+## Review update — checkout concurrency and refund reconciliation
+- The legacy booking checkout endpoint now delegates to the primary checkout handler; both entry points share validation and session idempotency.
+- The primary checkout handler recognizes when another concurrent request has already stored the same Stripe Checkout session, and returns that session instead of a false conflict.
+- **Not yet load-tested:** multiple simultaneous requests across session-expiry windows. Production acceptance requires concurrent request tests and Stripe event replay tests.
+- **Refund reconciliation gap:** refunds are initiated synchronously; if Stripe confirms a refund but the database update fails, the application returns an administrator-review error. Add an operational reconciliation process and alerts before live payments. Do not assume the database alone is a complete payment ledger.
+- **Booking conflict concurrency:** availability is checked before booking state updates, but no database-level overlap lock/constraint is established. Test and implement a serialized booking acceptance strategy before promising no double-bookings under concurrent requests.
