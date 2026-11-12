@@ -24,14 +24,26 @@ function dateTime(date: Date) {
 export default async function Admin() {
   const who = await identity();
 
-  // Visitors who are not signed in must log in first.
-  if (!who) {
+  // Visitors without a session must sign in.
+  if (!who?.id) {
     redirect('/login');
   }
 
-  // Signed-in parents and tutors cannot access
-  // administrator information or functionality.
-  if (who.role !== 'ADMIN') {
+  // Verify the user's CURRENT database role.
+  // Never rely solely on the JWT role.
+  const admin = await db.user.findUnique({
+    where: {
+      id: who.id,
+    },
+    select: {
+      id: true,
+      role: true,
+    },
+  });
+
+  // Deny access if the account is missing or
+  // no longer has administrator permissions.
+  if (!admin || admin.role !== 'ADMIN') {
     return (
       <main>
         <h1>Access Denied</h1>
@@ -49,8 +61,8 @@ export default async function Admin() {
     );
   }
 
-  // Administrative data is retrieved only after
-  // the administrator role has been verified.
+  // Retrieve sensitive information only after
+  // checking the current database permissions.
   const [tutors, bookings, bookingCounts] =
     await Promise.all([
       db.tutorProfile.findMany({
