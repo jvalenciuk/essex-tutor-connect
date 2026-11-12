@@ -24,10 +24,33 @@ function dateTime(date: Date) {
 export default async function Admin() {
   const who = await identity();
 
-  if (who?.role !== 'ADMIN') {
+  // Visitors who are not signed in must log in first.
+  if (!who) {
     redirect('/login');
   }
 
+  // Signed-in parents and tutors cannot access
+  // administrator information or functionality.
+  if (who.role !== 'ADMIN') {
+    return (
+      <main>
+        <h1>Access Denied</h1>
+
+        <p>
+          You do not have permission to access
+          the Administrator Dashboard.
+        </p>
+
+        <p>
+          This area is restricted to authorized
+          Essex Tutor Connect administrators.
+        </p>
+      </main>
+    );
+  }
+
+  // Administrative data is retrieved only after
+  // the administrator role has been verified.
   const [tutors, bookings, bookingCounts] =
     await Promise.all([
       db.tutorProfile.findMany({
