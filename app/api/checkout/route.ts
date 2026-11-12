@@ -362,6 +362,20 @@ export async function POST(req: Request) {
     });
 
     if (!updated.count) {
+      // Another request may have saved this same idempotent session.
+      // Do not expire it: the winning request could already be using it.
+      const current = await db.booking.findUnique({
+        where: { id: booking.id },
+        select: { stripeSessionId: true, status: true },
+      });
+
+      if (
+        current?.status === 'PENDING_PAYMENT' &&
+        current.stripeSessionId === session.id
+      ) {
+        return Response.json({ url: session.url, reused: true });
+      }
+
       return fail(
         'This booking changed while checkout was starting. Refresh My Bookings before trying again.',
         409
