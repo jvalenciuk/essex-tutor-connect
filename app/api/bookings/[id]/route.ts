@@ -169,7 +169,7 @@ export async function PATCH(
     let accepted: { count: number };
     try {
       accepted = await db.$transaction(async tx => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
         const issue = await checkTutorSlot(
           booking.tutorId,
