@@ -23,7 +23,11 @@ type StripeEvent = {
   type: string;
   account?: string;
   data: {
-    object: CheckoutSession;
+    object: CheckoutSession & {
+      payment_intent?: string;
+      status?: string;
+      amount?: number;
+    };
   };
 };
 
