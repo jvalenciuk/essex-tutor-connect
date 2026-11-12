@@ -1,3 +1,4 @@
+import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
@@ -521,7 +522,7 @@ export async function PATCH(
 
     const accountId = booking.tutor.stripeAccountId;
     const sessionId = booking.stripeSessionId;
-    const secret = process.env.STRIPE_SECRET_KEY;
+    const secret = getConfiguredStripeSecret();
 
     if (!accountId || !sessionId || !secret) {
       return fail(
