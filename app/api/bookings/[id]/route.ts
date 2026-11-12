@@ -163,28 +163,42 @@ export async function PATCH(
       return fail('The proposed session is in the past', 409);
     }
 
-    const issue = await checkTutorSlot(
-      booking.tutorId,
-      booking.startsAt,
-      booking.durationMinutes,
-      booking.id
-    );
+    // Serialize all acceptance attempts for this tutor, including
+    // different bookings competing for the same time slot.
+    // The transaction-scoped PostgreSQL advisory lock is released on commit.
+    let accepted: { count: number };
+    try {
+      accepted = await db.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
-    if (issue) {
-      return fail(issue, 409);
+        const issue = await checkTutorSlot(
+          booking.tutorId,
+          booking.startsAt,
+          booking.durationMinutes,
+          booking.id,
+          tx
+        );
+        if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+        return tx.booking.updateMany({
+          where: {
+            id,
+            status: 'PROPOSED',
+            parentId: who.id,
+            startsAt: { gt: new Date() },
+          },
+          data: { status: 'PENDING_PAYMENT' },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+        return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+      }
+      console.error('Booking acceptance transaction failed', error);
+      return fail('Unable to reserve the session. Please try again.', 503);
     }
 
-    const result = await db.booking.updateMany({
-      where: {
-        id,
-        status: 'PROPOSED',
-        parentId: who.id,
-        startsAt: { gt: new Date() },
-      },
-      data: { status: 'PENDING_PAYMENT' },
-    });
-
-    if (!result.count) {
+    if (!accepted.count) {
       return fail('Booking is no longer available', 409);
     }
 
