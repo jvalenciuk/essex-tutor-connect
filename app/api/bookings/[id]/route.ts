@@ -245,52 +245,55 @@ export async function PATCH(
       return fail('Invalid requested duration', 409);
     }
 
-    const issue = await checkTutorSlot(
-      booking.tutorId,
-      requestedStartsAt,
-      requestedDurationMinutes,
-      booking.id
+    const amountCents = Math.round(
+      (booking.tutor.hourlyRateCents * requestedDurationMinutes) / 60
     );
+    const platformFeeCents = Math.round(amountCents * 0.15);
 
-    if (issue) {
-      return fail(issue, 409);
+    let acceptedRequested: { count: number };
+    try {
+      acceptedRequested = await db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
+
+        const issue = await checkTutorSlot(
+          booking.tutorId,
+          requestedStartsAt,
+          requestedDurationMinutes,
+          booking.id,
+          tx
+        );
+        if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+        return tx.booking.updateMany({
+          where: {
+            id,
+            status: 'CHANGE_REQUESTED',
+            tutor: { userId: who.id },
+            requestedStartsAt,
+            requestedDurationMinutes,
+          },
+          data: {
+            startsAt: requestedStartsAt,
+            durationMinutes: requestedDurationMinutes,
+            amountCents,
+            platformFeeCents,
+            status: 'PENDING_PAYMENT',
+            requestedStartsAt: null,
+            requestedDurationMinutes: null,
+            requestNote: null,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+        return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+      }
+      console.error('Requested booking acceptance failed', error);
+      return fail('Unable to reserve the requested time. Please retry.', 503);
     }
 
-    const amountCents = Math.round(
-      (booking.tutor.hourlyRateCents *
-        requestedDurationMinutes) /
-        60
-    );
-
-    const platformFeeCents = Math.round(
-      amountCents * 0.15
-    );
-
-    const result = await db.booking.updateMany({
-      where: {
-        id,
-        status: 'CHANGE_REQUESTED',
-        tutor: { userId: who.id },
-        requestedStartsAt,
-        requestedDurationMinutes,
-      },
-      data: {
-        startsAt: requestedStartsAt,
-        durationMinutes: requestedDurationMinutes,
-        amountCents,
-        platformFeeCents,
-        status: 'PENDING_PAYMENT',
-        requestedStartsAt: null,
-        requestedDurationMinutes: null,
-        requestNote: null,
-      },
-    });
-
-    if (!result.count) {
-      return fail(
-        'The requested time has already changed. Refresh bookings.',
-        409
-      );
+    if (!acceptedRequested.count) {
+      return fail('The requested time has already changed. Refresh bookings.', 409);
     }
 
     return Response.json({
