@@ -56,6 +56,8 @@ model User {
   sentInquiries Inquiry[]     @relation("ParentInquiries")
   bookings      Booking[]     @relation("ParentBookings")
   messages      Message[]
+
+  verificationAudits TutorVerificationAudit[] @relation("VerificationAdmin")
 }
 
 model TutorProfile {
@@ -78,8 +80,23 @@ model TutorProfile {
   bookings         Booking[]
   availability     TutorAvailability[]
   blockedDates     TutorBlockedDate[]
+  verificationAudits TutorVerificationAudit[]
 
   createdAt        DateTime     @default(now())
+}
+
+model TutorVerificationAudit {
+  id                   String       @id @default(cuid())
+  tutorId              String
+  tutor                TutorProfile @relation(fields: [tutorId], references: [id])
+  adminId              String
+  admin                User         @relation("VerificationAdmin", fields: [adminId], references: [id])
+  previousVerification Verification
+  newVerification      Verification
+  createdAt            DateTime     @default(now())
+
+  @@index([tutorId, createdAt])
+  @@index([adminId, createdAt])
 }
 
 model TutorAvailability {
