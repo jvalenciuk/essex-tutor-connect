@@ -24,57 +24,51 @@ async function getStripeStatus(
     connected: Boolean(accountId),
     paymentsEnabled: false,
     payoutsEnabled: false,
+    payoutsRestricted: false,
     error: '',
   };
 
-  if (!accountId) {
-    return result;
-  }
+  if (!accountId) return result;
 
   const key = process.env.STRIPE_SECRET_KEY;
-
-  if (!key) {
-    return {
-      ...result,
-      error: 'Stripe configuration unavailable.',
-    };
-  }
+  if (!key) return { ...result, error: 'Stripe configuration unavailable.' };
 
   try {
-    const response = await fetch(
-      `https://api.stripe.com/v1/accounts/${encodeURIComponent(
-        accountId
-      )}`,
-      {
-        headers: {
-          Authorization: `Bearer ${key}`,
-        },
-        cache: 'no-store',
-      }
+    const url = new URL(
+      `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
     );
+    url.searchParams.set('include[0]', 'configuration.merchant');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Stripe-Version': '2026-10-28.endive',
+      },
+      cache: 'no-store',
+    });
 
     if (!response.ok) {
-      return {
-        ...result,
-        error: 'Unable to verify Stripe status.',
-      };
+      console.error('Stripe onboarding status lookup failed', response.status);
+      return { ...result, error: 'Unable to verify Stripe status.' };
     }
 
     const account = await response.json();
+    const capabilities = account?.configuration?.merchant?.capabilities;
+    if (!capabilities) {
+      return { ...result, error: 'Stripe capabilities unavailable.' };
+    }
 
-    return {
-      connected: true,
-      paymentsEnabled:
-        account.charges_enabled === true,
-      payoutsEnabled:
-        account.payouts_enabled === true,
-      error: '',
-    };
-  } catch {
+    const payoutStatus = capabilities.stripe_balance?.payouts?.status;
     return {
       ...result,
-      error: 'Stripe status check failed.',
+      paymentsEnabled: capabilities.card_payments?.status === 'active',
+      payoutsEnabled: payoutStatus === 'active',
+      payoutsRestricted: payoutStatus === 'restricted',
+      error: '',
     };
+  } catch (error) {
+    console.error('Stripe onboarding status check failed', error);
+    return { ...result, error: 'Stripe status check failed.' };
   }
 }
 
@@ -128,6 +122,7 @@ export default async function TutorOnboarding() {
         connected: false,
         paymentsEnabled: false,
         payoutsEnabled: false,
+        payoutsRestricted: false,
         error: '',
       };
 
@@ -189,7 +184,9 @@ export default async function TutorOnboarding() {
         : stripe.error
         ? stripe.error
         : stripe.connected
-        ? 'Continue Stripe onboarding or verification'
+        ? stripe.payoutsRestricted
+        ? 'Card payments may be active, but bank payouts require Stripe verification.'
+        : 'Continue Stripe onboarding or verification'
         : 'Connect your Stripe account below.',
     },
   ];
