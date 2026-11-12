@@ -52,3 +52,10 @@ Only after successful build, staging regression, environment separation, live we
 - Successful reconciliation sends the normal refunded notification; notification failures do not reverse the database update.
 - **Outstanding:** implement an operational alert/queue for Stripe-confirmed refunds that fail local database updates; add automated refund webhook reconciliation and regression tests. This endpoint is a manual recovery tool, not an automatic ledger.
 - **Outstanding:** validate build and run admin authorization, mismatched refund, duplicate retry, and happy-path tests before release.
+
+## Refund webhook monitoring update
+- Signed connected-account `refund.created` and `refund.updated` events with `status=succeeded` and a booking ID in refund metadata are checked against the original Stripe Checkout session and local booking before marking a PAID booking REFUNDED.
+- This handles ordinary webhook-based reconciliation, with a separate admin-only manual recovery form for missed or ambiguous cases.
+- Stripe must be configured to deliver the refund event types for connected accounts; without subscriptions, automatic reconciliation will not run.
+- A failed reconciliation returns an error so Stripe can retry, but operational alerting, durable discrepancy queues, and webhook replay tests remain **required** before launch.
+- The admin form is visible at `/admin` to current database administrators only; it verifies an existing refund and never creates one.
