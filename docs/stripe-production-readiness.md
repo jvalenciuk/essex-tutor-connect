@@ -44,3 +44,11 @@ Only after successful build, staging regression, environment separation, live we
 - **Not yet load-tested:** multiple simultaneous requests across session-expiry windows. Production acceptance requires concurrent request tests and Stripe event replay tests.
 - **Refund reconciliation gap:** refunds are initiated synchronously; if Stripe confirms a refund but the database update fails, the application returns an administrator-review error. Add an operational reconciliation process and alerts before live payments. Do not assume the database alone is a complete payment ledger.
 - **Booking conflict concurrency:** availability is checked before booking state updates, but no database-level overlap lock/constraint is established. Test and implement a serialized booking acceptance strategy before promising no double-bookings under concurrent requests.
+
+## Administrator refund reconciliation (staging implementation)
+- `POST /api/admin/refunds/reconcile` with JSON `{"bookingId":"..."}` requires an authenticated ADMIN session.
+- The endpoint **never creates a refund**. It retrieves the connected-account Checkout session and lists Stripe refunds for its payment intent.
+- It only marks a PAID booking REFUNDED if the payment and a **single full succeeded refund** match the booking and refund metadata. Ambiguous, partial, pending, or multiple refunds require manual review.
+- Successful reconciliation sends the normal refunded notification; notification failures do not reverse the database update.
+- **Outstanding:** implement an operational alert/queue for Stripe-confirmed refunds that fail local database updates; add automated refund webhook reconciliation and regression tests. This endpoint is a manual recovery tool, not an automatic ledger.
+- **Outstanding:** validate build and run admin authorization, mismatched refund, duplicate retry, and happy-path tests before release.
