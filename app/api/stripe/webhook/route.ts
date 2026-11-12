@@ -2,6 +2,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from '../../../../lib/db';
 import { notifyBooking } from '../../../../lib/email';
+import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
         typeof refund.payment_intent !== 'string'
       ) return Response.json({ received: true });
 
-      const key = process.env.STRIPE_SECRET_KEY;
+      const key = getConfiguredStripeSecret();
       if (!key) return new Response('Stripe unavailable', { status: 503 });
 
       const sessionResponse = await fetch(
