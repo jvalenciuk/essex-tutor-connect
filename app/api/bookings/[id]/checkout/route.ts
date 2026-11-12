@@ -1,3 +1,4 @@
+import { getConfiguredStripeSecret } from '../../../../../lib/stripe-config';
 
 import { db } from '../../../../../lib/db';
 import { identity, fail } from '../../../../../lib/security';
@@ -129,10 +130,10 @@ export async function POST(
     return fail('Invalid booking price or commission', 409);
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = getConfiguredStripeSecret();
 
-  if (!secretKey || !secretKey.startsWith('sk_test_')) {
-    return fail('Stripe sandbox is not configured', 503);
+  if (!secretKey) {
+    return fail('Stripe payments are not configured for this environment', 503);
   }
 
   // Apply the same Stripe eligibility check as the primary checkout route.
@@ -144,6 +145,7 @@ export async function POST(
   }
 
   const baseUrl = (
+    process.env.APP_URL ||
     process.env.NEXTAUTH_URL ||
     'https://essex-tutor-connect.vercel.app'
   ).replace(/\/$/, '');
