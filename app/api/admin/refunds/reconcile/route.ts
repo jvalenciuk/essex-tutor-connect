@@ -32,7 +32,9 @@ async function stripeGet(path: string, key: string, account: string) {
 // Explicit, single-booking reconciliation. Never issues a new refund.
 export async function POST(request: Request) {
   const who = await identity();
-  if (!who || who.role !== 'ADMIN') return fail('Administrator required', 403);
+  if (!who?.id) return fail('Administrator required', 403);
+  const admin = await db.user.findUnique({ where: { id: who.id }, select: { role: true } });
+  if (admin?.role !== 'ADMIN') return fail('Administrator required', 403);
 
   let bookingId: string;
   try {
