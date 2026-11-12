@@ -3,6 +3,7 @@ import { identity } from '../../lib/security';
 import { db } from '../../lib/db';
 import { redirect } from 'next/navigation';
 import Verify from './verify';
+import RefundReconcile from './refund-reconcile';
 
 export const dynamic = 'force-dynamic';
 
@@ -381,6 +382,8 @@ export default async function Admin() {
           </div>
         ))}
       </section>
+
+      <RefundReconcile />
 
       <section
         className="card"
