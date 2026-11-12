@@ -1,6 +1,7 @@
 
 import { db } from '../../../../../lib/db';
 import { identity, fail } from '../../../../../lib/security';
+import { tutorCanAcceptCardPayments } from '../../../../../lib/stripe-capabilities';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -132,6 +133,14 @@ export async function POST(
 
   if (!secretKey || !secretKey.startsWith('sk_test_')) {
     return fail('Stripe sandbox is not configured', 503);
+  }
+
+  // Apply the same Stripe eligibility check as the primary checkout route.
+  if (!(await tutorCanAcceptCardPayments(accountId, secretKey))) {
+    return fail(
+      'This tutor cannot accept card payments right now. Please try another tutor or contact support.',
+      409
+    );
   }
 
   const baseUrl = (
