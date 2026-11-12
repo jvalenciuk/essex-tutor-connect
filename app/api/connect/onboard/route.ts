@@ -1,3 +1,4 @@
+import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
@@ -69,13 +70,14 @@ export async function POST() {
     return fail('Approved tutor profile required', 403);
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = getConfiguredStripeSecret();
 
-  if (!secretKey || !secretKey.startsWith('sk_test_')) {
-    return fail('Stripe sandbox is not configured', 503);
+  if (!secretKey) {
+    return fail('Stripe payments are not configured for this environment', 503);
   }
 
   const baseUrl = (
+    process.env.APP_URL ||
     process.env.NEXTAUTH_URL ||
     'https://essex-tutor-connect.vercel.app'
   ).replace(/\/$/, '');
