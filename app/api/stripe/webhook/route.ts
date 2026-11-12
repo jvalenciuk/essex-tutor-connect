@@ -97,6 +97,65 @@ export async function POST(req: Request) {
     });
   }
 
+  // Stripe refund events can arrive after a successful refund while
+  // the local database still says PAID. Verify against Stripe before
+  // changing the booking; never create a refund from a webhook.
+  if (event.type === 'refund.updated' || event.type === 'refund.created') {
+    const refund = event.data?.object;
+    const bookingId = refund?.metadata?.bookingId;
+    if (!bookingId || refund?.status !== 'succeeded' || !event.account) {
+      return Response.json({ received: true });
+    }
+
+    try {
+      const booking = await db.booking.findUnique({
+        where: { id: bookingId },
+        include: { tutor: { select: { stripeAccountId: true } } },
+      });
+      if (
+        !booking ||
+        booking.status !== 'PAID' ||
+        booking.tutor.stripeAccountId !== event.account ||
+        !booking.stripeSessionId ||
+        refund.amount !== booking.amountCents ||
+        typeof refund.payment_intent !== 'string'
+      ) return Response.json({ received: true });
+
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key) return new Response('Stripe unavailable', { status: 503 });
+
+      const sessionResponse = await fetch(
+        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
+        {
+          headers: { Authorization: `Bearer ${key}`, 'Stripe-Account': event.account },
+          cache: 'no-store',
+        }
+      );
+      if (!sessionResponse.ok) return new Response('Stripe verification unavailable', { status: 503 });
+      const session = await sessionResponse.json();
+      if (
+        session.payment_intent !== refund.payment_intent ||
+        session.payment_status !== 'paid' ||
+        session.currency?.toLowerCase() !== 'cad' ||
+        session.amount_total !== booking.amountCents ||
+        session.metadata?.bookingId !== booking.id
+      ) return new Response('Refund payment mismatch', { status: 409 });
+
+      const result = await db.booking.updateMany({
+        where: { id: booking.id, status: 'PAID', stripeSessionId: booking.stripeSessionId },
+        data: { status: 'REFUNDED' },
+      });
+      if (result.count) {
+        try { await notifyBooking(booking.id, 'REFUNDED'); }
+        catch (error) { console.error('Refund notification failed', error); }
+      }
+      return Response.json({ received: true, reconciled: result.count === 1 });
+    } catch (error) {
+      console.error('Refund webhook reconciliation failed', error);
+      return new Response('Refund reconciliation failed', { status: 500 });
+    }
+  }
+
   if (
     event.type !== 'checkout.session.completed' &&
     event.type !== 'checkout.session.async_payment_succeeded'
