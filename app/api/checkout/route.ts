@@ -1,6 +1,7 @@
 
 import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
+import { tutorCanAcceptCardPayments } from '../../../lib/stripe-capabilities';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +160,15 @@ export async function POST(req: Request) {
   }
 
   const accountId = booking.tutor.stripeAccountId;
+
+  // Do not start Checkout unless Stripe confirms card payments are active.
+  // Payout restrictions alone do not prevent card payments.
+  if (!(await tutorCanAcceptCardPayments(accountId, secretKey))) {
+    return fail(
+      'This tutor cannot accept card payments right now. Please try another tutor or contact support.',
+      409
+    );
+  }
 
   if (booking.stripeSessionId) {
     const existing = await retrieveSession(
