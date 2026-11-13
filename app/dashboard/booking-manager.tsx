@@ -593,14 +593,21 @@ export default function BookingManager({
           </p>
         )}
 
-      {overduePaidBookings.length > 0 && (
-        <p style={{ fontWeight: 700, color: '#92400e' }}>
-          Awaiting completion ({overduePaidBookings.length}) — these paid sessions have ended.
-        </p>
-      )}
-      <h4 style={{ marginTop: 20, marginBottom: 12 }}>Active sessions ({activeBookings.length}) · {upcomingActiveBookings.length} upcoming or pending · {overduePaidBookings.length} awaiting completion</h4>
-      {activeBookings.length === 0 && !loading && <p className="muted">No active session requests.</p>}
-      {activeBookings.map(
+      {[
+        { title: 'Awaiting completion', items: overduePaidBookings, overdue: true },
+        { title: 'Upcoming and pending', items: upcomingActiveBookings, overdue: false },
+      ].map(group => (
+        <div key={group.title} style={{ marginTop: 20 }}>
+          <h4 style={{ marginBottom: 12, color: group.overdue ? '#92400e' : 'inherit' }}>
+            {group.title} ({group.items.length})
+          </h4>
+          {group.overdue && group.items.length > 0 && (
+            <p className="muted">These paid sessions have ended. Mark each completed after confirming the tutoring took place.</p>
+          )}
+          {!group.overdue && group.items.length === 0 && !loading && (
+            <p className="muted">No upcoming or pending sessions.</p>
+          )}
+          {group.items.map(
         booking => {
           const startTime =
             new Date(
@@ -1082,7 +1089,9 @@ export default function BookingManager({
             </article>
           );
         }
-      )}
+          )}
+        </div>
+      ))}
 
       {pastBookings.length > 0 && (
         <details style={{ marginTop: 20 }}>
