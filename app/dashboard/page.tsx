@@ -302,6 +302,30 @@ export default async function Dashboard() {
         })
       : [];
 
+  // Keep action items separate from the full booking history.
+  const tutorActionBookings =
+    isTutor && profile
+      ? await db.booking.findMany({
+          where: {
+            tutorId: profile.id,
+            status: { in: ['CHANGE_REQUESTED', 'PROPOSED', 'PENDING_PAYMENT'] },
+            startsAt: { gte: now },
+          },
+          include: {
+            parent: { select: { name: true } },
+            inquiry: { select: { subject: true } },
+          },
+          orderBy: { startsAt: 'asc' },
+        })
+      : [];
+
+  const tutorNeedsResponse = tutorActionBookings.filter(
+    booking => booking.status === 'CHANGE_REQUESTED'
+  );
+  const tutorWaitingForPayment = tutorActionBookings.filter(
+    booking => booking.status === 'PENDING_PAYMENT'
+  );
+
   const openInquiries = inquiries.filter(
     inquiry => inquiry.status === 'OPEN'
   ).length;
@@ -684,17 +708,50 @@ export default async function Dashboard() {
         </>
       )}
 
+      {isTutor && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h2>Needs Your Attention</h2>
+          <p className="muted">
+            Respond to scheduling requests below. Open the matching conversation
+            in Bookings &amp; Messages to accept or suggest a new time.
+          </p>
+          {tutorNeedsResponse.length === 0 ? (
+            <p>No scheduling requests need a response right now.</p>
+          ) : (
+            tutorNeedsResponse.map(booking => (
+              <p key={booking.id}>
+                <strong>{booking.parent.name}</strong> · {booking.inquiry?.subject || 'Tutoring'}
+                {' — '}requested a time change for {sessionDate(booking.startsAt)}
+              </p>
+            ))
+          )}
+          <details style={{ marginTop: 16 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+              Waiting for parent payment ({tutorWaitingForPayment.length})
+            </summary>
+            {tutorWaitingForPayment.length === 0 ? (
+              <p className="muted">No payments pending.</p>
+            ) : tutorWaitingForPayment.map(booking => (
+              <p key={booking.id}>
+                {booking.parent.name} · {sessionDate(booking.startsAt)} · {money(booking.amountCents)}
+              </p>
+            ))}
+          </details>
+        </section>
+      )}
+
       {(isTutor || isParent) && (
         <section className="card" style={{ marginTop: 28 }}>
+          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
           <SessionCalendar role={who.role} />
           <details style={{ marginTop: 16 }}>
             <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How booking works</summary>
-            <ol style={{ marginTop: 12 }}>
-              <li>The parent or tutor suggests a session time.</li>
-              <li>The other person accepts or suggests another time.</li>
-              <li>The parent pays securely through Stripe.</li>
-              <li>The session is confirmed after payment.</li>
-            </ol>
+            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+              <p><strong>1.</strong> The parent or tutor suggests a session time.</p>
+              <p><strong>2.</strong> The other person accepts or suggests another time.</p>
+              <p><strong>3.</strong> The parent pays securely through Stripe.</p>
+              <p><strong>4.</strong> The session is confirmed after payment.</p>
+            </div>
           </details>
         </section>
       )}
