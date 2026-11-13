@@ -9,6 +9,7 @@ import {
 
 type CalendarBooking = {
   id: string;
+  inquiryId?: string | null;
   startsAt: string;
   durationMinutes: number;
   amountCents: number;
@@ -158,6 +159,8 @@ export default function SessionCalendar({
     localDateKey(new Date())
   );
 
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -280,6 +283,18 @@ export default function SessionCalendar({
         monthNumber
       ).padStart(2, '0')}-01`
     );
+  }
+
+  function openBooking(booking: CalendarBooking) {
+    if (!booking.inquiryId) return;
+    const conversation = document.getElementById('inquiry-' + booking.inquiryId);
+    if (conversation instanceof HTMLDetailsElement) {
+      conversation.open = true;
+      requestAnimationFrame(() => {
+        const session = document.getElementById('booking-' + booking.id);
+        (session || conversation).scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
   }
 
   const firstWeekday =
@@ -827,6 +842,29 @@ export default function SessionCalendar({
                       }
                     </span>
                   </p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBookingId(expandedBookingId === booking.id ? null : booking.id)}
+                      aria-expanded={expandedBookingId === booking.id}
+                    >
+                      {expandedBookingId === booking.id ? 'Hide details' : 'View details'}
+                    </button>
+                    {booking.inquiryId && (
+                      <button type="button" onClick={() => openBooking(booking)}>
+                        {role === 'TUTOR' ? 'Manage session / message parent' : 'Manage session / message tutor'}
+                      </button>
+                    )}
+                  </div>
+                  {expandedBookingId === booking.id && (
+                    <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
+                      <p><strong>Session:</strong> {booking.inquiry?.subject || 'Tutoring'} · {booking.inquiry?.grade || 'Grade not specified'}</p>
+                      <p><strong>Start:</strong> {formatTime(booking.startsAt)} Eastern · {booking.durationMinutes} minutes</p>
+                      <p><strong>Price:</strong> {money(booking.amountCents)}</p>
+                      {booking.status === 'PENDING_PAYMENT' && <p>{role === 'TUTOR' ? 'This time is reserved while the parent completes payment.' : 'Payment is required to confirm this session.'}</p>}
+                      {booking.status === 'PROPOSED' && <p>This is a proposal, not a confirmed reservation.</p>}
+                    </div>
+                  )}
                 </div>
               );
             }
