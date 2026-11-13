@@ -7,6 +7,7 @@ import { db } from '../../lib/db';
 import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
 import BookingManager from './booking-manager';
+import SessionCalendar from './session-calendar';
 
 export const dynamic = 'force-dynamic';
 
@@ -681,6 +682,12 @@ export default async function Dashboard() {
             )}
           </section>
         </>
+      )}
+
+      {(isTutor || isParent) && (
+        <section className="card" style={{ marginTop: 28 }}>
+          <SessionCalendar role={who.role} />
+        </section>
       )}
 
       {(isTutor || isParent) && (
