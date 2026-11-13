@@ -548,6 +548,13 @@ export default function BookingManager({
     const bPriority = priority(b.status);
     return aPriority - bPriority || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
   });
+  const overduePaidBookings = activeBookings.filter(booking =>
+    booking.status === 'PAID' &&
+    new Date(booking.startsAt).getTime() + booking.durationMinutes * 60000 <= Date.now()
+  );
+  const upcomingActiveBookings = activeBookings.filter(booking =>
+    !overduePaidBookings.some(overdue => overdue.id === booking.id)
+  );
   const pastBookings = sortedBookings.filter(booking =>
     ['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
   );
@@ -586,7 +593,12 @@ export default function BookingManager({
           </p>
         )}
 
-      <h4 style={{ marginTop: 20, marginBottom: 12 }}>Current sessions ({activeBookings.length}) · Requests first</h4>
+      {overduePaidBookings.length > 0 && (
+        <p style={{ fontWeight: 700, color: '#92400e' }}>
+          Awaiting completion ({overduePaidBookings.length}) — these paid sessions have ended.
+        </p>
+      )}
+      <h4 style={{ marginTop: 20, marginBottom: 12 }}>Active sessions ({activeBookings.length}) · {upcomingActiveBookings.length} upcoming or pending · {overduePaidBookings.length} awaiting completion</h4>
       {activeBookings.length === 0 && !loading && <p className="muted">No active session requests.</p>}
       {activeBookings.map(
         booking => {
