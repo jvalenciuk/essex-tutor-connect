@@ -290,7 +290,16 @@ export default function SessionCalendar({
     const conversation = document.getElementById('inquiry-' + booking.inquiryId);
     if (!(conversation instanceof HTMLDetailsElement)) return;
 
-    conversation.open = true;
+    // Open the parent group, the inquiry, and its session panel.
+    let ancestor: HTMLElement | null = conversation;
+    while (ancestor) {
+      if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
+    const sessionPanel = conversation.querySelector<HTMLDetailsElement>(
+      'details[data-session-panel="true"]'
+    );
+    if (sessionPanel) sessionPanel.open = true;
     // Target the exact booking card, not merely the matching date or inquiry.
     // A newly opened inquiry can mount its booking manager asynchronously.
     const targetId = 'booking-' + booking.id;
