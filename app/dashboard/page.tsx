@@ -773,6 +773,7 @@ export default async function Dashboard() {
           {inquiries.map(inquiry => (
             <details
               className="card"
+              id={`inquiry-${inquiry.id}`}
               key={inquiry.id}
               
               style={{ marginBottom: 16 }}
