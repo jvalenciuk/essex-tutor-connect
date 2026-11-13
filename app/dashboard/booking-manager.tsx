@@ -182,6 +182,32 @@ export default function BookingManager({
     void loadBookings();
   }, [loadBookings]);
 
+  const [focusBookingId, setFocusBookingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onFocusBooking(event: Event) {
+      const detail = (event as CustomEvent<{ bookingId: string; inquiryId: string }>).detail;
+      if (detail?.inquiryId === inquiryId && detail.bookingId) {
+        setFocusBookingId(detail.bookingId);
+      }
+    }
+    window.addEventListener('essex:focus-booking', onFocusBooking);
+    return () => window.removeEventListener('essex:focus-booking', onFocusBooking);
+  }, [inquiryId]);
+
+  useEffect(() => {
+    if (!focusBookingId || loading || !bookings.some(booking => booking.id === focusBookingId)) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById('booking-' + focusBookingId);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.focus({ preventScroll: true });
+        setFocusBookingId(null);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusBookingId, loading, bookings]);
+
   function resetForm() {
     setStartsAt('');
     setDuration('60');
@@ -623,7 +649,8 @@ export default function BookingManager({
           return (
             <article
               id={'booking-' + booking.id}
-              key={
+              tabIndex={-1}
+              key=
                 booking.id
               }
               className="card"
@@ -1134,7 +1161,8 @@ export default function BookingManager({
           return (
             <article
               id={'booking-' + booking.id}
-              key={
+              tabIndex={-1}
+              key=
                 booking.id
               }
               className="card"
