@@ -794,6 +794,16 @@ export default function SessionCalendar({
                     '#64748b',
                 };
 
+              const starts = new Date(booking.startsAt).getTime();
+              const ends = starts + booking.durationMinutes * 60000;
+              const overlappingReservation = selectedBookings.some(other => {
+                if (other.id === booking.id ||
+                    !['PENDING_PAYMENT', 'PAID'].includes(other.status)) return false;
+                const otherStart = new Date(other.startsAt).getTime();
+                return starts < otherStart + other.durationMinutes * 60000 && otherStart < ends;
+              });
+              const tentativeConflict = ['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) && overlappingReservation;
+
               return (
                 <div
                   key={
@@ -866,6 +876,11 @@ export default function SessionCalendar({
                       }
                     </span>
                   </p>
+                  {tentativeConflict && (
+                    <p role="status" style={{ color: '#92400e', fontWeight: 700 }}>
+                      Scheduling conflict: this proposed time overlaps a reserved or paid session. A different time may be needed.
+                    </p>
+                  )}
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
                     <button
                       type="button"
