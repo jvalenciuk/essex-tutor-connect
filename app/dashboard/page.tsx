@@ -8,6 +8,7 @@ import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
 import BookingManager from './booking-manager';
 import SessionCalendar from './session-calendar';
+import BookingJump from './booking-jump';
 
 export const dynamic = 'force-dynamic';
 
@@ -736,7 +737,7 @@ export default async function Dashboard() {
                 <p key={booking.id}>
                   <strong>{booking.parent.name}</strong> · {sessionDate(booking.startsAt)}
                   {' · '}{booking.inquiry?.subject || 'Tutoring'}
-                  {' — '}Open the session in Bookings &amp; Messages to mark it completed.
+                  {' · '}<BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
                 </p>
               ))}
             </div>
