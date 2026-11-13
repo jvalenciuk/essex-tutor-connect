@@ -752,8 +752,7 @@ export default async function Dashboard() {
         <section style={{ marginTop: 28 }}>
           <h2>Bookings &amp; Messages</h2>
           <p className="muted">
-            Manage tutoring inquiries, conversations,
-            session proposals, and booking updates.
+            Select a parent or tutor below, then open Messages or Manage sessions only when needed.
           </p>
 
           {inquiries.length === 0 && (
@@ -800,13 +799,24 @@ export default async function Dashboard() {
               )}
 
               {inquiry.status === 'ACCEPTED' && (
-                <>
-                  <InquiryMessages inquiryId={inquiry.id} />
-                  <BookingManager
-                    inquiryId={inquiry.id}
-                    role={who.role}
-                  />
-                </>
+                <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+                  <details style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
+                      Messages with {isTutor ? inquiry.parent.name : inquiry.tutor.user.name}
+                    </summary>
+                    <div style={{ marginTop: 12 }}>
+                      <InquiryMessages inquiryId={inquiry.id} />
+                    </div>
+                  </details>
+                  <details style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
+                      Manage sessions and scheduling
+                    </summary>
+                    <div style={{ marginTop: 12 }}>
+                      <BookingManager inquiryId={inquiry.id} role={who.role} />
+                    </div>
+                  </details>
+                </div>
               )}
               </div>
             </details>
