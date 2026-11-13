@@ -695,31 +695,20 @@ export default function BookingManager({
                 )}
               </p>
 
-              {role ===
-                'TUTOR' && (
-                <>
+              {role === 'TUTOR' && (
+                <details style={{ margin: '10px 0' }}>
+                  <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                    View earnings breakdown
+                  </summary>
                   <p>
-                    <strong>
-                      Platform
-                      commission (15%):
-                    </strong>{' '}
-                    {money(
-                      booking.platformFeeCents
-                    )}
+                    <strong>Platform commission (15%):</strong>{' '}
+                    {money(booking.platformFeeCents)}
                   </p>
-
                   <p>
-                    <strong>
-                      Tutor portion
-                      before processing
-                      fees:
-                    </strong>{' '}
-                    {money(
-                      booking.amountCents -
-                        booking.platformFeeCents
-                    )}
+                    <strong>Tutor portion before processing fees:</strong>{' '}
+                    {money(booking.amountCents - booking.platformFeeCents)}
                   </p>
-                </>
+                </details>
               )}
 
               {booking.status ===
