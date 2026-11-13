@@ -17,8 +17,8 @@ const bookingSchema = z.object({
 export async function POST(req: Request) {
   const who = await identity();
 
-  if (!who || who.role !== 'TUTOR') {
-    return fail('Tutor account required', 403);
+  if (!who || (who.role !== 'TUTOR' && who.role !== 'PARENT')) {
+    return fail('Parent or tutor account required', 403);
   }
 
   let data: z.infer<typeof bookingSchema>;
@@ -40,9 +40,10 @@ export async function POST(req: Request) {
       id: data.inquiryId,
       status: 'ACCEPTED',
       tutor: {
-        userId: who.id,
+        ...(who.role === 'TUTOR' ? { userId: who.id } : {}),
         verification: 'APPROVED',
       },
+      ...(who.role === 'PARENT' ? { parentId: who.id } : {}),
     },
     include: {
       tutor: true,
@@ -104,7 +105,11 @@ export async function POST(req: Request) {
       durationMinutes: data.durationMinutes,
       amountCents,
       platformFeeCents,
-      status: 'PROPOSED',
+      status: who.role === 'PARENT' ? 'CHANGE_REQUESTED' : 'PROPOSED',
+      ...(who.role === 'PARENT' ? {
+        requestedStartsAt: startsAt,
+        requestedDurationMinutes: data.durationMinutes,
+      } : {}),
     },
     select: {
       id: true,
