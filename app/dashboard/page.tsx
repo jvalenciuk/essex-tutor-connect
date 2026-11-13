@@ -744,15 +744,7 @@ export default async function Dashboard() {
         <section className="card" style={{ marginTop: 28 }}>
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
           <SessionCalendar role={who.role} />
-          <details style={{ marginTop: 16 }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How booking works</summary>
-            <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
-              <p><strong>1.</strong> The parent or tutor suggests a session time.</p>
-              <p><strong>2.</strong> The other person accepts or suggests another time.</p>
-              <p><strong>3.</strong> The parent pays securely through Stripe.</p>
-              <p><strong>4.</strong> The session is confirmed after payment.</p>
-            </div>
-          </details>
+
         </section>
       )}
 
