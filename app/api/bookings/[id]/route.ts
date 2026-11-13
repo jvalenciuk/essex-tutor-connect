@@ -169,7 +169,7 @@ export async function PATCH(
     let accepted: { count: number };
     try {
       accepted = await db.$transaction(async tx => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
+        await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
         const issue = await checkTutorSlot(
           booking.tutorId,
@@ -253,7 +253,7 @@ export async function PATCH(
     let acceptedRequested: { count: number };
     try {
       acceptedRequested = await db.$transaction(async tx => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
+        await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
         const issue = await checkTutorSlot(
           booking.tutorId,
@@ -386,7 +386,7 @@ export async function PATCH(
     let result: { count: number };
     try {
       result = await db.$transaction(async tx => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
+        await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
         const issue = await checkTutorSlot(
           booking.tutorId,
