@@ -622,6 +622,7 @@ export default function BookingManager({
 
           return (
             <article
+              id={'booking-' + booking.id}
               key={
                 booking.id
               }
@@ -1132,6 +1133,7 @@ export default function BookingManager({
 
           return (
             <article
+              id={'booking-' + booking.id}
               key={
                 booking.id
               }
