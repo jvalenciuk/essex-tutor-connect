@@ -291,11 +291,25 @@ export default function SessionCalendar({
     if (!(conversation instanceof HTMLDetailsElement)) return;
 
     conversation.open = true;
-    // The booking cards load asynchronously. Let the matching BookingManager
-    // scroll only after its exact booking ID has rendered.
+    // Target the exact booking card, not merely the matching date or inquiry.
+    // A newly opened inquiry can mount its booking manager asynchronously.
+    const targetId = 'booking-' + booking.id;
+    let attempts = 0;
+    const focusExactBooking = () => {
+      const card = document.getElementById(targetId);
+      if (card && conversation.contains(card)) {
+        card.scrollIntoView({ behavior: 'auto', block: 'center' });
+        card.focus({ preventScroll: true });
+        return;
+      }
+      if (++attempts < 90) {
+        window.setTimeout(focusExactBooking, 100);
+      }
+    };
     window.dispatchEvent(new CustomEvent('essex:focus-booking', {
       detail: { bookingId: booking.id, inquiryId: booking.inquiryId },
     }));
+    window.setTimeout(focusExactBooking, 100);
   }
 
   const firstWeekday =
