@@ -371,8 +371,8 @@ export default async function Dashboard() {
             </div>
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Account Setup</h2>
+          <details className="card" style={{ marginTop: 24 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>Account setup · {completedSteps} of 5 steps complete{stripe?.payoutsRestricted ? " · Payouts restricted" : ""}</summary>
 
             <p>
               <strong>
@@ -463,7 +463,7 @@ export default async function Dashboard() {
                 ? 'Manage Tutor Account'
                 : 'Complete Tutor Setup'}
             </SectionLink>
-          </section>
+          </details>
 
           <section className="card" style={{ marginTop: 24 }}>
             <h2>Upcoming Sessions</h2>
@@ -517,8 +517,8 @@ export default async function Dashboard() {
             )}
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Earnings Summary</h2>
+          <details className="card" style={{ marginTop: 24 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>Earnings breakdown · {money(tutorEarnings)}</summary>
 
             <p>
               <strong>Total booking value:</strong>{' '}
@@ -543,7 +543,7 @@ export default async function Dashboard() {
               other adjustments. They are not confirmed
               bank payouts.
             </p>
-          </section>
+          </details>
         </>
       )}
 
@@ -713,11 +713,11 @@ export default async function Dashboard() {
             </div>
           )}
 
-          {inquiries.map((inquiry, index) => (
+          {inquiries.map(inquiry => (
             <details
               className="card"
               key={inquiry.id}
-              open={index === 0 ? true : undefined}
+              
               style={{ marginBottom: 16 }}
             >
               <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '8px 0', fontSize: '1.05rem' }}>
