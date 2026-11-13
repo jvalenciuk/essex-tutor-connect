@@ -687,6 +687,15 @@ export default async function Dashboard() {
       {(isTutor || isParent) && (
         <section className="card" style={{ marginTop: 28 }}>
           <SessionCalendar role={who.role} />
+          <details style={{ marginTop: 16 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>How booking works</summary>
+            <ol style={{ marginTop: 12 }}>
+              <li>The parent or tutor suggests a session time.</li>
+              <li>The other person accepts or suggests another time.</li>
+              <li>The parent pays securely through Stripe.</li>
+              <li>The session is confirmed after payment.</li>
+            </ol>
+          </details>
         </section>
       )}
 
@@ -704,11 +713,17 @@ export default async function Dashboard() {
             </div>
           )}
 
-          {inquiries.map(inquiry => (
-            <div className="card" key={inquiry.id}>
-              <h3>
-                {inquiry.subject} — {inquiry.grade}
-              </h3>
+          {inquiries.map((inquiry, index) => (
+            <details
+              className="card"
+              key={inquiry.id}
+              open={index === 0 ? true : undefined}
+              style={{ marginBottom: 16 }}
+            >
+              <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '8px 0', fontSize: '1.05rem' }}>
+                {inquiry.subject} — {inquiry.grade} · {isTutor ? inquiry.parent.name : inquiry.tutor.user.name} · {inquiry.status}
+              </summary>
+              <div style={{ marginTop: 12 }}>
               <p>{inquiry.message}</p>
 
               {isTutor ? (
@@ -743,7 +758,8 @@ export default async function Dashboard() {
                   />
                 </>
               )}
-            </div>
+              </div>
+            </details>
           ))}
         </section>
       )}
