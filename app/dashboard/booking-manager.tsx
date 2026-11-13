@@ -510,7 +510,18 @@ export default function BookingManager({
 
   const activeBookings = sortedBookings.filter(booking =>
     !['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
-  );
+  ).sort((a, b) => {
+    const priority = (status: string) => {
+      if (status === 'CHANGE_REQUESTED') return 0;
+      if (status === 'PROPOSED') return 1;
+      if (status === 'PENDING_PAYMENT') return 2;
+      if (status === 'PAID') return 3;
+      return 4;
+    };
+    const aPriority = priority(a.status);
+    const bPriority = priority(b.status);
+    return aPriority - bPriority || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+  });
   const pastBookings = sortedBookings.filter(booking =>
     ['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
   );
@@ -549,7 +560,7 @@ export default function BookingManager({
           </p>
         )}
 
-      <h4 style={{ marginTop: 20, marginBottom: 12 }}>Current sessions ({activeBookings.length})</h4>
+      <h4 style={{ marginTop: 20, marginBottom: 12 }}>Current sessions ({activeBookings.length}) · Requests first</h4>
       {activeBookings.length === 0 && !loading && <p className="muted">No active session requests.</p>}
       {activeBookings.map(
         booking => {
