@@ -650,9 +650,7 @@ export default function BookingManager({
             <article
               id={'booking-' + booking.id}
               tabIndex={-1}
-              key=
-                booking.id
-              }
+              key={booking.id}
               className="card"
               style={{
                 marginBottom: 16,
