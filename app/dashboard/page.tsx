@@ -827,7 +827,7 @@ export default async function Dashboard() {
                       <InquiryMessages inquiryId={inquiry.id} />
                     </div>
                   </details>
-                  <details style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
+                  <details data-session-panel="true" style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
                     <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
                       Manage sessions and scheduling
                     </summary>
