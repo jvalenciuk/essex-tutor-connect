@@ -653,7 +653,8 @@ export default function BookingManager({
               key={booking.id}
               className="card"
               style={{
-                marginBottom: 16,
+                marginBottom: 10,
+                padding: '14px 18px',
                 minWidth: 0,
                 overflowWrap:
                   'anywhere',
@@ -692,50 +693,34 @@ export default function BookingManager({
                 </span>
               </div>
 
-              <p>
-                <strong>
-                  Next step:
-                </strong>{' '}
-                {nextStep(
-                  booking.status,
-                  role
+              <p style={{ margin: '8px 0', color: '#475569', fontSize: '0.92rem' }}>
+                {nextStep(booking.status, role)}
+              </p>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '6px 16px',
+                  margin: '8px 0 12px',
+                  fontSize: '0.92rem',
+                }}
+              >
+                <span><strong>{booking.durationMinutes} min</strong></span>
+                <span><strong>{money(booking.amountCents)}</strong></span>
+                {role === 'TUTOR' && (
+                  <details style={{ display: 'inline-block' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                      Earnings
+                    </summary>
+                    <div style={{ padding: '8px 0', lineHeight: 1.6 }}>
+                      <div>Platform commission (15%): {money(booking.platformFeeCents)}</div>
+                      <div>Tutor portion before processing fees: {money(booking.amountCents - booking.platformFeeCents)}</div>
+                    </div>
+                  </details>
                 )}
-              </p>
-
-              <p>
-                <strong>
-                  Duration:
-                </strong>{' '}
-                {
-                  booking.durationMinutes
-                }{' '}
-                minutes
-              </p>
-
-              <p>
-                <strong>
-                  Session price:
-                </strong>{' '}
-                {money(
-                  booking.amountCents
-                )}
-              </p>
-
-              {role === 'TUTOR' && (
-                <details style={{ margin: '10px 0' }}>
-                  <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
-                    View earnings breakdown
-                  </summary>
-                  <p>
-                    <strong>Platform commission (15%):</strong>{' '}
-                    {money(booking.platformFeeCents)}
-                  </p>
-                  <p>
-                    <strong>Tutor portion before processing fees:</strong>{' '}
-                    {money(booking.amountCents - booking.platformFeeCents)}
-                  </p>
-                </details>
-              )}
+              </div>
 
               {booking.status ===
                 'PROPOSED' &&
