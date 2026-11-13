@@ -187,11 +187,27 @@ export default function SessionCalendar({
         const bookingData =
           await bookingResponse.json();
 
-        setBookings(
-          Array.isArray(bookingData)
-            ? bookingData
-            : bookingData.bookings || []
-        );
+        const loadedBookings: CalendarBooking[] = Array.isArray(bookingData)
+          ? bookingData
+          : bookingData.bookings || [];
+        setBookings(loadedBookings);
+
+        // Start on the next relevant session instead of an empty today.
+        const now = Date.now();
+        const nextSession = loadedBookings
+          .filter(booking =>
+            !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED'].includes(booking.status) &&
+            new Date(booking.startsAt).getTime() >= now
+          )
+          .sort((a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+          )[0];
+        if (nextSession) {
+          const dateKey = localDateKey(nextSession.startsAt);
+          const [year, monthNumber] = dateKey.split('-').map(Number);
+          setMonth({ year, monthNumber });
+          setSelectedDate(dateKey);
+        }
 
         if (role === 'TUTOR') {
           const availabilityResponse =
