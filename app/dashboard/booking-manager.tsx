@@ -6,7 +6,6 @@ import {
   useEffect,
   useState,
 } from 'react';
-import SessionCalendar from './session-calendar';
 import { useRouter } from 'next/navigation';
 
 type Booking = {
@@ -559,10 +558,6 @@ export default function BookingManager({
         </ol>
       </div>
 
-      <SessionCalendar
-        role={role}
-      />
-
       {loading && (
         <p>
           Loading bookings...
@@ -812,7 +807,7 @@ export default function BookingManager({
 
               {booking.status ===
                 'CHANGE_REQUESTED' && (
-                <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
                   <p>
                     <strong>
                       Requested
