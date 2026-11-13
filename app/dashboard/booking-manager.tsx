@@ -594,7 +594,9 @@ export default function BookingManager({
         )}
 
       {[
-        { title: 'Awaiting completion', items: overduePaidBookings, overdue: true },
+        ...(overduePaidBookings.length > 0
+          ? [{ title: 'Awaiting completion', items: overduePaidBookings, overdue: true }]
+          : []),
         { title: 'Upcoming and pending', items: upcomingActiveBookings, overdue: false },
       ].map(group => (
         <div key={group.title} style={{ marginTop: 20 }}>
