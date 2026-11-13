@@ -99,8 +99,8 @@ function nextStep(
         : 'Waiting for the parent to respond to your proposal.';
     case 'CHANGE_REQUESTED':
       return role === 'TUTOR'
-        ? 'Review the requested time and send a revised proposal.'
-        : 'Waiting for the tutor to propose a revised session.';
+        ? 'Accept the parent’s requested time or propose an alternative.'
+        : 'Waiting for the tutor to accept your requested time or propose an alternative.';
     case 'PENDING_PAYMENT':
       return role === 'PARENT'
         ? 'Your session time has been agreed upon. Complete secure payment to confirm it.'
@@ -359,7 +359,9 @@ export default function BookingManager({
         inquiryId,
         ...details,
       },
-      'New session proposed successfully.'
+      role === 'PARENT'
+        ? 'Session request sent to the tutor.'
+        : 'New session proposed successfully.'
     );
   }
 
@@ -539,12 +541,12 @@ export default function BookingManager({
 
         <ol>
           <li>
-            The tutor proposes
-            a session.
+            The parent or tutor suggests
+            a session time.
           </li>
           <li>
-            The parent accepts
-            or requests a change.
+            The other person accepts
+            or suggests another time.
           </li>
           <li>
             The parent pays
@@ -845,6 +847,27 @@ export default function BookingManager({
                     </p>
                   )}
 
+                  {role === 'TUTOR' &&
+                    booking.requestedStartsAt &&
+                    booking.requestedDurationMinutes && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm('Accept the requested session time? The parent will then be able to pay.')) {
+                          void sendRequest(
+                            `/api/bookings/${encodeURIComponent(booking.id)}`,
+                            'PATCH',
+                            { action: 'ACCEPT_REQUESTED_TIME' },
+                            'Requested time accepted. The parent can now pay.'
+                          );
+                        }
+                      }}
+                    >
+                      Accept requested time
+                    </button>
+                  )}
+
                   {role ===
                     'TUTOR' && (
                     <button
@@ -1070,8 +1093,7 @@ export default function BookingManager({
         }
       )}
 
-      {role ===
-        'TUTOR' &&
+      {(role === 'TUTOR' || role === 'PARENT') &&
         !loading && (
           <div
             className="card"
@@ -1080,17 +1102,13 @@ export default function BookingManager({
             }}
           >
             <h3>
-              Propose another
-              tutoring session
+              {role === 'PARENT' ? 'Request a tutoring session' : 'Propose another tutoring session'}
             </h3>
 
             <p className="muted">
-              You can schedule
-              multiple sessions
-              with the same parent.
-              Choose a date and
-              time within your
-              availability.
+              {role === 'PARENT'
+                ? 'Choose a preferred date and time. Your tutor can accept it or suggest an alternative. No payment is required until the tutor accepts.'
+                : 'You can schedule multiple sessions with the same parent. Choose a date and time within your availability.'}
             </p>
 
             {dateFields()}
@@ -1106,7 +1124,7 @@ export default function BookingManager({
             >
               {busy
                 ? 'Submitting...'
-                : 'Propose session'}
+                : role === 'PARENT' ? 'Request session' : 'Propose session'}
             </button>
           </div>
         )}
