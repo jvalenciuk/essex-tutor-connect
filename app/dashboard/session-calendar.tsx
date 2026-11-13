@@ -878,7 +878,7 @@ export default function SessionCalendar({
                   </p>
                   {tentativeConflict && (
                     <p role="status" style={{ color: '#92400e', fontWeight: 700 }}>
-                      Scheduling conflict: this proposed time overlaps a reserved or paid session. A different time may be needed.
+                      Conflicts with reserved session
                     </p>
                   )}
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
