@@ -288,13 +288,14 @@ export default function SessionCalendar({
   function openBooking(booking: CalendarBooking) {
     if (!booking.inquiryId) return;
     const conversation = document.getElementById('inquiry-' + booking.inquiryId);
-    if (conversation instanceof HTMLDetailsElement) {
-      conversation.open = true;
-      requestAnimationFrame(() => {
-        const session = document.getElementById('booking-' + booking.id);
-        (session || conversation).scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    }
+    if (!(conversation instanceof HTMLDetailsElement)) return;
+
+    conversation.open = true;
+    // The booking cards load asynchronously. Let the matching BookingManager
+    // scroll only after its exact booking ID has rendered.
+    window.dispatchEvent(new CustomEvent('essex:focus-booking', {
+      detail: { bookingId: booking.id, inquiryId: booking.inquiryId },
+    }));
   }
 
   const firstWeekday =
