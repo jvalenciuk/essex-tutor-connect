@@ -231,6 +231,11 @@ export default async function Dashboard() {
         a.startsAt.getTime() - b.startsAt.getTime()
     );
 
+  const overdueTutorSessions = tutorBookings
+    .filter(booking => booking.status === 'PAID' &&
+      booking.startsAt.getTime() + booking.durationMinutes * 60000 <= now.getTime())
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+
   const totalValue = tutorBookings.reduce(
     (sum, booking) => sum + booking.amountCents,
     0
@@ -723,6 +728,19 @@ export default async function Dashboard() {
       {isTutor && (
         <section className="card" style={{ marginTop: 24 }}>
           <h2>Needs Your Attention</h2>
+          {overdueTutorSessions.length > 0 && (
+            <div style={{ borderLeft: '4px solid #b45309', paddingLeft: 12, marginBottom: 18 }}>
+              <h3>Awaiting completion ({overdueTutorSessions.length})</h3>
+              <p className="muted">These paid sessions have ended but have not been marked completed.</p>
+              {overdueTutorSessions.map(booking => (
+                <p key={booking.id}>
+                  <strong>{booking.parent.name}</strong> · {sessionDate(booking.startsAt)}
+                  {' · '}{booking.inquiry?.subject || 'Tutoring'}
+                  {' — '}Open the session in Bookings &amp; Messages to mark it completed.
+                </p>
+              ))}
+            </div>
+          )}
           <p className="muted">
             Respond to scheduling requests below. Open the matching conversation
             in Bookings &amp; Messages to accept or suggest a new time.
