@@ -302,6 +302,18 @@ export default async function Dashboard() {
         })
       : [];
 
+  // Group conversations by the underlying account, not by display name.
+  const conversationGroups = Array.from(
+    inquiries.reduce((groups, inquiry) => {
+      const accountId = isTutor ? inquiry.parentId : inquiry.tutorId;
+      const key = String(accountId);
+      const existing = groups.get(key);
+      if (existing) existing.push(inquiry);
+      else groups.set(key, [inquiry]);
+      return groups;
+    }, new Map<string, typeof inquiries>())
+  );
+
   // Keep action items separate from the full booking history.
   const tutorActionBookings =
     isTutor && profile
@@ -761,13 +773,20 @@ export default async function Dashboard() {
             </div>
           )}
 
-          {inquiries.map(inquiry => (
+          {conversationGroups.map(([accountId, conversations]) => (
+            <details className="card" key={accountId} style={{ marginBottom: 16 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '10px 0' }}>
+                {isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name}
+                {' · '}{conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
+              </summary>
+              <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+              {conversations.map(inquiry => (
             <details
               className="card"
               id={`inquiry-${inquiry.id}`}
               key={inquiry.id}
               
-              style={{ marginBottom: 16 }}
+              style={{ marginBottom: 8 }}
             >
               <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '8px 0', fontSize: '1.05rem' }}>
                 {inquiry.subject} — {inquiry.grade} · {isTutor ? inquiry.parent.name : inquiry.tutor.user.name} · {inquiry.status}
@@ -818,6 +837,9 @@ export default async function Dashboard() {
                   </details>
                 </div>
               )}
+              </div>
+            </details>
+              ))}
               </div>
             </details>
           ))}
