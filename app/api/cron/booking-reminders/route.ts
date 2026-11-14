@@ -1,6 +1,7 @@
 
 import { db } from '../../../../lib/db';
 import { notifyBooking } from '../../../../lib/email';
+import { expireUnpaidBookings } from '../../../../lib/payment-expiration';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -37,6 +38,7 @@ export async function GET(req: Request) {
   );
 
   try {
+    const expiration = await expireUnpaidBookings();
     const bookings = await db.booking.findMany({
       where: {
         status: 'PAID',
@@ -88,6 +90,7 @@ export async function GET(req: Request) {
       {
         success: failed === 0,
         scanned: bookings.length,
+        expiration,
         sent,
         failed,
       },
