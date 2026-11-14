@@ -76,7 +76,7 @@ export default function AuthNavigation() {
       </Link>
 
       <Link href="/dashboard/bookings">
-        My Bookings
+        My Sessions
       </Link>
 
       {role === 'ADMIN' && (
