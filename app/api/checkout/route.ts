@@ -1,4 +1,5 @@
 import { getConfiguredStripeSecret } from '../../../lib/stripe-config';
+import { expireUnpaidBookings } from '../../../lib/payment-expiration';
 
 import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
@@ -86,6 +87,8 @@ export async function POST(req: Request) {
     return fail('Invalid payment request', 400);
   }
 
+  await expireUnpaidBookings();
+
   const booking = await db.booking.findUnique({
     where: { id: bookingId },
     include: {
@@ -122,6 +125,10 @@ export async function POST(req: Request) {
       'This booking is not awaiting payment. Refresh My Bookings to see its current status.',
       409
     );
+  }
+
+  if (booking.paymentDueAt && booking.paymentDueAt <= new Date()) {
+    return fail('The 24-hour payment deadline has passed. Refresh your bookings.', 409);
   }
 
   if (booking.startsAt <= new Date()) {
@@ -275,6 +282,13 @@ export async function POST(req: Request) {
   const form = new URLSearchParams();
 
   form.set('mode', 'payment');
+  if (booking.paymentDueAt) {
+    const seconds = Math.floor(booking.paymentDueAt.getTime() / 1000);
+    if (seconds - Math.floor(Date.now() / 1000) < 1800) {
+      return fail('Less than 30 minutes remain to pay. Please arrange a new booking.', 409);
+    }
+    form.set('expires_at', String(seconds));
+  }
   form.set('success_url', `${confirmationUrl}&checkout=success`);
   form.set('cancel_url', `${confirmationUrl}&checkout=cancelled`);
 
@@ -355,6 +369,7 @@ export async function POST(req: Request) {
         startsAt: {
           gt: new Date(),
         },
+        ...(booking.paymentDueAt ? { paymentDueAt: { gt: new Date() } } : {}),
       },
       data: {
         stripeSessionId: session.id,
