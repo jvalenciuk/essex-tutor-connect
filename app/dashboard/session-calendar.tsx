@@ -290,8 +290,9 @@ export default function SessionCalendar({
 
   function openBooking(booking: CalendarBooking) {
     if (!booking.inquiryId) return;
-    const conversation = document.getElementById('inquiry-' + booking.inquiryId);
-    if (!(conversation instanceof HTMLDetailsElement)) return;
+    const anchor = document.getElementById('inquiry-' + booking.inquiryId);
+    const conversation = anchor?.closest<HTMLDetailsElement>('details[data-conversation-group="true"]');
+    if (!conversation) return;
 
     // Open the parent group, the inquiry, and its session panel.
     let ancestor: HTMLElement | null = conversation;
