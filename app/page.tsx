@@ -13,8 +13,8 @@ export default function Home() {
       <section className="hero home-hero">
         <div className="home-hero-copy">
           <p className="home-eyebrow">LOCAL TUTORING · WINDSOR & ESSEX COUNTY</p>
-          <h1>Find the right tutor. Build confidence.</h1>
-          <p className="home-lead">Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you.</p>
+          <h1>Local tutors. Stronger futures.</h1>
+          <p className="home-lead">Find the right tutor. Build confidence. Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you.</p>
           <div className="home-hero-actions">
             <Link className="button" href="/tutors">Find a tutor</Link>
             <Link className="home-outline-button" href="/register?role=tutor">Become a tutor</Link>
