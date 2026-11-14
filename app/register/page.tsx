@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { useState, type FormEvent } from 'react';
 
 type AccountRole = 'PARENT' | 'TUTOR';
 
-export default function Register() {
+function RegisterForm() {
   const params = useSearchParams();
   const [role, setRole] = useState<AccountRole>(params.get('role')?.toUpperCase() === 'TUTOR' ? 'TUTOR' : 'PARENT');
   const [error, setError] = useState('');
@@ -89,4 +90,8 @@ export default function Register() {
       </form>
     </main>
   );
+}
+
+export default function Register() {
+  return <Suspense fallback={<main className="signup-page"><p>Loading registration...</p></main>}><RegisterForm /></Suspense>;
 }
