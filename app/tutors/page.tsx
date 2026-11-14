@@ -11,6 +11,7 @@ type Filters = {
   city?: string;
   online?: string;
   maxRate?: string;
+  sort?: string;
 };
 
 function uniqueOptions(values: string[][]): string[] {
@@ -101,6 +102,8 @@ export default async function Tutors({
     Number.isFinite(maxRate) &&
     maxRate > 0;
 
+  const sort = ['price-asc', 'price-desc', 'name'].includes(q.sort || '') ? q.sort : 'price-asc';
+
   const tutors = approvedTutors
     .filter(tutor => {
       if (subject && !tutor.subjects.includes(subject)) {
@@ -128,6 +131,11 @@ export default async function Tutors({
 
       return true;
     })
+    .sort((a, b) => sort === 'price-desc'
+      ? b.hourlyRateCents - a.hourlyRateCents
+      : sort === 'name'
+        ? a.user.name.localeCompare(b.user.name, 'en-CA')
+        : a.hourlyRateCents - b.hourlyRateCents)
     .slice(0, 100);
 
   return (
@@ -218,6 +226,15 @@ export default async function Tutors({
           </label>
 
           <label>
+            Sort results
+            <select className="field" name="sort" defaultValue={sort}>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+              <option value="name">Tutor name: A to Z</option>
+            </select>
+          </label>
+
+          <label>
             Online tutoring
             <select
               className="field"
@@ -259,7 +276,7 @@ export default async function Tutors({
         </div>
       </form>
 
-      <p className="muted">
+      <p className="muted" role="status">
         <strong>{tutors.length}</strong>{' '}
         matching tutor{tutors.length === 1 ? '' : 's'}
         {tutors.length === 100
@@ -275,7 +292,7 @@ export default async function Tutors({
       >
         {tutors.map(tutor => (
           <article
-            className="card"
+            className="card tutor-result-card"
             key={tutor.id}
             style={{
               minWidth: 0,
@@ -324,23 +341,20 @@ export default async function Tutors({
               {tutor.bio}
             </p>
 
-            <h3>Qualifications and experience</h3>
+            <div className="tutor-quick-facts">
+              <div><strong>Subjects</strong><Tags items={tutor.subjects} /></div>
+              <div><strong>Grades</strong><Tags items={tutor.grades} /></div>
+              <div><strong>Languages</strong><Tags items={tutor.languages} /></div>
+            </div>
 
-            <p style={{ whiteSpace: 'pre-wrap' }}>
-              {tutor.qualifications ||
-                'Contact this tutor for details.'}
-            </p>
-
-            <h3>Subjects</h3>
-            <Tags items={tutor.subjects} />
-
-            <h3>Grades</h3>
-            <Tags items={tutor.grades} />
-
-            <h3>Languages</h3>
-            <Tags items={tutor.languages} />
-
-            <TutorAvailability tutorId={tutor.id} />
+            <details className="tutor-more-details">
+              <summary>Qualifications, experience and availability</summary>
+              <h3>Qualifications and experience</h3>
+              <p style={{ whiteSpace: 'pre-wrap' }}>
+                {tutor.qualifications || 'Contact this tutor for details.'}
+              </p>
+              <TutorAvailability tutorId={tutor.id} />
+            </details>
 
             <div
               style={{
