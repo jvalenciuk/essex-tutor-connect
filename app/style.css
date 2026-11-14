@@ -333,3 +333,46 @@ footer {
   .dashboard-quick-nav a { font-size: 13px; padding: 9px 12px; }
   .dashboard-action-banner a { width: 100%; justify-content: center; }
 }
+
+
+/* Conversations: reduce nested navigation and make session actions discoverable */
+.conversation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 750;
+  padding: 10px 0;
+  font-size: 1.05rem;
+}
+.conversation-summary-meta {
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.conversation-card[open] { border-color: #9cb6cc; }
+.conversation-panel {
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.conversation-panel[open] { background: #fcfdff; }
+.conversation-panel-summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 4px 0;
+}
+.conversation-panel-summary:hover { color: #005a9c; }
+.conversation-panel summary:focus-visible,
+.conversation-card summary:focus-visible {
+  outline: 3px solid var(--maize);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+@media (max-width: 600px) {
+  .conversation-card { padding: 16px; }
+  .conversation-panel { padding: 10px; }
+}
