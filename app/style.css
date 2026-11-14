@@ -447,3 +447,27 @@ footer {
 .home-trust>a { font-weight:700; }
 @media(max-width:850px){ .home-hero { grid-template-columns:1fr; } .home-hero-side { grid-template-columns:repeat(3,minmax(0,1fr)); } .home-highlight { align-items:flex-start; flex-direction:column; } .home-step-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px){ .home-hero-side,.home-benefits,.home-audience-grid,.home-step-grid { grid-template-columns:1fr; } .home-highlight { flex-direction:row; align-items:center; } .home-hero-actions>a { width:100%; } .home-benefits { gap:16px; } .home-trust { display:block; } .home-audience-card { padding:22px; } }
+
+
+/* Account creation and sign-in */
+.signup-page { max-width:760px; padding-top:42px; }
+.signup-heading { text-align:center; margin-bottom:24px; }
+.signup-heading h1 { font-size:clamp(30px,4vw,42px); margin:8px 0; }
+.signup-form { max-width:640px; margin:0 auto; padding:clamp(20px,4vw,34px); }
+.signup-role-fieldset { border:0; margin:0 0 22px; padding:0; min-width:0; }
+.signup-role-fieldset legend { font-size:16px; font-weight:800; margin-bottom:12px; }
+.signup-role-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.signup-role { display:flex; align-items:flex-start; gap:10px; border:2px solid var(--border); border-radius:12px; padding:15px; cursor:pointer; font-size:15px; }
+.signup-role.selected { border-color:var(--blue); background:#eef5fb; }
+.signup-role input { flex:0 0 auto; margin-top:4px; accent-color:var(--blue); }
+.signup-role strong, .signup-role small { display:block; }
+.signup-role small { margin-top:7px; color:var(--muted); line-height:1.45; }
+.signup-show-password { display:flex; align-items:center; gap:8px; margin:-5px 0 20px; cursor:pointer; }
+.signup-show-password input { width:16px; height:16px; accent-color:var(--blue); }
+.signup-info, .signup-success { padding:14px 16px; border-radius:10px; line-height:1.5; }
+.signup-info { background:#eef5fb; border-left:4px solid var(--blue-light); }
+.signup-success { background:#e8f5ee; border-left:4px solid #15803d; }
+.signup-submit { width:100%; min-height:48px; font-size:16px; }
+.signup-signin { text-align:center; margin:20px 0 0; }
+.signup-signin a { font-weight:800; text-decoration:underline; }
+@media(max-width:560px) { .signup-role-grid { grid-template-columns:1fr; } }
