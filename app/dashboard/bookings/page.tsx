@@ -25,6 +25,7 @@ type Booking = {
 };
 
 type Role = 'PARENT' | 'TUTOR' | 'ADMIN' | '';
+type BookingTab = 'action' | 'upcoming' | 'history';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +78,7 @@ export default function MyBookingsPage() {
   const { status: sessionStatus } = useSession();
 
   const [role, setRole] = useState<Role>('');
+  const [activeTab, setActiveTab] = useState<BookingTab>('action');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -346,6 +348,12 @@ export default function MyBookingsPage() {
   const history = sorted
     .filter(b => category(b) === 'history')
     .reverse();
+  const tabs: { id: BookingTab; title: string; count: number; empty: string; items: Booking[] }[] = [
+    { id: 'action', title: 'Awaiting Action', count: actionItems.length, empty: 'Nothing needs attention right now.', items: actionItems },
+    { id: 'upcoming', title: 'Upcoming', count: upcoming.length, empty: 'No upcoming confirmed sessions.', items: upcoming },
+    { id: 'history', title: 'History', count: history.length, empty: 'No previous bookings yet.', items: history },
+  ];
+  const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
 
   function BookingCard({ booking }: { booking: Booking }) {
     const start = new Date(booking.startsAt).getTime();
@@ -767,24 +775,19 @@ export default function MyBookingsPage() {
         requests, and booking history in one place.
       </p>
 
-      <div
-        className="cards"
-        style={{
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(190px, 1fr))',
-        }}
-      >
-        {[
-          ['Action Required', actionItems.length],
-          ['Upcoming Sessions', upcoming.length],
-          ['Booking History', history.length],
-        ].map(([label, count]) => (
-          <div className="card" key={String(label)}>
-            <p className="muted">{label}</p>
-            <h2>{count}</h2>
-          </div>
+      <nav className="booking-tabs" aria-label="Filter tutoring sessions">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            className={activeTab === tab.id ? 'booking-tab active' : 'booking-tab'}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+            onClick={() => { setActiveTab(tab.id); resetEditor(); setError(''); }}
+          >
+            {tab.title} <span className="booking-tab-count">{tab.count}</span>
+          </button>
         ))}
-      </div>
+      </nav>
 
       <button
         disabled={loading || busyId !== null}
@@ -813,25 +816,11 @@ export default function MyBookingsPage() {
       )}
 
       {!loading && (
-        <>
-          <Section
-            title="Action Required"
-            items={actionItems}
-            empty="No bookings need attention."
-          />
-
-          <Section
-            title="Upcoming Sessions"
-            items={upcoming}
-            empty="No upcoming confirmed sessions."
-          />
-
-          <Section
-            title="Booking History"
-            items={history}
-            empty="No previous bookings yet."
-          />
-        </>
+        <Section
+          title={selectedTab.title}
+          items={selectedTab.items}
+          empty={selectedTab.empty}
+        />
       )}
     </main>
   );
