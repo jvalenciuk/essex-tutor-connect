@@ -104,7 +104,7 @@ function nextStep(
         : 'Waiting for the tutor to accept your requested time or propose an alternative.';
     case 'PENDING_PAYMENT':
       return role === 'PARENT'
-        ? 'Your session time has been agreed upon. Complete secure payment to confirm it.'
+        ? 'Your session time has been agreed upon. Complete secure payment before the 24-hour deadline to confirm it.'
         : 'Waiting for the parent to complete payment.';
     case 'PAID':
       return 'Your session is confirmed. Check the date and time below.';
