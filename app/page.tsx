@@ -17,7 +17,7 @@ export default function Home() {
           <p className="home-lead">Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you.</p>
           <div className="home-hero-actions">
             <Link className="button" href="/tutors">Find a tutor</Link>
-            <Link className="home-outline-button" href="/register">Become a tutor</Link>
+            <Link className="home-outline-button" href="/register?role=tutor">Become a tutor</Link>
           </div>
           <p className="home-small-note">Browsing tutor profiles and sending inquiries is free.</p>
         </div>
@@ -59,7 +59,7 @@ export default function Home() {
           <p className="home-section-kicker">FOR TUTORS</p>
           <h2>Share your expertise locally</h2>
           <p>Create a profile, set your hourly rate and availability, and manage inquiries and sessions from your dashboard. Approval is required before your profile appears in search.</p>
-          <Link className="home-dark-button" href="/register">Create a tutor account</Link>
+          <Link className="home-dark-button" href="/register?role=tutor">Create a tutor account</Link>
         </article>
       </section>
 
