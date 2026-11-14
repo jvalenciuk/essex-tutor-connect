@@ -142,6 +142,9 @@ export default function SessionCalendar({
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingNotice, setBookingNotice] = useState('');
   const [bookingError, setBookingError] = useState('');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [calendarActionError, setCalendarActionError] = useState('');
+  const [calendarActionNotice, setCalendarActionNotice] = useState('');
 
   const [bookings, setBookings] =
     useState<CalendarBooking[]>([]);
@@ -340,6 +343,29 @@ export default function SessionCalendar({
         monthNumber
       ).padStart(2, '0')}-01`
     );
+  }
+
+  async function acceptCalendarProposal(booking: CalendarBooking) {
+    if (acceptingId) return;
+    setAcceptingId(booking.id);
+    setCalendarActionError('');
+    setCalendarActionNotice('');
+    try {
+      const response = await fetch(`/api/bookings/${encodeURIComponent(booking.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ACCEPT' }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Unable to accept the proposal.');
+      await loadCalendar();
+      window.dispatchEvent(new Event('essex:bookings-updated'));
+      setCalendarActionNotice('Session accepted. Complete payment within 24 hours to confirm your booking.');
+    } catch (error) {
+      setCalendarActionError(error instanceof Error ? error.message : 'Unable to accept the proposal.');
+    } finally {
+      setAcceptingId(null);
+    }
   }
 
   function openBooking(booking: CalendarBooking) {
@@ -878,6 +904,8 @@ export default function SessionCalendar({
             </p>
           )}
 
+        {calendarActionError && <p role="alert" style={{ color: '#b91c1c' }}>{calendarActionError}</p>}
+        {calendarActionNotice && <p role="status" style={{ color: '#15803d' }}>{calendarActionNotice}</p>}
         {!loading && selectedBookings.length > 0 && (
           <details key={selectedDate} open={selectedBookings.length === 1 ? true : undefined}
             style={{ border: selectedBookings.length > 1 ? '1px solid #cbd5e1' : 'none', borderRadius: 8, padding: selectedBookings.length > 1 ? '12px 14px' : 0 }}>
@@ -986,6 +1014,12 @@ export default function SessionCalendar({
                     </p>
                   )}
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                    {role === 'PARENT' && booking.status === 'PROPOSED' && (
+                      <button type="button" disabled={acceptingId !== null}
+                        onClick={() => void acceptCalendarProposal(booking)}>
+                        {acceptingId === booking.id ? 'Accepting...' : 'Accept session'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setExpandedBookingId(expandedBookingId === booking.id ? null : booking.id)}
