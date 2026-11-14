@@ -245,10 +245,14 @@ export async function POST(req: Request) {
 
   // APP_URL allows Preview and Production to use separate
   // Stripe Checkout return URLs.
+  // Use the current preview deployment origin so Checkout returns to the
+  // same host as the parent's authenticated session.
   const configuredBaseUrl =
-    process.env.APP_URL ||
-    process.env.NEXTAUTH_URL ||
-    'https://essex-tutor-connect.vercel.app';
+    process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : (process.env.APP_URL ||
+         process.env.NEXTAUTH_URL ||
+         'https://essex-tutor-connect.vercel.app');
 
   let baseUrl: string;
 
