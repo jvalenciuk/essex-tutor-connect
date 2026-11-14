@@ -255,6 +255,7 @@ export default function BookingManager({
 
       resetForm();
       await loadBookings();
+      window.dispatchEvent(new Event('essex:bookings-updated'));
       router.refresh();
       setNotice(successMessage);
     } catch (err) {
