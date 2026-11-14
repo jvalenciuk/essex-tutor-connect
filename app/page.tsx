@@ -1,160 +1,76 @@
+import Link from 'next/link';
+
+const steps = [
+  { number: '01', title: 'Explore tutors', description: 'Filter approved profiles by subject, grade, location, price and online availability.' },
+  { number: '02', title: 'Ask a question', description: 'Send a tutor an inquiry about your learning goals. There is no charge to inquire.' },
+  { number: '03', title: 'Choose a time', description: 'Review a proposed session or request a different time before you commit.' },
+  { number: '04', title: 'Confirm and learn', description: 'Pay securely to confirm your booking, then manage your sessions in one place.' },
+];
 
 export default function Home() {
-  const steps = [
-    {
-      number: '01',
-      title: 'Find the right tutor',
-      description:
-        'Compare approved tutor profiles by subject, grade, location, price, and availability.',
-    },
-    {
-      number: '02',
-      title: 'Start a conversation',
-      description:
-        'Send an inquiry about learning goals and preferred times. No payment is needed to inquire.',
-    },
-    {
-      number: '03',
-      title: 'Agree on a session',
-      description:
-        'Review a tutoring proposal, accept it, or request a different time.',
-    },
-    {
-      number: '04',
-      title: 'Pay and learn',
-      description:
-        'Complete secure checkout to confirm your session. Manage bookings from your dashboard.',
-    },
-  ];
-
   return (
-    <main>
-      <section className="hero">
+    <main className="home-page">
+      <section className="hero home-hero">
+        <div className="home-hero-copy">
+          <p className="home-eyebrow">LOCAL TUTORING · WINDSOR & ESSEX COUNTY</p>
+          <h1>Find the right tutor. Build confidence.</h1>
+          <p className="home-lead">Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you.</p>
+          <div className="home-hero-actions">
+            <Link className="button" href="/tutors">Find a tutor</Link>
+            <Link className="home-outline-button" href="/register">Become a tutor</Link>
+          </div>
+          <p className="home-small-note">Browsing tutor profiles and sending inquiries is free.</p>
+        </div>
+        <div className="home-hero-side" aria-label="How tutoring works">
+          <div className="home-highlight"><span>1</span><div><strong>Find your match</strong><small>Search by subject, grade and budget</small></div></div>
+          <div className="home-highlight"><span>2</span><div><strong>Connect directly</strong><small>Discuss goals and scheduling</small></div></div>
+          <div className="home-highlight"><span>3</span><div><strong>Book with confidence</strong><small>Pay securely after agreeing on a time</small></div></div>
+        </div>
+      </section>
+
+      <section className="home-benefits" aria-label="Platform benefits">
+        <div><strong>Local focus</strong><p>Windsor, LaSalle, Tecumseh and Essex County</p></div>
+        <div><strong>Flexible learning</strong><p>Explore in-person and online options</p></div>
+        <div><strong>Clear pricing</strong><p>Compare hourly rates before contacting tutors</p></div>
+      </section>
+
+      <section className="home-section" id="how-it-works">
+        <div className="home-section-heading">
+          <div><p className="home-section-kicker">SIMPLE FROM START TO FINISH</p><h2>How it works</h2></div>
+          <Link href="/how-it-works">Booking and payment details</Link>
+        </div>
+        <div className="home-step-grid">
+          {steps.map(step => <article className="card home-step" key={step.number}>
+            <span className="home-step-number">{step.number}</span>
+            <h3>{step.title}</h3>
+            <p>{step.description}</p>
+          </article>)}
+        </div>
+      </section>
+
+      <section className="home-audience-grid">
+        <article className="card home-audience-card">
+          <p className="home-section-kicker">FOR FAMILIES</p>
+          <h2>Personalized support starts here</h2>
+          <p>Browse tutor qualifications, subjects, grades and published availability. Message a tutor to discuss what your learner needs before booking.</p>
+          <Link className="button" href="/tutors">Explore tutors</Link>
+        </article>
+        <article className="card home-audience-card">
+          <p className="home-section-kicker">FOR TUTORS</p>
+          <h2>Share your expertise locally</h2>
+          <p>Create a profile, set your hourly rate and availability, and manage inquiries and sessions from your dashboard. Approval is required before your profile appears in search.</p>
+          <Link className="home-dark-button" href="/register">Create a tutor account</Link>
+        </article>
+      </section>
+
+      <section className="card home-trust">
         <div>
-          WINDSOR · LASALLE · TECUMSEH · ESSEX COUNTY
+          <p className="home-section-kicker">BOOKING WITH CONFIDENCE</p>
+          <h2>Know what to expect</h2>
+          <p>Tutor profiles are reviewed before publication. Secure payments are processed through Stripe, and your bookings appear in your account.</p>
+          <p className="muted">Profile approval does not guarantee credentials, suitability or a completed background check. Families should make their own assessment before booking.</p>
         </div>
-
-        <h1>Local tutors. Stronger futures.</h1>
-
-        <p>
-          Connect with local educators for personalized
-          tutoring in math, French, English, science,
-          and more — in person or online.
-        </p>
-
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 12,
-            marginTop: 20,
-          }}
-        >
-          <a className="button" href="/tutors">
-            Find a tutor
-          </a>
-
-          <a className="button" href="/register">
-            Become a tutor
-          </a>
-        </div>
-      </section>
-
-      <section style={{ margin: '36px 0' }}>
-        <h2>How Essex Tutor Connect works</h2>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns:
-              'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
-            gap: 16,
-          }}
-        >
-          {steps.map(step => (
-            <article className="card" key={step.number}>
-              <p
-                style={{
-                  fontSize: 26,
-                  fontWeight: 800,
-                  color: '#087f8c',
-                }}
-              >
-                {step.number}
-              </p>
-
-              <h3>{step.title}</h3>
-              <p>{step.description}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="cards">
-        <div className="card">
-          <h2>For parents and learners</h2>
-
-          <p>
-            Search tutor profiles, compare hourly
-            rates, view published availability, and
-            contact tutors directly through your account.
-          </p>
-
-          <p>
-            You decide whether to accept a proposed
-            session before making a payment.
-          </p>
-
-          <a href="/tutors">
-            Explore tutors
-          </a>
-        </div>
-
-        <div className="card">
-          <h2>For tutors</h2>
-
-          <p>
-            Create a professional profile, list your
-            qualifications and subjects, and set
-            your weekly availability.
-          </p>
-
-          <p>
-            Manage inquiries, propose sessions,
-            and connect Stripe to receive payments.
-          </p>
-
-          <a href="/register">
-            Create a tutor account
-          </a>
-        </div>
-      </section>
-
-      <section
-        className="card"
-        style={{ margin: '28px 0' }}
-      >
-        <h2>Booking with confidence</h2>
-
-        <p>
-          Tutor profiles are reviewed by an
-          administrator before appearing in search
-          results. Payments are processed through
-          Stripe, and confirmed sessions appear
-          in your account dashboard.
-        </p>
-
-        <p>
-          Administrator approval is not a guarantee
-          of teaching credentials, suitability, or
-          a completed background check.
-          Parents should ask questions and make
-          their own assessment before booking.
-        </p>
-
-        <a href="/how-it-works">
-          Read about booking, payments, and safety
-        </a>
+        <Link href="/how-it-works">Learn about payments and safety</Link>
       </section>
     </main>
   );
