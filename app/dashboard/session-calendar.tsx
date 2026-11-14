@@ -785,8 +785,15 @@ export default function SessionCalendar({
             </p>
           )}
 
-        {!loading &&
-          selectedBookings.map(
+        {!loading && selectedBookings.length > 0 && (
+          <details key={selectedDate} open={selectedBookings.length === 1 ? true : undefined}
+            style={{ border: selectedBookings.length > 1 ? '1px solid #cbd5e1' : 'none', borderRadius: 8, padding: selectedBookings.length > 1 ? '12px 14px' : 0 }}>
+            {selectedBookings.length > 1 && (
+              <summary style={{ cursor: 'pointer', fontWeight: 700, marginBottom: 10 }}>
+                View {selectedBookings.length} sessions
+              </summary>
+            )}
+            {selectedBookings.map(
             booking => {
               const status =
                 statuses[
@@ -912,6 +919,8 @@ export default function SessionCalendar({
               );
             }
           )}
+          </details>
+        )}
       </div>
 
       <button
