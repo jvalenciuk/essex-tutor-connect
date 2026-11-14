@@ -24,6 +24,8 @@ type CalendarBooking = {
   } | null;
 };
 
+type BookingContact = { id: string; name: string; subject: string; grade: string };
+
 type AvailabilityResponse = {
   blockedDates: string[];
 };
@@ -128,9 +130,19 @@ function money(cents: number) {
 
 export default function SessionCalendar({
   role,
+  bookingContacts = [],
 }: {
   role: string;
+  bookingContacts?: BookingContact[];
 }) {
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [contactId, setContactId] = useState('');
+  const [bookingTime, setBookingTime] = useState('16:00');
+  const [bookingDuration, setBookingDuration] = useState('60');
+  const [bookingBusy, setBookingBusy] = useState(false);
+  const [bookingNotice, setBookingNotice] = useState('');
+  const [bookingError, setBookingError] = useState('');
+
   const [bookings, setBookings] =
     useState<CalendarBooking[]>([]);
 
@@ -256,6 +268,36 @@ export default function SessionCalendar({
     window.addEventListener('essex:bookings-updated', refreshAfterBookingChange);
     return () => window.removeEventListener('essex:bookings-updated', refreshAfterBookingChange);
   }, [loadCalendar]);
+
+
+  async function proposeCalendarBooking(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBookingError('');
+    setBookingNotice('');
+    if (!contactId) { setBookingError('Choose a parent.'); return; }
+    const localStart = new Date(`${selectedDate}T${bookingTime}:00`);
+    if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
+      setBookingError('Choose a future date and time.'); return;
+    }
+    setBookingBusy(true);
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inquiryId: contactId, startsAt: localStart.toISOString(), durationMinutes: Number(bookingDuration) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
+      setBookingNotice('Session proposed. The parent can now review and accept it.');
+      setShowBookingForm(false);
+      await loadCalendar();
+      window.dispatchEvent(new Event('essex:bookings-updated'));
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : 'Unable to propose session.');
+    } finally {
+      setBookingBusy(false);
+    }
+  }
 
   function changeMonth(
     amount: number
@@ -768,6 +810,35 @@ export default function SessionCalendar({
               tutoring sessions.
             </p>
           )}
+
+        {role === 'TUTOR' && (
+          <div style={{ marginBottom: 16 }}>
+            <button type="button" onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
+              {showBookingForm ? 'Close booking form' : '+ Book a session on this date'}
+            </button>
+            {showBookingForm && (
+              <form onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                <p><strong>New session · {selectedDate}</strong></p>
+                <p className="muted">Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.</p>
+                <label htmlFor="calendar-parent">Parent and subject</label>
+                <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
+                  <option value="">Select a parent</option>
+                  {bookingContacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name} — {contact.subject} ({contact.grade})</option>)}
+                </select>
+                {bookingContacts.length === 0 && <p className="muted">No accepted parent inquiries yet. Accept an inquiry first.</p>}
+                <label htmlFor="calendar-start">Start time (your device's local time)</label>
+                <input id="calendar-start" className="field" type="time" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required />
+                <label htmlFor="calendar-duration">Duration</label>
+                <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
+                  {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
+                </select>
+                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Creating...' : 'Propose session'}</button>
+                {bookingError && <p role="alert" className="error">{bookingError}</p>}
+              </form>
+            )}
+            {bookingNotice && <p role="status" style={{ color: '#15803d' }}>{bookingNotice}</p>}
+          </div>
+        )}
 
         {loading && (
           <p>
