@@ -186,6 +186,13 @@ export default function BookingManager({
     void loadBookings();
   }, [loadBookings]);
 
+  // Keep the session manager in sync with actions performed on the calendar.
+  useEffect(() => {
+    const refreshFromCalendar = () => { void loadBookings(); };
+    window.addEventListener('essex:bookings-updated', refreshFromCalendar);
+    return () => window.removeEventListener('essex:bookings-updated', refreshFromCalendar);
+  }, [loadBookings]);
+
   const [focusBookingId, setFocusBookingId] = useState<string | null>(null);
 
   useEffect(() => {
