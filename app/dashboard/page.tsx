@@ -398,7 +398,7 @@ export default async function Dashboard() {
       )}
 
       {(isTutor || isParent) && (
-        <section className="card" style={{ marginTop: 28 }}>
+        <section id="my-calendar" className="card" style={{ marginTop: 28 }}>
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
           <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
 
@@ -421,7 +421,7 @@ export default async function Dashboard() {
 
       {isTutor && (
         <>
-          <section style={{ marginTop: 24 }}>
+          <section id="dashboard-overview" style={{ marginTop: 24 }}>
             <h2>Overview</h2>
 
             <div
@@ -631,7 +631,7 @@ export default async function Dashboard() {
 
       {isParent && (
         <>
-          <section style={{ marginTop: 24 }}>
+          <section id="dashboard-overview" style={{ marginTop: 24 }}>
             <h2>Overview</h2>
 
             <div
@@ -722,7 +722,7 @@ export default async function Dashboard() {
             )}
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
+          <section className="card" style={{ marginTop: 24 }} id="payments">
             <h2>Payments Awaiting Action</h2>
 
             {awaitingPayment.length === 0 ? (
@@ -767,7 +767,7 @@ export default async function Dashboard() {
       )}
 
       {isTutor && (
-        <section className="card" style={{ marginTop: 24 }}>
+        <section className="card" style={{ marginTop: 24 }} id="needs-attention">
           <h2>Needs Your Attention</h2>
           {overdueTutorSessions.length > 0 && (
             <div style={{ borderLeft: '4px solid #b45309', paddingLeft: 12, marginBottom: 18 }}>
@@ -813,7 +813,7 @@ export default async function Dashboard() {
 
 
       {(isTutor || isParent) && (
-        <section style={{ marginTop: 28 }}>
+        <section style={{ marginTop: 28 }} id="conversations">
           <h2>Bookings &amp; Messages</h2>
           <p className="muted">
             Select a parent or tutor below, then open Messages or Manage sessions only when needed.
