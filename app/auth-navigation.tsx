@@ -59,9 +59,10 @@ export default function AuthNavigation() {
     );
   }
 
-  const role = (
-    session.user as { role?: string }
-  ).role;
+  const currentUser = session.user as { role?: string; name?: string | null; email?: string | null };
+  const role = currentUser.role;
+  const displayName = currentUser.name?.trim() || currentUser.email || 'Account';
+  const roleLabel = role === 'TUTOR' ? 'Tutor' : role === 'PARENT' ? 'Parent' : role === 'ADMIN' ? 'Admin' : 'Member';
 
   return (
     <>
@@ -82,6 +83,12 @@ export default function AuthNavigation() {
           Admin
         </Link>
       )}
+
+      <span className="signed-in-identity" aria-label={`Signed in as ${displayName}, ${roleLabel}`}>
+        <span className="signed-in-identity-label">Signed in as</span>
+        <strong>{displayName}</strong>
+        <span className="signed-in-role">{roleLabel}</span>
+      </span>
 
       <button
         type="button"
