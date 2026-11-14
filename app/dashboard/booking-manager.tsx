@@ -19,6 +19,7 @@ type Booking = {
   amountCents: number;
   platformFeeCents: number;
   status: string;
+  paymentDueAt?: string | null;
 };
 
 type Props = {
