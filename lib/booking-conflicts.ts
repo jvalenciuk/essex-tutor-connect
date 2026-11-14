@@ -1,5 +1,6 @@
 
 import { db } from './db';
+import { expireUnpaidBookings } from './payment-expiration';
 import type { Prisma } from '@prisma/client';
 
 type BookingReader = Pick<Prisma.TransactionClient, 'tutorAvailability' | 'tutorBlockedDate' | 'booking'>;
@@ -99,6 +100,7 @@ export async function checkTutorSlot(
     }
   }
 
+  // Cleanup runs before transaction-backed slot checks in the API routes.
   const candidates = await reader.booking.findMany({
     where: {
       tutorId,
