@@ -60,7 +60,8 @@ export default function AuthNavigation() {
   }
 
   const currentUser = session.user as { role?: string; name?: string | null; email?: string | null };
-  const role = currentUser.role;
+  // NextAuth stores the role on the session root, not session.user.
+  const role = (session as typeof session & { role?: string }).role || currentUser.role;
   const displayName = currentUser.name?.trim() || currentUser.email || 'Account';
   const roleLabel = role === 'TUTOR' ? 'Tutor' : role === 'PARENT' ? 'Parent' : role === 'ADMIN' ? 'Admin' : 'Member';
 
