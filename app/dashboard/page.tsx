@@ -774,7 +774,7 @@ export default async function Dashboard() {
       {(isTutor || isParent) && (
         <section className="card" style={{ marginTop: 28 }}>
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
-          <SessionCalendar role={who.role} bookingContacts={isTutor ? inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => ({ id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade })) : []} />
+          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
 
         </section>
       )}
