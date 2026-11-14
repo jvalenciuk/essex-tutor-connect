@@ -816,7 +816,7 @@ export default async function Dashboard() {
         <section style={{ marginTop: 28 }} id="conversations">
           <h2>Bookings &amp; Messages</h2>
           <p className="muted">
-            Select a parent or tutor below, then open Messages or Manage sessions only when needed.
+            Choose a conversation to manage tutoring sessions, send a message, or review earlier inquiries. Your session manager opens automatically.
           </p>
 
           {inquiries.length === 0 && (
@@ -831,9 +831,10 @@ export default async function Dashboard() {
             const inquiryIds = accepted.map(inquiry => inquiry.id);
             const partnerName = isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name;
             return (
-              <details className="card" data-conversation-group="true" key={accountId} style={{ marginBottom: 16 }}>
-                <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '10px 0' }}>
-                  {partnerName}
+              <details className="card conversation-card" data-conversation-group="true" key={accountId} open={conversationGroups.length === 1 ? true : undefined} style={{ marginBottom: 16 }}>
+                <summary className="conversation-summary">
+                  <span>{partnerName}</span>
+                  <span className="conversation-summary-meta">{accepted.length} accepted {accepted.length === 1 ? 'inquiry' : 'inquiries'}</span>
                 </summary>
                 <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
                   <details>
@@ -850,12 +851,12 @@ export default async function Dashboard() {
                   </details>
                   {primaryId && (
                     <>
-                      <details style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
-                        <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Messages with {partnerName}</summary>
+                      <details className="conversation-panel">
+                        <summary className="conversation-panel-summary">Messages with {partnerName}</summary>
                         <InquiryMessages inquiryId={primaryId} inquiryIds={inquiryIds} />
                       </details>
-                      <details data-session-panel="true" style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
-                        <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Manage sessions and scheduling</summary>
+                      <details open data-session-panel="true" className="conversation-panel">
+                        <summary className="conversation-panel-summary">Tutoring sessions · scheduling and payments</summary>
                         <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} />
                       </details>
                     </>
