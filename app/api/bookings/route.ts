@@ -3,6 +3,7 @@ import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
 import { checkTutorSlot } from '../../../lib/booking-conflicts';
 import { z } from 'zod';
+import { expireUnpaidBookings } from '../../../lib/payment-expiration';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,8 @@ export async function POST(req: Request) {
   if (!inquiry) {
     return fail('Accepted inquiry not found', 403);
   }
+
+  await expireUnpaidBookings(inquiry.tutorId);
 
   const issue = await checkTutorSlot(
     inquiry.tutorId,
@@ -147,6 +150,8 @@ export async function GET() {
       headers: responseHeaders,
     });
   }
+
+  await expireUnpaidBookings();
 
   const bookings = await db.booking.findMany({
     where:
