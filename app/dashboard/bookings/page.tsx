@@ -751,7 +751,7 @@ export default function MyBookingsPage() {
   if (sessionStatus === 'unauthenticated') {
     return (
       <main>
-        <h1>My Bookings</h1>
+        <h1>My Sessions</h1>
         <p>Please sign in to view your bookings.</p>
         <Link href="/login">Sign In</Link>
       </main>
@@ -771,8 +771,7 @@ export default function MyBookingsPage() {
       <h1>My Bookings</h1>
 
       <p className="muted">
-        Manage tutoring sessions, payments, scheduling
-        requests, and booking history in one place.
+        View confirmed sessions, respond to scheduling requests, and manage payments in one place.
       </p>
 
       <nav className="booking-tabs" aria-label="Filter tutoring sessions">
