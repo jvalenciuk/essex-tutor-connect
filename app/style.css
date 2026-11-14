@@ -376,3 +376,13 @@ footer {
   .conversation-card { padding: 16px; }
   .conversation-panel { padding: 10px; }
 }
+
+/* My Sessions: simple, accessible filtering */
+.booking-tabs { display:flex; flex-wrap:wrap; gap:10px; margin:26px 0 16px; border-bottom:1px solid var(--border); padding-bottom:12px; }
+.booking-tab { display:inline-flex; align-items:center; gap:9px; border:1px solid #c1cfdb; border-radius:999px; background:#fff; color:var(--blue); padding:11px 16px; font-weight:700; }
+.booking-tab:hover { background:#fff4c2; }
+.booking-tab.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+.booking-tab.active:hover { background:var(--blue-light); color:#fff; }
+.booking-tab-count { display:inline-flex; justify-content:center; align-items:center; min-width:24px; height:24px; border-radius:999px; background:#e7edf3; color:var(--blue); font-size:13px; }
+.booking-tab:focus-visible { outline:3px solid var(--maize); outline-offset:3px; }
+@media(max-width:600px){ .booking-tabs{gap:7px}.booking-tab{padding:10px 12px;font-size:13px} }
