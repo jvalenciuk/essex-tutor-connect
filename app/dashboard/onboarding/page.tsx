@@ -135,10 +135,10 @@ export default async function TutorOnboarding() {
       title: 'Create your tutor profile',
       description:
         'Tell parents who you are and what you teach.',
-      complete: Boolean(profile),
-      detail: profile
-        ? 'Profile submitted'
-        : 'Complete the profile form below.',
+      complete: profileComplete,
+      detail: profileComplete
+        ? 'Profile submitted with required information'
+        : 'Complete and save your profile below.'
     },
     {
       title: 'Complete your profile details',
