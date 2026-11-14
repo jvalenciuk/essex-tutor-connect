@@ -1,0 +1,26 @@
+name: Test unpaid booking expiration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-expiration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check configured endpoint
+        env:
+          EXPIRATION_URL: ${{ secrets.EXPIRATION_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$EXPIRATION_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "Missing EXPIRATION_URL or CRON_SECRET repository secret"
+            exit 1
+          fi
+          curl --fail-with-body --show-error --silent \
+            --retry 2 --retry-delay 5 --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$EXPIRATION_URL"
