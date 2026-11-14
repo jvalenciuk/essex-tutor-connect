@@ -403,3 +403,47 @@ footer {
 .tutor-more-details summary:hover { color: #005a9c; }
 .tutor-more-details summary:focus-visible { outline: 3px solid var(--maize); outline-offset: 4px; }
 @media(max-width:600px) { .tutor-quick-facts { gap: 10px; } }
+
+
+/* Homepage: two clear journeys, approachable editorial layout */
+.home-page { max-width: 1180px; }
+.home-hero { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(250px,.8fr); gap:34px; align-items:center; padding:clamp(28px,5vw,58px); }
+.home-hero h1 { max-width:760px; margin:14px 0 20px; letter-spacing:-.035em; }
+.home-hero .home-eyebrow { color:var(--maize); font-size:12px; font-weight:800; letter-spacing:.12em; margin:0; }
+.home-hero .home-lead { font-size:clamp(17px,2vw,20px); line-height:1.6; }
+.home-hero-actions { display:flex; flex-wrap:wrap; gap:12px; margin:26px 0 12px; }
+.home-hero-actions .button, .home-outline-button { display:inline-flex; justify-content:center; align-items:center; min-height:48px; padding:13px 21px; border-radius:9px; font-weight:800; }
+.home-outline-button { border:1px solid rgba(255,255,255,.7); color:#fff; }
+.home-outline-button:hover { background:rgba(255,255,255,.13); color:#fff; }
+.home-hero .home-small-note { font-size:13px; color:#dbe8f5; margin:0; }
+.home-hero-side { display:grid; gap:14px; }
+.home-highlight { display:flex; gap:14px; align-items:center; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:14px; padding:18px; }
+.home-highlight span { display:grid; place-items:center; flex:0 0 38px; height:38px; border-radius:50%; background:var(--maize); color:var(--blue); font-weight:800; }
+.home-highlight strong, .home-highlight small { display:block; color:#fff; }
+.home-highlight small { opacity:.85; margin-top:5px; line-height:1.4; }
+.home-benefits { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:24px 0; border-bottom:1px solid var(--border); }
+.home-benefits>div { padding:8px 18px; border-left:3px solid var(--maize); }
+.home-benefits strong { color:var(--blue); }
+.home-benefits p { color:var(--muted); margin:7px 0 0; font-size:14px; }
+.home-section { margin:44px 0; }
+.home-section-heading { display:flex; justify-content:space-between; align-items:end; gap:14px; flex-wrap:wrap; margin-bottom:20px; }
+.home-section-heading h2 { margin:7px 0 0; font-size:clamp(25px,3vw,34px); }
+.home-section-kicker { color:#516779; font-size:12px; font-weight:800; letter-spacing:.1em; margin:0; }
+.home-step-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+.home-step { padding:22px; }
+.home-step-number { display:inline-flex; font-size:25px; font-weight:850; color:#087f8c; margin-bottom:10px; }
+.home-step h3 { margin:0 0 10px; }
+.home-step p { line-height:1.55; margin-bottom:0; color:var(--muted); }
+.home-audience-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin:36px 0; }
+.home-audience-card { display:flex; flex-direction:column; align-items:flex-start; gap:12px; padding:30px; }
+.home-audience-card h2 { margin:0; font-size:26px; }
+.home-audience-card>p:not(.home-section-kicker) { line-height:1.65; flex:1; margin:0 0 8px; }
+.home-dark-button { display:inline-flex; align-items:center; padding:13px 18px; border-radius:9px; background:var(--blue); color:#fff; font-weight:800; }
+.home-dark-button:hover { background:var(--blue-light); color:#fff; }
+.home-trust { display:flex; align-items:center; justify-content:space-between; gap:24px; margin:32px 0; }
+.home-trust>div { max-width:740px; }
+.home-trust h2 { margin:10px 0; }
+.home-trust p { line-height:1.55; }
+.home-trust>a { font-weight:700; }
+@media(max-width:850px){ .home-hero { grid-template-columns:1fr; } .home-hero-side { grid-template-columns:repeat(3,minmax(0,1fr)); } .home-highlight { align-items:flex-start; flex-direction:column; } .home-step-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px){ .home-hero-side,.home-benefits,.home-audience-grid,.home-step-grid { grid-template-columns:1fr; } .home-highlight { flex-direction:row; align-items:center; } .home-hero-actions>a { width:100%; } .home-benefits { gap:16px; } .home-trust { display:block; } .home-audience-card { padding:22px; } }
