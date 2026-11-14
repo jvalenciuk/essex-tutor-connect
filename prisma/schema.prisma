@@ -180,6 +180,7 @@ model Booking {
   status           BookingStatus @default(PROPOSED)
 
   stripeSessionId  String?       @unique
+  paymentDueAt     DateTime?
 
   notifications    NotificationDelivery[]
 
@@ -189,6 +190,7 @@ model Booking {
   @@index([tutorId, startsAt])
   @@index([inquiryId])
   @@index([parentId, status])
+  @@index([status, paymentDueAt])
 }
 
 model NotificationDelivery {
