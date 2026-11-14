@@ -367,6 +367,37 @@ export default async function Dashboard() {
       <p className="muted">Account type: {who.role}</p>
 
       {(isTutor || isParent) && (
+        <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
+          <a href="#my-calendar">Calendar</a>
+          <a href="#dashboard-overview">Overview</a>
+          {isParent && <a href="#payments">Payments {awaitingPayment.length > 0 ? `(${awaitingPayment.length})` : ''}</a>}
+          {isTutor && <a href="#needs-attention">Needs attention</a>}
+          <a href="#conversations">Bookings &amp; messages</a>
+          {isParent && <Link href="/tutors">Find a tutor</Link>}
+        </nav>
+      )}
+
+      {isParent && awaitingPayment.length > 0 && (
+        <div className="dashboard-action-banner" role="status">
+          <div>
+            <strong>{awaitingPayment.length} {awaitingPayment.length === 1 ? 'session needs payment' : 'sessions need payment'}</strong>
+            <p>Finish payment to confirm your tutoring {awaitingPayment.length === 1 ? 'session' : 'sessions'}.</p>
+          </div>
+          <a href="#payments">Review payments</a>
+        </div>
+      )}
+
+      {isTutor && (tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && (
+        <div className="dashboard-action-banner" role="status">
+          <div>
+            <strong>You have items needing attention</strong>
+            <p>{tutorNeedsResponse.length} scheduling {tutorNeedsResponse.length === 1 ? 'request' : 'requests'} and {overdueTutorSessions.length} {overdueTutorSessions.length === 1 ? 'session' : 'sessions'} to complete.</p>
+          </div>
+          <a href="#needs-attention">Review items</a>
+        </div>
+      )}
+
+      {(isTutor || isParent) && (
         <section className="card" style={{ marginTop: 28 }}>
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
           <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
