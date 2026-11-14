@@ -23,6 +23,7 @@ type Booking = {
 
 type Props = {
   inquiryId: string;
+  inquiryIds?: string[];
   role: string;
 };
 
@@ -121,9 +122,11 @@ function nextStep(
 
 export default function BookingManager({
   inquiryId,
+  inquiryIds,
   role,
 }: Props) {
   const router = useRouter();
+  const ids = inquiryIds?.join(',') || inquiryId;
   const [bookings, setBookings] =
     useState<Booking[]>([]);
   const [loading, setLoading] =
@@ -163,7 +166,7 @@ export default function BookingManager({
         setBookings(
           data.filter(
             item =>
-              item.inquiryId === inquiryId
+              ids.split(',').includes(item.inquiryId || '')
           )
         );
         setError('');
@@ -175,7 +178,7 @@ export default function BookingManager({
         setLoading(false);
       }
     },
-    [inquiryId]
+    [ids]
   );
 
   useEffect(() => {
@@ -187,13 +190,13 @@ export default function BookingManager({
   useEffect(() => {
     function onFocusBooking(event: Event) {
       const detail = (event as CustomEvent<{ bookingId: string; inquiryId: string }>).detail;
-      if (detail?.inquiryId === inquiryId && detail.bookingId) {
+      if (detail?.inquiryId && ids.split(',').includes(detail.inquiryId) && detail.bookingId) {
         setFocusBookingId(detail.bookingId);
       }
     }
     window.addEventListener('essex:focus-booking', onFocusBooking);
     return () => window.removeEventListener('essex:focus-booking', onFocusBooking);
-  }, [inquiryId]);
+  }, [ids]);
 
   useEffect(() => {
     if (!focusBookingId || loading || !bookings.some(booking => booking.id === focusBookingId)) return;
