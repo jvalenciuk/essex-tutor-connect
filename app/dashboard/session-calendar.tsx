@@ -275,7 +275,19 @@ export default function SessionCalendar({
     setBookingError('');
     setBookingNotice('');
     if (!contactId) { setBookingError('Choose a parent.'); return; }
-    const localStart = new Date(`${selectedDate}T${bookingTime}:00`);
+    // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
+    const [year, monthNumber, day] = selectedDate.split('-').map(Number);
+    const [hour, minute] = bookingTime.split(':').map(Number);
+    const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
+    const offsetParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: ZONE, timeZoneName: 'shortOffset', hour: '2-digit',
+    }).formatToParts(new Date(wallClockUtc));
+    const offsetLabel = offsetParts.find(part => part.type === 'timeZoneName')?.value || 'GMT-5';
+    const offsetMatch = offsetLabel.match(/GMT([+-])(\\d{1,2})(?::(\\d{2}))?/);
+    const offsetMinutes = offsetMatch
+      ? (offsetMatch[1] === '+' ? 1 : -1) * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0))
+      : -300;
+    const localStart = new Date(wallClockUtc - offsetMinutes * 60000);
     if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
       setBookingError('Choose a future date and time.'); return;
     }
@@ -826,8 +838,18 @@ export default function SessionCalendar({
                   {bookingContacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name} — {contact.subject} ({contact.grade})</option>)}
                 </select>
                 {bookingContacts.length === 0 && <p className="muted">No accepted parent inquiries yet. Accept an inquiry first.</p>}
-                <label htmlFor="calendar-start">Start time (your device's local time)</label>
-                <input id="calendar-start" className="field" type="time" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required />
+                <label htmlFor="calendar-start">Start time (Eastern Time)</label>
+                <select id="calendar-start" className="field" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required>
+                  {Array.from({ length: 61 }, (_, index) => {
+                    const totalMinutes = 7 * 60 + index * 15;
+                    const hour = Math.floor(totalMinutes / 60);
+                    const minute = totalMinutes % 60;
+                    const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    const label = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+                    return <option key={value} value={value}>{label}</option>;
+                  })}
+                </select>
+                <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
                 <label htmlFor="calendar-duration">Duration</label>
                 <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
