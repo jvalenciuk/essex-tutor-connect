@@ -366,6 +366,15 @@ export default async function Dashboard() {
 
       <p className="muted">Account type: {who.role}</p>
 
+      {(isTutor || isParent) && (
+        <section className="card" style={{ marginTop: 28 }}>
+          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
+          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
+
+        </section>
+      )}
+
+
       {who.role === 'ADMIN' && (
         <section className="card">
           <h2>Administrator Tools</h2>
@@ -771,13 +780,6 @@ export default async function Dashboard() {
         </section>
       )}
 
-      {(isTutor || isParent) && (
-        <section className="card" style={{ marginTop: 28 }}>
-          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
-          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
-
-        </section>
-      )}
 
       {(isTutor || isParent) && (
         <section style={{ marginTop: 28 }}>
