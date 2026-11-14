@@ -252,6 +252,9 @@ export default function SessionCalendar({
 
   useEffect(() => {
     void loadCalendar();
+    const refreshAfterBookingChange = () => { void loadCalendar(); };
+    window.addEventListener('essex:bookings-updated', refreshAfterBookingChange);
+    return () => window.removeEventListener('essex:bookings-updated', refreshAfterBookingChange);
   }, [loadCalendar]);
 
   function changeMonth(
