@@ -5,6 +5,7 @@ import { identity, fail } from '../../../../lib/security';
 import { notifyBooking } from '../../../../lib/email';
 import { checkTutorSlot } from '../../../../lib/booking-conflicts';
 import { z } from 'zod';
+import { PAYMENT_WINDOW_MS } from '../../../../lib/payment-expiration';
 
 export const dynamic = 'force-dynamic';
 
@@ -187,7 +188,7 @@ export async function PATCH(
             parentId: who.id,
             startsAt: { gt: new Date() },
           },
-          data: { status: 'PENDING_PAYMENT' },
+          data: { status: 'PENDING_PAYMENT', paymentDueAt: new Date(Date.now() + PAYMENT_WINDOW_MS) },
         });
       });
     } catch (error) {
@@ -278,6 +279,7 @@ export async function PATCH(
             amountCents,
             platformFeeCents,
             status: 'PENDING_PAYMENT',
+            paymentDueAt: new Date(Date.now() + PAYMENT_WINDOW_MS),
             requestedStartsAt: null,
             requestedDurationMinutes: null,
             requestNote: null,
