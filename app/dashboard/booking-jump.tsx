@@ -5,8 +5,9 @@ type Props = { bookingId: string; inquiryId: string | null };
 export default function BookingJump({ bookingId, inquiryId }: Props) {
   function openBooking() {
     if (!inquiryId) return;
-    const conversation = document.getElementById('inquiry-' + inquiryId);
-    if (!(conversation instanceof HTMLDetailsElement)) return;
+    const anchor = document.getElementById('inquiry-' + inquiryId);
+    const conversation = anchor?.closest<HTMLDetailsElement>('details[data-conversation-group="true"]');
+    if (!conversation) return;
     let ancestor: HTMLElement | null = conversation;
     while (ancestor) {
       if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
