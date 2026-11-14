@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { useState, type FormEvent } from 'react';
 
-export default function Login() {
+function LoginForm() {
   const params = useSearchParams();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,4 +55,8 @@ export default function Login() {
       </form>
     </main>
   );
+}
+
+export default function Login() {
+  return <Suspense fallback={<main className="signup-page"><p>Loading sign in...</p></main>}><LoginForm /></Suspense>;
 }
