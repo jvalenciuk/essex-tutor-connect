@@ -792,76 +792,45 @@ export default async function Dashboard() {
             </div>
           )}
 
-          {conversationGroups.map(([accountId, conversations]) => (
-            <details className="card" key={accountId} style={{ marginBottom: 16 }}>
-              <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '10px 0' }}>
-                {isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name}
-                {' · '}{conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
-              </summary>
-              <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-              {conversations.map(inquiry => (
-            <details
-              className="card"
-              id={`inquiry-${inquiry.id}`}
-              key={inquiry.id}
-              
-              style={{ marginBottom: 8 }}
-            >
-              <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '8px 0', fontSize: '1.05rem' }}>
-                {inquiry.subject} — {inquiry.grade} · {isTutor ? inquiry.parent.name : inquiry.tutor.user.name} · {inquiry.status}
-              </summary>
-              <div style={{ marginTop: 12 }}>
-              <p>{inquiry.message}</p>
-
-              {isTutor ? (
-                <>
-                  <p>
-                    <strong>From:</strong>{' '}
-                    {inquiry.parent.name}
-                  </p>
-                  <InquiryActions
-                    inquiryId={inquiry.id}
-                    status={inquiry.status}
-                  />
-                </>
-              ) : (
-                <>
-                  <p>
-                    <strong>Tutor:</strong>{' '}
-                    {inquiry.tutor.user.name}
-                  </p>
-                  <p className="muted">
-                    Status: {inquiry.status}
-                  </p>
-                </>
-              )}
-
-              {inquiry.status === 'ACCEPTED' && (
-                <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
-                  <details style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
-                      Messages with {isTutor ? inquiry.parent.name : inquiry.tutor.user.name}
+          {conversationGroups.map(([accountId, conversations]) => {
+            const accepted = conversations.filter(inquiry => inquiry.status === 'ACCEPTED');
+            const primaryId = accepted[accepted.length - 1]?.id;
+            const inquiryIds = accepted.map(inquiry => inquiry.id);
+            const partnerName = isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name;
+            return (
+              <details className="card" data-conversation-group="true" key={accountId} style={{ marginBottom: 16 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '10px 0' }}>
+                  {partnerName}
+                </summary>
+                <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+                  <details>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                      Inquiry history ({conversations.length})
                     </summary>
-                    <div style={{ marginTop: 12 }}>
-                      <InquiryMessages inquiryId={inquiry.id} />
-                    </div>
+                    {conversations.map(inquiry => (
+                      <div id={`inquiry-${inquiry.id}`} key={inquiry.id} style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb' }}>
+                        <strong>{inquiry.subject} — {inquiry.grade} · {inquiry.status}</strong>
+                        <p>{inquiry.message}</p>
+                        {isTutor && <InquiryActions inquiryId={inquiry.id} status={inquiry.status} />}
+                      </div>
+                    ))}
                   </details>
-                  <details data-session-panel="true" style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
-                      Manage sessions and scheduling
-                    </summary>
-                    <div style={{ marginTop: 12 }}>
-                      <BookingManager inquiryId={inquiry.id} role={who.role} />
-                    </div>
-                  </details>
+                  {primaryId && (
+                    <>
+                      <details style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
+                        <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Messages with {partnerName}</summary>
+                        <InquiryMessages inquiryId={primaryId} inquiryIds={inquiryIds} />
+                      </details>
+                      <details data-session-panel="true" style={{ border: '1px solid #cbd5e1', borderRadius: 10, padding: '12px 14px' }}>
+                        <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Manage sessions and scheduling</summary>
+                        <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} />
+                      </details>
+                    </>
+                  )}
                 </div>
-              )}
-              </div>
-            </details>
-              ))}
-              </div>
-            </details>
-          ))}
+              </details>
+            );
+          })}
         </section>
       )}
     </main>
