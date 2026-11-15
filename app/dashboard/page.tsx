@@ -808,12 +808,14 @@ export default async function Dashboard() {
 
       {isTutor && acceptedInquiryItems.length > 0 && (
         <section className="card" style={{ marginTop: 20 }}>
-          <h2>Ready to schedule ({acceptedInquiryItems.length})</h2>
-          <p className="muted">These inquiries have been accepted. Open the conversation to propose a session or reply to the parent.</p>
-          {acceptedInquiryItems.slice(0, 8).map(inquiry => (
-            <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Schedule session</a></p>
-          ))}
-          <a href="#conversations">Open messages and scheduling</a>
+          <details>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Accepted inquiries — schedule another session ({acceptedInquiryItems.length})</summary>
+            <p className="muted">Open a conversation to propose another session or message the parent. Existing sessions are listed under My Sessions.</p>
+            {acceptedInquiryItems.slice(0, 8).map(inquiry => (
+              <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Open scheduling</a></p>
+            ))}
+            <a href="#conversations">Open messages and scheduling</a>
+          </details>
         </section>
       )}
 
