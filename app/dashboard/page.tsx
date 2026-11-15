@@ -384,7 +384,7 @@ export default async function Dashboard() {
           <a href="#dashboard-overview">Overview</a>
           <a href="#my-calendar">Calendar</a>
           {isParent && parentProposals.length > 0 && <a href="#my-calendar">Proposals ({parentProposals.length})</a>}
-          {isParent && <a href="#payments">Payments {awaitingPayment.length > 0 ? `(${awaitingPayment.length})` : ''}</a>}
+          {isParent && awaitingPayment.length > 0 && <a href="#payments">Payments ({awaitingPayment.length})</a>}
           {isTutor && <a href="#needs-attention">Needs attention</a>}
           <Link href="/dashboard/bookings">My Sessions</Link>
           <a href="#conversations">Messages &amp; inquiries</a>
