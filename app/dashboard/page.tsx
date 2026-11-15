@@ -657,16 +657,7 @@ export default async function Dashboard() {
             </div>
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Find a Tutor</h2>
-            <p>
-              Search for approved tutors, send inquiries,
-              and arrange your next tutoring session.
-            </p>
-            <SectionLink href="/tutors">
-              Find Tutors
-            </SectionLink>
-          </section>
+
 
           <section className="card" style={{ marginTop: 24 }}>
             <h2>Upcoming Sessions</h2>
@@ -718,7 +709,7 @@ export default async function Dashboard() {
           </section>
 
           <section className="card" style={{ marginTop: 24 }} id="payments">
-            <h2>Payments Awaiting Action</h2>
+            <h2>Payments Awaiting Action ({awaitingPayment.length})</h2>
 
             {awaitingPayment.length === 0 ? (
               <p>No payments are currently awaiting action.</p>
