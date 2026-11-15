@@ -854,7 +854,7 @@ export default async function Dashboard() {
                       </details>
                       <details open data-session-panel="true" className="conversation-panel">
                         <summary className="conversation-panel-summary">Tutoring sessions · scheduling and payments</summary>
-                        <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} />
+                        <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} tutorId={conversations[0].tutorId} />
                       </details>
                     </>
                   )}
