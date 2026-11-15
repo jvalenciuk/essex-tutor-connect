@@ -64,7 +64,7 @@ export default async function Admin() {
 
   // Retrieve sensitive information only after
   // checking the current database permissions.
-  const [tutors, bookings, bookingCounts] =
+  const [tutors, bookings, bookingCounts, failedNotifications] =
     await Promise.all([
       db.tutorProfile.findMany({
         include: {
@@ -114,6 +114,9 @@ export default async function Admin() {
           _all: true,
         },
       }),
+      db.notificationDelivery.count({
+        where: { type: 'PAYMENT_EXPIRED', status: 'FAILED' },
+      }),
     ]);
 
   const counts = Object.fromEntries(
@@ -161,7 +164,8 @@ export default async function Admin() {
   const attention = bookings.filter(
     booking =>
       booking.status === 'PENDING_PAYMENT' &&
-      booking.startsAt <= now
+      (booking.startsAt <= now ||
+        (booking.paymentDueAt !== null && booking.paymentDueAt <= now))
   );
 
   return (
@@ -199,6 +203,10 @@ export default async function Admin() {
             title: 'Refunded sessions',
             value: refundedBookings,
           },
+          {
+            title: 'Failed expiration emails',
+            value: failedNotifications,
+          },
         ].map(item => (
           <div className="card" key={item.title}>
             <p className="muted">
@@ -216,14 +224,14 @@ export default async function Admin() {
         <h2>Bookings needing attention</h2>
 
         <p className="muted">
-          Pending-payment bookings whose start time
-          has passed. Review their Stripe payment
-          status before taking further action.
+          Pending-payment bookings whose start time or payment deadline
+          has passed. Verify Stripe payment status before taking action.
+          Failed expiration emails are counted above.
         </p>
 
         {attention.length === 0 ? (
           <p>
-            No overdue payments in the recent
+            No overdue pending payments in the recent
             booking list.
           </p>
         ) : (
