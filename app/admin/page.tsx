@@ -64,7 +64,7 @@ export default async function Admin() {
 
   // Retrieve sensitive information only after
   // checking the current database permissions.
-  const [tutors, bookings, bookingCounts, failedNotifications] =
+  const [tutors, bookings, bookingCounts, failedNotifications, overduePayments] =
     await Promise.all([
       db.tutorProfile.findMany({
         include: {
@@ -116,6 +116,9 @@ export default async function Admin() {
       }),
       db.notificationDelivery.count({
         where: { type: 'PAYMENT_EXPIRED', status: 'FAILED' },
+      }),
+      db.booking.count({
+        where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: new Date() } },
       }),
     ]);
 
@@ -202,6 +205,10 @@ export default async function Admin() {
           {
             title: 'Refunded sessions',
             value: refundedBookings,
+          },
+          {
+            title: 'Overdue payment deadlines',
+            value: overduePayments,
           },
           {
             title: 'Failed expiration emails',
