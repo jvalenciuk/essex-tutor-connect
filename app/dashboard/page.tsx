@@ -9,6 +9,7 @@ import InquiryMessages from './inquiry-messages';
 import BookingManager from './booking-manager';
 import SessionCalendar from './session-calendar';
 import BookingJump from './booking-jump';
+import DirectPaymentButton from './direct-payment-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -753,11 +754,7 @@ export default async function Dashboard() {
                       {sessionDate(booking.startsAt)} —{' '}
                       {money(booking.amountCents)}
                     </p>
-                    <p className="muted">
-                      Open the corresponding accepted
-                      inquiry under Bookings &amp; Messages
-                      to pay securely.
-                    </p>
+                    <DirectPaymentButton bookingId={booking.id} amount={money(booking.amountCents)} />
                   </div>
                 ))}
               </>
