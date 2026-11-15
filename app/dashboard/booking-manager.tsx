@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import AvailableTimePicker from './available-time-picker';
 
 type Booking = {
   id: string;
@@ -26,6 +27,7 @@ type Props = {
   inquiryId: string;
   inquiryIds?: string[];
   role: string;
+  tutorId: string;
 };
 
 const DAY_MS = 86400000;
@@ -125,6 +127,7 @@ export default function BookingManager({
   inquiryId,
   inquiryIds,
   role,
+  tutorId,
 }: Props) {
   const router = useRouter();
   const ids = inquiryIds?.join(',') || inquiryId;
@@ -1161,7 +1164,7 @@ export default function BookingManager({
                 : 'You can schedule multiple sessions with the same parent. Choose a date and time within your availability.'}
             </p>
 
-            {dateFields()}
+            <AvailableTimePicker tutorId={tutorId} duration={duration} onDurationChange={setDuration} startsAt={startsAt} onStartsAtChange={setStartsAt} />
 
             <button
               type="button"
