@@ -20,6 +20,8 @@ export async function GET(req: Request) {
       cancelledWithCheckout,
       failedExpirationNotifications,
       pendingExpirationNotifications,
+      paidPastDeadline,
+      refundedWithoutCheckout,
     ] = await Promise.all([
       db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: now } } }),
       db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: null } }),
@@ -27,6 +29,8 @@ export async function GET(req: Request) {
       db.booking.count({ where: { status: 'CANCELLED', stripeSessionId: { not: null } } }),
       db.notificationDelivery.count({ where: { type: 'PAYMENT_EXPIRED', status: 'FAILED' } }),
       db.notificationDelivery.count({ where: { type: 'PAYMENT_EXPIRED', status: { in: ['PENDING', 'PROCESSING'] } } }),
+      db.booking.count({ where: { status: 'PAID', paymentDueAt: { lte: now } } }),
+      db.booking.count({ where: { status: 'REFUNDED', stripeSessionId: null } }),
     ]);
     return Response.json({
       success: true,
@@ -39,6 +43,8 @@ export async function GET(req: Request) {
         cancelledWithCheckout,
         failedExpirationNotifications,
         pendingExpirationNotifications,
+        paidPastDeadline,
+        refundedWithoutCheckout,
       },
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
