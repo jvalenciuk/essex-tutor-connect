@@ -23,7 +23,12 @@ jobs:
             echo "::notice::PREVIEW_CRON_SECRET is not configured. Add a repository Actions secret matching the Vercel Preview CRON_SECRET to enable this test."
             exit 0
           fi
-          curl --fail-with-body --show-error --silent \
+          curl --show-error --silent --fail-with-body \
             --retry 2 --retry-delay 5 --max-time 90 \
+            --dump-header /tmp/preview-expiration-headers \
             -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
-            "https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/expire-payments?dryRun=true"
+            "https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/expire-payments?dryRun=true" || { \
+              echo "Diagnostic response header:"; \
+              grep -i '^x-etc-auth-diagnostic:' /tmp/preview-expiration-headers || true; \
+              exit 1; \
+            }
