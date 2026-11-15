@@ -14,16 +14,30 @@ export function getConfiguredStripeSecret(): string | null {
 }
 
 
+// Tutor verification is deliberately permitted separately from card charging.
+// Enabling STRIPE_LIVE_ONBOARDING_ENABLED allows only Connect onboarding/status
+// with sk_live_; checkout/refunds continue requiring STRIPE_LIVE_ENABLED=true.
+export function getConfiguredStripeOnboardingSecret(): string | null {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return null;
+  if (process.env.VERCEL_ENV === 'production') {
+    return process.env.STRIPE_LIVE_ONBOARDING_ENABLED === 'true' &&
+      key.startsWith('sk_live_') ? key : null;
+  }
+  return key.startsWith('sk_test_') ? key : null;
+}
+
 // Account identifiers are isolated by payment mode. Existing stripeAccountId values
 // are legacy sandbox IDs and must NEVER be reused in Production Live Mode.
-// Production with payments disabled intentionally has no active connected account.
+// Live-mode account IDs remain separate from legacy sandbox account IDs.
 export function getActiveTutorStripeAccountId(profile: {
   stripeAccountId?: string | null;
   stripeLiveAccountId?: string | null;
 } | null | undefined): string | null {
   if (!profile) return null;
   if (process.env.VERCEL_ENV === 'production') {
-    return process.env.STRIPE_LIVE_ENABLED === 'true'
+    return process.env.STRIPE_LIVE_ENABLED === 'true' ||
+      process.env.STRIPE_LIVE_ONBOARDING_ENABLED === 'true'
       ? profile.stripeLiveAccountId ?? null
       : null;
   }

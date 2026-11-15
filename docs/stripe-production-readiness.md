@@ -59,3 +59,11 @@ Only after successful build, staging regression, environment separation, live we
 - Stripe must be configured to deliver the refund event types for connected accounts; without subscriptions, automatic reconciliation will not run.
 - A failed reconciliation returns an error so Stripe can retry, but operational alerting, durable discrepancy queues, and webhook replay tests remain **required** before launch.
 - The admin form is visible at `/admin` to current database administrators only; it verifies an existing refund and never creates one.
+
+
+## Gated live tutor onboarding (November 2026)
+- Legacy `TutorProfile.stripeAccountId` values are **sandbox only**. Existing booking session IDs and accounting history remain preserved, but do not authorize live payment actions.
+- New `TutorProfile.stripeLiveAccountId` is independently provisioned from Stripe Live Mode; existing tutors start with this field null.
+- `STRIPE_LIVE_ONBOARDING_ENABLED=true` permits approved tutors to create or continue Connect onboarding using an `sk_live_` key in Production. This alone does **not** authorize checkout, refunds or charge processing.
+- `STRIPE_LIVE_ENABLED=false` remains the payment gate. Do not set true until live webhook delivery, real payout eligibility, payment and refund tests, accounting reconciliation, and explicit authorization are complete.
+- Before inviting tutors, configure the Production live secret key securely in Vercel, verify connected-account configuration, and set the onboarding-only gate. Never copy a sandbox connected-account ID into the live field.

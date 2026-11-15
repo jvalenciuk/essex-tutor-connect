@@ -1,4 +1,4 @@
-import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeOnboardingSecret } from '../../lib/stripe-config';
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -50,7 +50,7 @@ async function getStripeStatus(
 
   if (!accountId) return empty;
 
-  const key = getConfiguredStripeSecret();
+  const key = getConfiguredStripeOnboardingSecret();
   if (!key) {
     return { ...empty, connected: true, error: 'Stripe configuration unavailable.' };
   }

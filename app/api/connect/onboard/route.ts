@@ -1,4 +1,4 @@
-import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeOnboardingSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
@@ -70,10 +70,10 @@ export async function POST() {
     return fail('Approved tutor profile required', 403);
   }
 
-  const secretKey = getConfiguredStripeSecret();
+  const secretKey = getConfiguredStripeOnboardingSecret();
 
   if (!secretKey) {
-    return fail('Stripe payments are not configured for this environment', 503);
+    return fail('Stripe tutor onboarding is not yet enabled for this environment', 503);
   }
 
   // Prefer the actual deployment host in preview, where APP_URL may be stale
