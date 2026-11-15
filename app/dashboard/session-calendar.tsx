@@ -695,11 +695,15 @@ export default function SessionCalendar({
               <button
                 key={dateKey}
                 type="button"
-                onClick={() =>
-                  setSelectedDate(
-                    dateKey
-                  )
-                }
+                onClick={() => {
+                  setSelectedDate(dateKey);
+                  window.requestAnimationFrame(() => {
+                    document.getElementById('calendar-selected-day')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
+                  });
+                }}
                 aria-pressed={
                   selected
                 }
@@ -817,9 +821,12 @@ export default function SessionCalendar({
       </div>
 
       <div
+        id="calendar-selected-day"
+        tabIndex={-1}
         style={{
           marginTop: 20,
           paddingTop: 12,
+          scrollMarginTop: 24,
           borderTop:
             '1px solid #ddd',
         }}
