@@ -349,6 +349,8 @@ export default async function Dashboard() {
     inquiry => inquiry.status === 'OPEN'
   ).length;
 
+  const pendingInquiryItems = inquiries.filter(inquiry => inquiry.status === 'OPEN');
+
   const activeParentInquiries = inquiries.filter(
     inquiry =>
       inquiry.status === 'OPEN' ||
@@ -389,11 +391,11 @@ export default async function Dashboard() {
         </div>
       )}
 
-      {isTutor && (tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && (
+      {isTutor && (openInquiries > 0 || tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && (
         <div className="dashboard-action-banner" role="status">
           <div>
             <strong>You have items needing attention</strong>
-            <p>{tutorNeedsResponse.length} scheduling {tutorNeedsResponse.length === 1 ? 'request' : 'requests'} and {overdueTutorSessions.length} {overdueTutorSessions.length === 1 ? 'session' : 'sessions'} to complete.</p>
+            <p>{openInquiries} new inquiries · {tutorNeedsResponse.length} scheduling requests · {overdueTutorSessions.length} sessions to complete.</p>
           </div>
           <a href="#needs-attention">Review items</a>
         </div>
@@ -756,6 +758,32 @@ export default async function Dashboard() {
         </section>
       )}
 
+
+      {isParent && pendingInquiryItems.length > 0 && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h2>Waiting for tutor response ({pendingInquiryItems.length})</h2>
+          <p className="muted">Your requests have been sent. The tutor must accept the inquiry before scheduling can begin.</p>
+          {pendingInquiryItems.slice(0, 5).map(inquiry => (
+            <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span></p>
+          ))}
+          <a href="#conversations">View inquiries and messages</a>
+        </section>
+      )}
+
+      {isTutor && pendingInquiryItems.length > 0 && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h2>New tutoring inquiries ({pendingInquiryItems.length})</h2>
+          <p className="muted">Review each request, then accept or decline. Accepting opens scheduling and messaging; it does not charge the parent.</p>
+          {pendingInquiryItems.slice(0, 10).map(inquiry => (
+            <div key={inquiry.id} style={{ padding: '12px 0', borderBottom: '1px solid #e5e7eb' }}>
+              <strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade}
+              <p style={{ whiteSpace: 'pre-wrap', margin: '8px 0' }}>{inquiry.message}</p>
+              <InquiryActions inquiryId={inquiry.id} status={inquiry.status} />
+            </div>
+          ))}
+          {pendingInquiryItems.length > 10 && <a href="#conversations">Review other inquiries</a>}
+        </section>
+      )}
 
       {isTutor && (
         <section className="card" style={{ marginTop: 24 }} id="needs-attention">
