@@ -276,7 +276,7 @@ export default function SessionCalendar({
     event.preventDefault();
     setBookingError('');
     setBookingNotice('');
-    if (!contactId) { setBookingError('Choose a parent.'); return; }
+    if (!contactId) { setBookingError(role === 'PARENT' ? 'Choose a tutor.' : 'Choose a parent.'); return; }
     // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
     const [hour, minute] = bookingTime.split(':').map(Number);
@@ -302,7 +302,7 @@ export default function SessionCalendar({
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
-      setBookingNotice('Session proposed. The parent can now review and accept it.');
+      setBookingNotice(role === 'PARENT' ? 'Session requested. Your tutor can review and respond.' : 'Session proposed. The parent can now review and accept it.');
       setShowBookingForm(false);
       await loadCalendar();
       window.dispatchEvent(new Event('essex:bookings-updated'));
@@ -854,21 +854,21 @@ export default function SessionCalendar({
             </p>
           )}
 
-        {role === 'TUTOR' && (
+        {(role === 'TUTOR' || role === 'PARENT') && (
           <div style={{ marginBottom: 16 }}>
             <button type="button" onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
-              {showBookingForm ? 'Close booking form' : '+ Book a session on this date'}
+              {showBookingForm ? 'Close booking form' : role === 'PARENT' ? '+ Request a session on this date' : '+ Propose a session on this date'}
             </button>
             {showBookingForm && (
               <form onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
                 <p><strong>New session · {selectedDate}</strong></p>
-                <p className="muted">Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.</p>
-                <label htmlFor="calendar-parent">Parent and subject</label>
+                <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
+                <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
                 <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
-                  <option value="">Select a parent</option>
+                  <option value="">{role === 'PARENT' ? 'Select a tutor' : 'Select a parent'}</option>
                   {bookingContacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name} — {contact.subject} ({contact.grade})</option>)}
                 </select>
-                {bookingContacts.length === 0 && <p className="muted">No accepted parent inquiries yet. Accept an inquiry first.</p>}
+                {bookingContacts.length === 0 && <p className="muted">{role === 'PARENT' ? 'No accepted tutor inquiries yet. Contact a tutor and wait for their acceptance first.' : 'No accepted parent inquiries yet. Accept an inquiry first.'}</p>}
                 <label htmlFor="calendar-start">Start time (Eastern Time)</label>
                 <select id="calendar-start" className="field" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required>
                   {Array.from({ length: 61 }, (_, index) => {
@@ -885,7 +885,7 @@ export default function SessionCalendar({
                 <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
                 </select>
-                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Creating...' : 'Propose session'}</button>
+                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Creating...' : role === 'PARENT' ? 'Request session' : 'Propose session'}</button>
                 {bookingError && <p role="alert" className="error">{bookingError}</p>}
               </form>
             )}
