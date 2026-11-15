@@ -207,6 +207,7 @@ export async function POST(req: Request) {
 
     if (
       booking.stripeSessionId !== session.id ||
+      session.metadata?.bookingId !== booking.id ||
       session.currency?.toLowerCase() !== 'cad' ||
       session.amount_total !== booking.amountCents
     ) {
