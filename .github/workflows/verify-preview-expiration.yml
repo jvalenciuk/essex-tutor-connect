@@ -1,4 +1,5 @@
 name: Verify preview payment expiration (one-time test)
+# Second isolated run verifies tracked PAYMENT_EXPIRED notifications.
 
 on:
   push:
