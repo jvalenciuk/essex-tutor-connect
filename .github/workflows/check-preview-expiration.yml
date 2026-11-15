@@ -1,0 +1,29 @@
+name: Check preview payment expiration (read-only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [stripe-testing]
+    paths:
+      - '.github/workflows/check-preview-expiration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview-expiration-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify preview endpoint without changing bookings
+        env:
+          PREVIEW_CRON_SECRET: ${{ secrets.PREVIEW_CRON_SECRET }}
+        run: |
+          if [ -z "$PREVIEW_CRON_SECRET" ]; then
+            echo "::notice::PREVIEW_CRON_SECRET is not configured. Add a repository Actions secret matching the Vercel Preview CRON_SECRET to enable this test."
+            exit 0
+          fi
+          curl --fail-with-body --show-error --silent \
+            --retry 2 --retry-delay 5 --max-time 90 \
+            -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
+            "https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/expire-payments?dryRun=true"
