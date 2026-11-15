@@ -689,16 +689,13 @@ export default function BookingManager({
               'TUTOR' &&
             beforeSession;
 
+          // Match the API's cancellation policy: parents may only cancel
+          // paid sessions at least 24 hours ahead; tutors may cancel
+          // their proposed or paid sessions before they begin.
           const canCancel =
-            (parentCanCancel ||
-              tutorCanCancel) &&
-            [
-              'PROPOSED',
-              'CHANGE_REQUESTED',
-              'PAID',
-            ].includes(
-              booking.status
-            );
+            (role === 'PARENT' && parentCanCancel && booking.status === 'PAID') ||
+            (role === 'TUTOR' && tutorCanCancel &&
+              ['PROPOSED', 'CHANGE_REQUESTED', 'PAID'].includes(booking.status));
 
           const info =
             statusInfo[
