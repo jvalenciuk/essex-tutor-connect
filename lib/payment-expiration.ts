@@ -50,6 +50,12 @@ export async function expireUnpaidBookings(tutorId?: string) {
         }
         if (session.payment_status === 'paid' || session.status === 'complete') {
           // A delayed webhook must still be allowed to confirm this payment.
+          // Keep the slot reserved and surface the discrepancy for investigation.
+          console.warn('PAID_CHECKOUT_PENDING_RECONCILIATION', {
+            bookingId: booking.id,
+            stripeSessionId: booking.stripeSessionId,
+            paymentDueAt: booking.paymentDueAt?.toISOString(),
+          });
           deferred++;
           continue;
         }
