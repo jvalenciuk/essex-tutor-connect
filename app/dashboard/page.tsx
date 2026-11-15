@@ -11,7 +11,6 @@ import SessionCalendar from './session-calendar';
 import BookingJump from './booking-jump';
 import DirectPaymentButton from './direct-payment-button';
 import ConversationDeepLink from './conversation-deep-link';
-import PreviewExpirationTest from './preview-expiration-test';
 
 export const dynamic = 'force-dynamic';
 
@@ -861,7 +860,6 @@ export default async function Dashboard() {
             ) : tutorWaitingForPayment.map(booking => (
               <p key={booking.id}>
                 {booking.parent.name} · {sessionDate(booking.startsAt)} · {money(booking.amountCents)}
-                {process.env.VERCEL_ENV === 'preview' && <PreviewExpirationTest bookingId={booking.id} />}
               </p>
             ))}
           </details>
