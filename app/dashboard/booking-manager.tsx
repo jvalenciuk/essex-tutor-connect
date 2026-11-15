@@ -141,6 +141,7 @@ export default function BookingManager({
     useState('');
   const [notice, setNotice] =
     useState('');
+  const [bookingFeedback, setBookingFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
   const [startsAt, setStartsAt] =
     useState('');
   const [duration, setDuration] =
@@ -234,11 +235,13 @@ export default function BookingManager({
     method: 'POST' | 'PATCH',
     payload: object,
     successMessage =
-      'Booking updated successfully.'
+      'Booking updated successfully.',
+    bookingId?: string
   ) {
     setBusy(true);
     setError('');
     setNotice('');
+    if (bookingId) setBookingFeedback(current => { const next = { ...current }; delete next[bookingId]; return next; });
 
     try {
       const response = await fetch(
@@ -271,13 +274,12 @@ export default function BookingManager({
       await loadBookings();
       window.dispatchEvent(new Event('essex:bookings-updated'));
       router.refresh();
-      setNotice(successMessage);
+      if (bookingId) setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'success', message: successMessage } }));
+      else setNotice(successMessage);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong.'
-      );
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      if (bookingId) setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'error', message } }));
+      else setError(message);
     } finally {
       setBusy(false);
     }
@@ -289,6 +291,7 @@ export default function BookingManager({
     setBusy(true);
     setError('');
     setNotice('');
+    setBookingFeedback(current => { const next = { ...current }; delete next[bookingId]; return next; });
 
     try {
       const response = await fetch(
@@ -333,20 +336,18 @@ export default function BookingManager({
         result.url
       );
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to start payment.'
-      );
+      setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'error', message: err instanceof Error ? err.message : 'Unable to start payment.' } }));
       setBusy(false);
     }
   }
 
-  function datePayload() {
+  function datePayload(bookingId?: string) {
+    const reportError = (message: string) => {
+      if (bookingId) setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'error', message } }));
+      else setError(message);
+    };
     if (!startsAt) {
-      setError(
-        'Please choose a date and time.'
-      );
+      reportError('Please choose a date and time.');
       return null;
     }
 
@@ -361,9 +362,7 @@ export default function BookingManager({
       ) ||
       date.getTime() <= Date.now()
     ) {
-      setError(
-        'Please choose a future date and time.'
-      );
+      reportError('Please choose a future date and time.');
       return null;
     }
 
@@ -372,9 +371,7 @@ export default function BookingManager({
       minutes < 30 ||
       minutes > 180
     ) {
-      setError(
-        'Choose a duration between 30 and 180 minutes.'
-      );
+      reportError('Choose a duration between 30 and 180 minutes.');
       return null;
     }
 
@@ -409,7 +406,7 @@ export default function BookingManager({
     bookingId: string
   ) {
     const details =
-      datePayload();
+      datePayload(bookingId);
 
     if (!details) return;
 
@@ -427,7 +424,9 @@ export default function BookingManager({
         ...(role === 'PARENT'
           ? { note }
           : {}),
-      }
+      },
+      'Session time request sent successfully.',
+      bookingId
     );
   }
 
@@ -443,7 +442,9 @@ export default function BookingManager({
         bookingId
       )}`,
       'PATCH',
-      { action }
+      { action },
+      action === 'ACCEPT' ? 'Session accepted. Complete payment to confirm.' : action === 'DECLINE' ? 'Session declined.' : 'Session marked completed.',
+      bookingId
     );
   }
 
@@ -471,7 +472,8 @@ export default function BookingManager({
       { action: 'CANCEL' },
       isPaid
         ? 'Cancellation processed. Stripe refund confirmed.'
-        : 'Booking cancelled successfully.'
+        : 'Booking cancelled successfully.',
+      booking.id
     );
   }
 
@@ -930,7 +932,8 @@ export default function BookingManager({
                             `/api/bookings/${encodeURIComponent(booking.id)}`,
                             'PATCH',
                             { action: 'ACCEPT_REQUESTED_TIME' },
-                            'Requested time accepted. The parent can now pay.'
+                            'Requested time accepted. The parent can now pay.',
+                            booking.id
                           );
                         }
                       }}
@@ -1070,6 +1073,12 @@ export default function BookingManager({
                     assistance.
                   </p>
                 )}
+
+              {bookingFeedback[booking.id] && (
+                <p role={bookingFeedback[booking.id].kind === 'error' ? 'alert' : 'status'} style={{ marginTop: 12, padding: '10px 12px', borderRadius: 6, background: bookingFeedback[booking.id].kind === 'error' ? '#fef2f2' : '#f0fdf4', color: bookingFeedback[booking.id].kind === 'error' ? '#b42318' : '#166534' }}>
+                  {bookingFeedback[booking.id].message}
+                </p>
+              )}
 
               {changingId ===
                 booking.id && (
