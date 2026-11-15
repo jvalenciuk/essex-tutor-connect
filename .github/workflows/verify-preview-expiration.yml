@@ -1,0 +1,31 @@
+name: Verify preview payment expiration (one-time test)
+
+on:
+  push:
+    branches: [stripe-testing]
+    paths:
+      - '.github/workflows/verify-preview-expiration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  expire-preview-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Expire eligible unpaid bookings on Preview
+        env:
+          PREVIEW_CRON_SECRET: ${{ secrets.PREVIEW_CRON_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          if [ -z "$PREVIEW_CRON_SECRET" ] || [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
+            echo "Missing Preview authentication secrets"
+            exit 1
+          fi
+          curl --fail-with-body --show-error --silent \
+            --retry 2 --retry-delay 5 --max-time 90 \
+            -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
+            -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" \
+            "https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/expire-payments"
