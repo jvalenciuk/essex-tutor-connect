@@ -49,6 +49,15 @@ export default async function Admin() {
     { label: 'Refunded', value: counts.REFUNDED || 0 },
     { label: 'Payment alerts', value: overdue + failedEmails },
   ];
+  // Show only the mode of the configured key, never its value or any credential.
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  const stripeKeyMode = stripeSecret?.startsWith('sk_live_') ? 'Live key configured'
+    : stripeSecret?.startsWith('sk_test_') ? 'Sandbox key configured'
+    : stripeSecret ? 'Unrecognized Stripe key' : 'Missing Stripe key';
+  const stripeLivePayments = process.env.STRIPE_LIVE_ENABLED === 'true';
+  const stripeLiveOnboarding = process.env.STRIPE_LIVE_ONBOARDING_ENABLED === 'true';
+  const stripeWebhookConfigured = Boolean(process.env.STRIPE_WEBHOOK_SECRET?.startsWith('whsec_'));
+  const tutorsWithLiveAccounts = tutors.filter(t => Boolean(t.stripeLiveAccountId)).length;
   const tableStyle = { width: '100%', borderCollapse: 'collapse' as const };
   const cellStyle = { padding: '10px 12px', borderBottom: '1px solid var(--border, #ddd)', textAlign: 'left' as const };
 
@@ -57,6 +66,19 @@ export default async function Admin() {
       <h1 style={{ marginBottom: 6 }}>Administrator Dashboard</h1>
       <p className="muted" style={{ marginTop: 0 }}>Tutor approvals, reservations and payments in one place.</p>
     </header>
+
+    <section className="card" style={{ marginBottom: 22 }}>
+      <h2 style={{ marginTop: 0 }}>Stripe Live Mode readiness</h2>
+      <p><strong>Production key:</strong> {stripeKeyMode}</p>
+      <p><strong>Live tutor onboarding:</strong> {stripeLiveOnboarding ? 'Enabled' : 'Disabled'}</p>
+      <p><strong>Live customer payments:</strong> {stripeLivePayments ? 'Enabled — real charges possible' : 'Disabled — real charges blocked'}</p>
+      <p><strong>Webhook signing secret:</strong> {stripeWebhookConfigured ? 'Configured (mode not verified)' : 'Missing or invalid format'}</p>
+      <p><strong>Connected live tutors:</strong> {tutorsWithLiveAccounts} of {tutors.length}</p>
+      {stripeLiveOnboarding && stripeKeyMode === 'Live key configured'
+        ? <p>Approved tutors can start Live Stripe onboarding. This does not guarantee that card payments or payouts are active.</p>
+        : <p className="muted">Live onboarding is gated until a Production live Stripe key and the onboarding flag have been verified. Do not enable payment processing merely to onboard tutors.</p>}
+      <p className="muted">Only configuration status is displayed; API keys and signing secrets are never revealed. Verify webhook deliveries, tutor eligibility, and payment reconciliation before enabling charges.</p>
+    </section>
 
     <section className="cards" style={{ marginBottom: 22 }}>
       {metrics.map(m => <div className="card" key={m.label} style={{ padding: 16 }}>
@@ -102,7 +124,7 @@ export default async function Admin() {
           <summary style={{ cursor: 'pointer', fontWeight: 600 }}>View approved and rejected tutors</summary>
           {tutors.filter(t => t.verification !== 'PENDING').map(t => <div key={t.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border, #ddd)' }}>
             <strong>{t.user.name}</strong> · {t.verification} · {t.user.email}
-            <p className="muted">{t.qualifications} · {t.subjects.join(', ')} · {t.grades.join(', ')} · {money(t.hourlyRateCents)}/hr · Stripe: {t.stripeAccountId ? 'Linked (payout status not verified)' : 'Not connected'}</p>
+            <p className="muted">{t.qualifications} · {t.subjects.join(', ')} · {t.grades.join(', ')} · {money(t.hourlyRateCents)}/hr · Stripe sandbox: {t.stripeAccountId ? 'Linked' : 'Not connected'} · Stripe Live: {t.stripeLiveAccountId ? 'Linked (payout status not verified)' : 'Not connected'}</p>
             <Verify id={t.id} />
           </div>)}
         </details>}
