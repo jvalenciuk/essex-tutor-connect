@@ -11,7 +11,7 @@ export async function GET(req: Request) {
     return new Response('Not configured', { status: 503 });
   }
   if (req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return new Response('Unauthorized', { status: 401 });
+    return Response.json({ error: 'Unauthorized', source: 'preview-expiration-route', configured: true, authorizationProvided: Boolean(req.headers.get('authorization')) }, { status: 401, headers: { 'Cache-Control': 'no-store', 'X-ETC-Auth-Diagnostic': 'route-secret-mismatch' } });
   }
 
   try {
