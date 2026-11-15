@@ -1,0 +1,29 @@
+name: Test unpaid booking expiration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-expire-payments.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-expiration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check production endpoint (read-only)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Missing CRON_SECRET repository secret"
+            exit 1
+          fi
+          curl --fail-with-body --show-error --silent \
+            --retry 2 --retry-delay 5 --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "https://essex-tutor-connect.vercel.app/api/cron/expire-unpaid-bookings"
