@@ -154,7 +154,7 @@ export default async function Tutors({
           marginBottom: 24,
         }}
       >
-        <h2>Find the right match</h2>
+        <h2 style={{ marginTop: 0 }}>Find the right match</h2>
 
         <div
           style={{
@@ -335,11 +335,7 @@ export default async function Tutors({
                 : 'Contact tutor about session location'}
             </p>
 
-            <h3>About this tutor</h3>
-
-            <p style={{ whiteSpace: 'pre-wrap' }}>
-              {tutor.bio}
-            </p>
+            <p style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{tutor.bio}</p>
 
             <div className="tutor-quick-facts">
               <div><strong>Subjects</strong><Tags items={tutor.subjects} /></div>
@@ -356,19 +352,8 @@ export default async function Tutors({
               <TutorAvailability tutorId={tutor.id} />
             </details>
 
-            <div
-              style={{
-                marginTop: 18,
-                paddingTop: 14,
-                borderTop: '1px solid #ddd',
-              }}
-            >
-              <h3>Interested in tutoring?</h3>
-
-              <p className="muted">
-                Contact this tutor to discuss your learning
-                goals. No payment is required to send an inquiry.
-              </p>
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #ddd' }}>
+              <p className="muted">Send a free inquiry to discuss tutoring and scheduling. No payment required.</p>
 
               <InquiryForm
                 tutorId={tutor.id}
