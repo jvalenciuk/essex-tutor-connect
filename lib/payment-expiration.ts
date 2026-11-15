@@ -79,6 +79,9 @@ export async function expireUnpaidBookings(tutorId?: string) {
       where: {
         id: booking.id,
         status: 'PENDING_PAYMENT',
+        // A new checkout session may have been attached while we checked Stripe.
+        // Never cancel that newer attempt based on an older session's state.
+        stripeSessionId: booking.stripeSessionId,
         paymentDueAt: { lte: now },
       },
       data: { status: 'CANCELLED' },
