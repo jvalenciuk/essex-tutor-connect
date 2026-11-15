@@ -2,7 +2,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from '../../../../lib/db';
 import { notifyBooking } from '../../../../lib/email';
-import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -115,12 +115,12 @@ export async function POST(req: Request) {
     try {
       const booking = await db.booking.findUnique({
         where: { id: bookingId },
-        include: { tutor: { select: { stripeAccountId: true } } },
+        include: { tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true } } },
       });
       if (
         !booking ||
         booking.status !== 'PAID' ||
-        booking.tutor.stripeAccountId !== event.account ||
+        getActiveTutorStripeAccountId(booking.tutor) !== event.account ||
         !booking.stripeSessionId ||
         refund.amount !== booking.amountCents ||
         typeof refund.payment_intent !== 'string'
@@ -193,7 +193,7 @@ export async function POST(req: Request) {
       include: {
         tutor: {
           select: {
-            stripeAccountId: true,
+            stripeAccountId: true, stripeLiveAccountId: true,
           },
         },
       },
@@ -224,7 +224,7 @@ export async function POST(req: Request) {
     // Payments use direct charges on connected accounts.
     if (
       !event.account ||
-      booking.tutor.stripeAccountId !== event.account
+      getActiveTutorStripeAccountId(booking.tutor) !== event.account
     ) {
       return new Response('Connected account mismatch', {
         status: 400,

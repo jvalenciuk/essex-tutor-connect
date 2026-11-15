@@ -1,6 +1,6 @@
 import { db } from '../../../../../lib/db';
 import { identity, fail } from '../../../../../lib/security';
-import { getConfiguredStripeSecret } from '../../../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../../../lib/stripe-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,7 +22,7 @@ export async function POST() {
   const bookings = await db.booking.findMany({
     where: { status: 'PAID', stripeSessionId: { not: null } },
     include: {
-      tutor: { select: { stripeAccountId: true, user: { select: { name: true } } } },
+      tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true, user: { select: { name: true } } } },
       parent: { select: { name: true } },
     },
     orderBy: { updatedAt: 'desc' },
@@ -40,7 +40,7 @@ export async function POST() {
   let unavailable = 0;
 
   for (const booking of bookings) {
-    const accountId = booking.tutor.stripeAccountId;
+    const accountId = getActiveTutorStripeAccountId(booking.tutor);
     if (!accountId || !booking.stripeSessionId) {
       unavailable++;
       continue;

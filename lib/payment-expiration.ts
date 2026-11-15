@@ -1,6 +1,6 @@
 import { db } from './db';
 import { notifyBooking } from './email';
-import { getConfiguredStripeSecret } from './stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from './stripe-config';
 
 const STRIPE = 'https://api.stripe.com/v1';
 export const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -14,7 +14,7 @@ export async function expireUnpaidBookings(tutorId?: string) {
       paymentDueAt: { lte: now },
       ...(tutorId ? { tutorId } : {}),
     },
-    include: { tutor: { select: { stripeAccountId: true } } },
+    include: { tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true } } },
     take: 100,
   });
   let expired = 0;
@@ -23,7 +23,7 @@ export async function expireUnpaidBookings(tutorId?: string) {
     // Never release a slot if payment might have succeeded.
     if (booking.stripeSessionId) {
       const secret = getConfiguredStripeSecret();
-      const account = booking.tutor.stripeAccountId;
+      const account = getActiveTutorStripeAccountId(booking.tutor);
       if (!secret || !account) { deferred++; continue; }
       try {
         const headers = {

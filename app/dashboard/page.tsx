@@ -1,3 +1,4 @@
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../lib/stripe-config';
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -49,7 +50,7 @@ async function getStripeStatus(
 
   if (!accountId) return empty;
 
-  const key = process.env.STRIPE_SECRET_KEY;
+  const key = getConfiguredStripeSecret();
   if (!key) {
     return { ...empty, connected: true, error: 'Stripe configuration unavailable.' };
   }
@@ -169,7 +170,7 @@ export default async function Dashboard() {
   const approved = profile?.verification === 'APPROVED';
 
   const stripe = approved
-    ? await getStripeStatus(profile?.stripeAccountId)
+    ? await getStripeStatus(getActiveTutorStripeAccountId(profile))
     : null;
 
   const profileComplete = Boolean(

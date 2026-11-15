@@ -74,7 +74,10 @@ model TutorProfile {
   online           Boolean      @default(false)
   verification     Verification @default(PENDING)
   qualifications   String       @default("")
+  // Legacy sandbox-only account. Never use for live charges.
   stripeAccountId  String?      @unique
+  // Independently onboarded real account; intentionally null for all existing tutors.
+  stripeLiveAccountId String?    @unique
 
   inquiries        Inquiry[]
   bookings         Booking[]
