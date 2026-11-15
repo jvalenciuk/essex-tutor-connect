@@ -380,6 +380,7 @@ export default async function Dashboard() {
         <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
           <a href="#dashboard-overview">Overview</a>
           <a href="#my-calendar">Calendar</a>
+          {isParent && parentProposals.length > 0 && <a href="#session-proposals">Proposals ({parentProposals.length})</a>}
           {isParent && <a href="#payments">Payments {awaitingPayment.length > 0 ? `(${awaitingPayment.length})` : ''}</a>}
           {isTutor && <a href="#needs-attention">Needs attention</a>}
           <Link href="/dashboard/bookings">My Sessions</Link>
