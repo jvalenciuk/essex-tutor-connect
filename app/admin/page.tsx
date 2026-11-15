@@ -16,7 +16,7 @@ export default async function Admin() {
   if (admin?.role !== 'ADMIN') return <main><h1>Access denied</h1><p>Administrator access is required.</p></main>;
 
   const now = new Date();
-  const [tutors, bookings, grouped, overdue, failedEmails] = await Promise.all([
+  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions] = await Promise.all([
     db.tutorProfile.findMany({
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
@@ -33,6 +33,9 @@ export default async function Admin() {
     db.booking.groupBy({ by: ['status'], _count: { _all: true } }),
     db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: now } } }),
     db.notificationDelivery.count({ where: { type: 'PAYMENT_EXPIRED', status: 'FAILED' } }),
+    db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: null } }),
+    db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_test_' } } }),
+    db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_live_' } } }),
   ]);
   const counts = Object.fromEntries(grouped.map(g => [g.status, g._count._all]));
   const pendingTutors = tutors.filter(t => t.verification === 'PENDING');
@@ -78,6 +81,17 @@ export default async function Admin() {
         ? <p>Approved tutors can start Live Stripe onboarding. This does not guarantee that card payments or payouts are active.</p>
         : <p className="muted">Live onboarding is gated until a Production live Stripe key and the onboarding flag have been verified. Do not enable payment processing merely to onboard tutors.</p>}
       <p className="muted">Only configuration status is displayed; API keys and signing secrets are never revealed. Verify webhook deliveries, tutor eligibility, and payment reconciliation before enabling charges.</p>
+    </section>
+
+    <section className="card" style={{ marginBottom: 22 }}>
+      <h2 style={{ marginTop: 0 }}>Production operations and delivery</h2>
+      <p><strong>Email delivery:</strong> {process.env.EMAIL_TEST_TO ? 'Testing mode — all notification emails are redirected to the test recipient' : 'No test redirect set — verify RESEND configuration before sending'}</p>
+      <p><strong>Unpaid bookings without deadline:</strong> {legacyPending} (grandfathered; automatic expiration does not change these)</p>
+      <p><strong>Overdue payment deadlines:</strong> {overdue}</p>
+      <p><strong>Historical Stripe Checkout sessions:</strong> {sandboxSessions} sandbox · {liveSessions} live</p>
+      <p><strong>Failed expiration notifications:</strong> {failedEmails}</p>
+      <p><strong>Scheduled expiration:</strong> Daily at 12:15 UTC via Vercel Cron. This does not guarantee exact 24-hour expiration; delayed or failed runs require attention.</p>
+      <p className="muted">Values reflect the current database. A configured cron schedule is not evidence that the job executed successfully. Review deployment logs and reconcile Stripe payment states before manually changing bookings.</p>
     </section>
 
     <section className="cards" style={{ marginBottom: 22 }}>
