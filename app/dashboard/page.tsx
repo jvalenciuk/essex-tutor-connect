@@ -10,6 +10,7 @@ import BookingManager from './booking-manager';
 import SessionCalendar from './session-calendar';
 import BookingJump from './booking-jump';
 import DirectPaymentButton from './direct-payment-button';
+import ConversationDeepLink from './conversation-deep-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -360,6 +361,7 @@ export default async function Dashboard() {
 
   return (
     <main>
+      <ConversationDeepLink />
       <h1>
         {isTutor
           ? 'Tutor Dashboard'
@@ -765,7 +767,7 @@ export default async function Dashboard() {
           <h2>Waiting for tutor response ({pendingInquiryItems.length})</h2>
           <p className="muted">Your requests have been sent. The tutor must accept the inquiry before scheduling can begin.</p>
           {pendingInquiryItems.slice(0, 5).map(inquiry => (
-            <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span></p>
+            <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span> · <Link href={`/dashboard?conversation=${encodeURIComponent(inquiry.tutorId)}&panel=inquiries`}>View inquiry</Link></p>
           ))}
           <a href="#conversations">View inquiries and messages</a>
         </section>
@@ -776,7 +778,7 @@ export default async function Dashboard() {
           <h2>Ready to schedule ({acceptedInquiryItems.length})</h2>
           <p className="muted">These inquiries have been accepted. Open the conversation to propose a session or reply to the parent.</p>
           {acceptedInquiryItems.slice(0, 8).map(inquiry => (
-            <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade}</p>
+            <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <Link href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Schedule session</Link></p>
           ))}
           <a href="#conversations">Open messages and scheduling</a>
         </section>
@@ -863,13 +865,13 @@ export default async function Dashboard() {
             const inquiryIds = accepted.map(inquiry => inquiry.id);
             const partnerName = isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name;
             return (
-              <details className="card conversation-card" data-conversation-group="true" key={accountId} style={{ marginBottom: 16 }}>
+              <details className="card conversation-card" data-conversation-group="true" data-conversation-id={accountId} key={accountId} style={{ marginBottom: 16 }}>
                 <summary className="conversation-summary">
                   <span>{partnerName}</span>
                   <span className="conversation-summary-meta">{accepted.length} accepted {accepted.length === 1 ? 'inquiry' : 'inquiries'}</span>
                 </summary>
                 <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-                  <details>
+                  <details data-inquiry-panel="true">
                     <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
                       Inquiry history ({conversations.length})
                     </summary>
@@ -883,7 +885,7 @@ export default async function Dashboard() {
                   </details>
                   {primaryId && (
                     <>
-                      <details className="conversation-panel">
+                      <details data-message-panel="true" className="conversation-panel">
                         <summary className="conversation-panel-summary">Messages with {partnerName}</summary>
                         <InquiryMessages inquiryId={primaryId} inquiryIds={inquiryIds} />
                       </details>
