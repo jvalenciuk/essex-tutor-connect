@@ -266,6 +266,27 @@ export async function POST(req: Request) {
       eventType: event.type,
     });
 
+    // Handle a race where expiration or cancellation changed the booking
+    // after the initial read but before the conditional payment update.
+    if (result.count === 0 && booking.status === 'PENDING_PAYMENT') {
+      const latest = await db.booking.findUnique({
+        where: { id: booking.id },
+        select: { status: true },
+      });
+      if (latest?.status !== 'PAID') {
+        console.error('PAYMENT_RECONCILIATION_REQUIRED', {
+          bookingId: booking.id,
+          latestStatus: latest?.status ?? 'MISSING',
+          stripeSessionId: session.id,
+          stripeEventId: event.id,
+          reason: 'Paid checkout raced with booking state change',
+        });
+        return new Response('Paid booking requires manual reconciliation', {
+          status: 409,
+        });
+      }
+    }
+
     // Only notify when this event actually changed the status.
     // Stripe may deliver the same event more than once.
     if (result.count === 1) {
