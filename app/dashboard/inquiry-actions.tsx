@@ -49,7 +49,7 @@ export default function InquiryActions({
   }
 
   if (currentStatus !== 'OPEN') {
-    return <p className="muted" role="status">{currentStatus === 'ACCEPTED' ? 'Accepted — scheduling and messaging are now available below.' : 'Inquiry declined.'}</p>;
+    return <div role="status"><p className="muted">{currentStatus === 'ACCEPTED' ? 'Accepted — you can now arrange a session.' : 'Inquiry declined.'}</p>{currentStatus === 'ACCEPTED' && <a href="#conversations">Open messages and scheduling</a>}</div>;
   }
 
   return (
