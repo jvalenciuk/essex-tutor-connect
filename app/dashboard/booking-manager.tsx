@@ -774,6 +774,14 @@ export default function BookingManager({
                 </div>
               )}
 
+              {booking.status === 'PENDING_PAYMENT' && booking.paymentDueAt && (
+                <p role="status" style={{ margin: '8px 0', color: new Date(booking.paymentDueAt).getTime() <= Date.now() ? '#b91c1c' : '#92400e', fontWeight: 600 }}>
+                  {new Date(booking.paymentDueAt).getTime() <= Date.now()
+                    ? 'Payment deadline passed. Refresh bookings to check the latest status.'
+                    : `Pay by ${formatDate(booking.paymentDueAt)} to keep this reservation.`}
+                </p>
+              )}
+
               <p style={{ margin: '8px 0', color: '#475569', fontSize: '0.92rem' }}>
                 {nextStep(booking.status, role)}
               </p>
