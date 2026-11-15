@@ -584,15 +584,45 @@ export default function BookingManager({
         minWidth: 0,
       }}
     >
-      <h3>
-        Tutoring sessions
-      </h3>
+      <h3>Session scheduling</h3>
 
       <p className="muted">
-        Manage session proposals,
-        scheduling, and secure
-        payments here.
+        Request a time, respond to proposals, and pay securely after both sides agree.
       </p>
+
+      {(role === 'TUTOR' || role === 'PARENT') &&
+        !loading && (
+          <div
+            className="card"
+            style={{ marginTop: 16, marginBottom: 20 }}
+          >
+            <h3>
+              {role === 'PARENT' ? 'Request a tutoring session' : 'Propose another tutoring session'}
+            </h3>
+
+            <p className="muted">
+              {role === 'PARENT'
+                ? 'Choose a preferred date and time. Your tutor can accept it or suggest an alternative. No payment is required until the tutor accepts.'
+                : 'You can schedule multiple sessions with the same parent. Choose a date and time within your availability.'}
+            </p>
+
+            <AvailableTimePicker tutorId={tutorId} duration={duration} onDurationChange={setDuration} startsAt={startsAt} onStartsAtChange={setStartsAt} />
+
+            <button
+              type="button"
+              disabled={
+                busy
+              }
+              onClick={
+                submitProposal
+              }
+            >
+              {busy
+                ? 'Submitting...'
+                : role === 'PARENT' ? 'Request session' : 'Propose session'}
+            </button>
+          </div>
+        )}
 
       {loading && (
         <p>
@@ -1146,41 +1176,6 @@ export default function BookingManager({
         </details>
       )}
 
-      {(role === 'TUTOR' || role === 'PARENT') &&
-        !loading && (
-          <div
-            className="card"
-            style={{
-              marginTop: 16,
-            }}
-          >
-            <h3>
-              {role === 'PARENT' ? 'Request a tutoring session' : 'Propose another tutoring session'}
-            </h3>
-
-            <p className="muted">
-              {role === 'PARENT'
-                ? 'Choose a preferred date and time. Your tutor can accept it or suggest an alternative. No payment is required until the tutor accepts.'
-                : 'You can schedule multiple sessions with the same parent. Choose a date and time within your availability.'}
-            </p>
-
-            <AvailableTimePicker tutorId={tutorId} duration={duration} onDurationChange={setDuration} startsAt={startsAt} onStartsAtChange={setStartsAt} />
-
-            <button
-              type="button"
-              disabled={
-                busy
-              }
-              onClick={
-                submitProposal
-              }
-            >
-              {busy
-                ? 'Submitting...'
-                : role === 'PARENT' ? 'Request session' : 'Propose session'}
-            </button>
-          </div>
-        )}
 
       <button
         type="button"
