@@ -656,6 +656,13 @@ export default function BookingManager({
           )}
           {group.items.map(
         booking => {
+          const hasReservedTimeConflict = booking.status === 'PROPOSED' && bookings.some(other => {
+            if (other.id === booking.id || !['PAID', 'PENDING_PAYMENT'].includes(other.status)) return false;
+            const start = new Date(booking.startsAt).getTime();
+            const otherStart = new Date(other.startsAt).getTime();
+            return start < otherStart + other.durationMinutes * 60000 && otherStart < start + booking.durationMinutes * 60000;
+          });
+
           const startTime =
             new Date(
               booking.startsAt
@@ -755,6 +762,12 @@ export default function BookingManager({
                   {info.label}
                 </span>
               </div>
+
+              {hasReservedTimeConflict && (
+                <p role="status" style={{ margin: '10px 0', padding: '10px 12px', borderRadius: 6, background: '#fffbeb', color: '#92400e' }}>
+                  This proposed time overlaps another confirmed or awaiting-payment session. Request a different time instead of accepting this proposal.
+                </p>
+              )}
 
               {['PROPOSED', 'CHANGE_REQUESTED', 'PENDING_PAYMENT', 'PAID'].includes(booking.status) && (
                 <div aria-label="Booking progress" style={{ display: 'flex', gap: 6, margin: '10px 0' }}>
