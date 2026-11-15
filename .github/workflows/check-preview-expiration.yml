@@ -21,8 +21,8 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           if [ -z "$PREVIEW_CRON_SECRET" ]; then
-            echo "::notice::PREVIEW_CRON_SECRET is not configured. Add a repository Actions secret matching the Vercel Preview CRON_SECRET to enable this test."
-            exit 0
+            echo "PREVIEW_CRON_SECRET is missing; refusing to report a false-positive test pass."
+            exit 1
           fi
           if [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
             echo "Missing VERCEL_AUTOMATION_BYPASS_SECRET repository secret"
