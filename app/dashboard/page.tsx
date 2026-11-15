@@ -350,6 +350,7 @@ export default async function Dashboard() {
   ).length;
 
   const pendingInquiryItems = inquiries.filter(inquiry => inquiry.status === 'OPEN');
+  const acceptedInquiryItems = inquiries.filter(inquiry => inquiry.status === 'ACCEPTED');
 
   const activeParentInquiries = inquiries.filter(
     inquiry =>
@@ -767,6 +768,17 @@ export default async function Dashboard() {
             <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span></p>
           ))}
           <a href="#conversations">View inquiries and messages</a>
+        </section>
+      )}
+
+      {isTutor && acceptedInquiryItems.length > 0 && (
+        <section className="card" style={{ marginTop: 20 }}>
+          <h2>Ready to schedule ({acceptedInquiryItems.length})</h2>
+          <p className="muted">These inquiries have been accepted. Open the conversation to propose a session or reply to the parent.</p>
+          {acceptedInquiryItems.slice(0, 8).map(inquiry => (
+            <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade}</p>
+          ))}
+          <a href="#conversations">Open messages and scheduling</a>
         </section>
       )}
 
