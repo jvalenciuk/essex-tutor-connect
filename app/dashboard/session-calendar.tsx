@@ -143,8 +143,7 @@ export default function SessionCalendar({
   const [bookingNotice, setBookingNotice] = useState('');
   const [bookingError, setBookingError] = useState('');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
-  const [calendarActionError, setCalendarActionError] = useState('');
-  const [calendarActionNotice, setCalendarActionNotice] = useState('');
+  const [calendarFeedback, setCalendarFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
 
   const [bookings, setBookings] =
     useState<CalendarBooking[]>([]);
@@ -348,8 +347,7 @@ export default function SessionCalendar({
   async function acceptCalendarProposal(booking: CalendarBooking) {
     if (acceptingId) return;
     setAcceptingId(booking.id);
-    setCalendarActionError('');
-    setCalendarActionNotice('');
+    setCalendarFeedback(current => { const next = { ...current }; delete next[booking.id]; return next; });
     try {
       const response = await fetch(`/api/bookings/${encodeURIComponent(booking.id)}`, {
         method: 'PATCH',
@@ -360,9 +358,9 @@ export default function SessionCalendar({
       if (!response.ok) throw new Error(result.error || 'Unable to accept the proposal.');
       await loadCalendar();
       window.dispatchEvent(new Event('essex:bookings-updated'));
-      setCalendarActionNotice('Session accepted. Complete payment within 24 hours to confirm your booking.');
+      setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'success', message: 'Session accepted. Complete payment within 24 hours to confirm your booking.' } }));
     } catch (error) {
-      setCalendarActionError(error instanceof Error ? error.message : 'Unable to accept the proposal.');
+      setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'error', message: error instanceof Error ? error.message : 'Unable to accept the proposal.' } }));
     } finally {
       setAcceptingId(null);
     }
@@ -904,8 +902,6 @@ export default function SessionCalendar({
             </p>
           )}
 
-        {calendarActionError && <p role="alert" style={{ color: '#b91c1c' }}>{calendarActionError}</p>}
-        {calendarActionNotice && <p role="status" style={{ color: '#15803d' }}>{calendarActionNotice}</p>}
         {!loading && selectedBookings.length > 0 && (
           <details key={selectedDate} open={selectedBookings.length === 1 ? true : undefined}
             style={{ border: selectedBookings.length > 1 ? '1px solid #cbd5e1' : 'none', borderRadius: 8, padding: selectedBookings.length > 1 ? '12px 14px' : 0 }}>
@@ -1033,6 +1029,11 @@ export default function SessionCalendar({
                       </button>
                     )}
                   </div>
+                  {calendarFeedback[booking.id] && (
+                    <p role={calendarFeedback[booking.id].kind === 'error' ? 'alert' : 'status'} style={{ marginTop: 10, padding: '10px 12px', borderRadius: 6, background: calendarFeedback[booking.id].kind === 'error' ? '#fef2f2' : '#f0fdf4', color: calendarFeedback[booking.id].kind === 'error' ? '#b42318' : '#166534' }}>
+                      {calendarFeedback[booking.id].message}
+                    </p>
+                  )}
                   {expandedBookingId === booking.id && (
                     <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
                       <p><strong>Session:</strong> {booking.inquiry?.subject || 'Tutoring'} · {booking.inquiry?.grade || 'Grade not specified'}</p>
