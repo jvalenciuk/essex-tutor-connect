@@ -1,4 +1,5 @@
 import { db } from './db';
+import { notifyBooking } from './email';
 import { getConfiguredStripeSecret } from './stripe-config';
 
 const STRIPE = 'https://api.stripe.com/v1';
@@ -65,6 +66,14 @@ export async function expireUnpaidBookings(tutorId?: string) {
       data: { status: 'CANCELLED' },
     });
     expired += result.count;
+    if (result.count) {
+      try {
+        await notifyBooking(booking.id, 'PAYMENT_EXPIRED');
+      } catch (error) {
+        // Expiration remains committed even if email delivery is unavailable.
+        console.error('Payment expiration email failed', booking.id, error);
+      }
+    }
   }
   return { scanned: bookings.length, expired, deferred };
 }
