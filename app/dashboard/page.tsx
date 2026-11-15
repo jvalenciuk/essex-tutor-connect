@@ -857,7 +857,7 @@ export default async function Dashboard() {
             tutorNeedsResponse.map(booking => (
               <p key={booking.id}>
                 <strong>{booking.parent.name}</strong> · {booking.inquiry?.subject || 'Tutoring'}
-                {' — '}requested a time change for {sessionDate(booking.startsAt)}
+                {' — '}requested {sessionDate(booking.requestedStartsAt || booking.startsAt)}
                 {' · '}<BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
               </p>
             ))
