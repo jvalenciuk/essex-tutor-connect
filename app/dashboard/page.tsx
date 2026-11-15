@@ -806,6 +806,7 @@ export default async function Dashboard() {
       {(isTutor || isParent) && (
         <section style={{ marginTop: 28 }} id="conversations">
           <h2>Messages &amp; Inquiries</h2>
+          <p><Link href="/dashboard/bookings">View all sessions and payments</Link></p>
           <p className="muted">
             Choose a conversation to message a tutor or parent, review inquiries, or manage scheduling. For a quick view of all bookings, open My Sessions.
           </p>
@@ -822,7 +823,7 @@ export default async function Dashboard() {
             const inquiryIds = accepted.map(inquiry => inquiry.id);
             const partnerName = isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name;
             return (
-              <details className="card conversation-card" data-conversation-group="true" key={accountId} open={conversationGroups.length === 1 ? true : undefined} style={{ marginBottom: 16 }}>
+              <details className="card conversation-card" data-conversation-group="true" key={accountId} style={{ marginBottom: 16 }}>
                 <summary className="conversation-summary">
                   <span>{partnerName}</span>
                   <span className="conversation-summary-meta">{accepted.length} accepted {accepted.length === 1 ? 'inquiry' : 'inquiries'}</span>
@@ -846,7 +847,7 @@ export default async function Dashboard() {
                         <summary className="conversation-panel-summary">Messages with {partnerName}</summary>
                         <InquiryMessages inquiryId={primaryId} inquiryIds={inquiryIds} />
                       </details>
-                      <details open data-session-panel="true" className="conversation-panel">
+                      <details data-session-panel="true" className="conversation-panel">
                         <summary className="conversation-panel-summary">Tutoring sessions · scheduling and payments</summary>
                         <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} tutorId={conversations[0].tutorId} />
                       </details>
