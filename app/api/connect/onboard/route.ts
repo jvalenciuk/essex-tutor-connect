@@ -1,4 +1,4 @@
-import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
@@ -94,7 +94,7 @@ export async function POST() {
   }
 
   try {
-    let accountId = profile.stripeAccountId;
+    let accountId = getActiveTutorStripeAccountId(profile);
 
     if (!accountId) {
       const account = await stripeRequest(
@@ -139,7 +139,9 @@ export async function POST() {
       await db.tutorProfile.update({
         where: { id: profile.id },
         data: {
-          stripeAccountId: accountId,
+          ...(process.env.VERCEL_ENV === 'production'
+            ? { stripeLiveAccountId: accountId }
+            : { stripeAccountId: accountId }),
         },
       });
     }

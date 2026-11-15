@@ -1,4 +1,4 @@
-import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
@@ -548,7 +548,7 @@ export async function PATCH(
       return fail('This booking cannot be cancelled', 409);
     }
 
-    const accountId = booking.tutor.stripeAccountId;
+    const accountId = getActiveTutorStripeAccountId(booking.tutor);
     const sessionId = booking.stripeSessionId;
     const secret = getConfiguredStripeSecret();
 

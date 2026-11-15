@@ -1,6 +1,6 @@
 import { db } from '../../../../../lib/db';
 import { identity, fail } from '../../../../../lib/security';
-import { getConfiguredStripeSecret } from '../../../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../../../lib/stripe-config';
 import { notifyBooking } from '../../../../../lib/email';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
   const booking = await db.booking.findUnique({
     where: { id: bookingId },
-    include: { tutor: { select: { stripeAccountId: true } } },
+    include: { tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true } } },
   });
   if (!booking) return fail('Booking not found', 404);
   if (booking.status === 'REFUNDED') {
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   }
   if (booking.status !== 'PAID') return fail('Booking is not eligible for refund reconciliation', 409);
 
-  const accountId = booking.tutor.stripeAccountId;
+  const accountId = getActiveTutorStripeAccountId(booking.tutor);
   if (!accountId || !booking.stripeSessionId) return fail('Stripe references missing', 409);
 
   try {

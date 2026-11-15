@@ -1,4 +1,4 @@
-import { getConfiguredStripeSecret } from '../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from '../../../lib/stripe-config';
 import { expireUnpaidBookings } from '../../../lib/payment-expiration';
 
 import { db } from '../../../lib/db';
@@ -138,7 +138,7 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!booking.tutor.stripeAccountId) {
+  if (!getActiveTutorStripeAccountId(booking.tutor)) {
     return fail(
       'This tutor has not completed payment setup. Please try again after the tutor connects Stripe.',
       409
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const accountId = booking.tutor.stripeAccountId;
+  const accountId = getActiveTutorStripeAccountId(booking.tutor)!;
 
   // Do not start Checkout unless Stripe confirms card payments are active.
   // Payout restrictions alone do not prevent card payments.
