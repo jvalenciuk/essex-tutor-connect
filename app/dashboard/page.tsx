@@ -333,7 +333,10 @@ export default async function Dashboard() {
           where: {
             tutorId: profile.id,
             status: { in: ['CHANGE_REQUESTED', 'PROPOSED', 'PENDING_PAYMENT'] },
-            startsAt: { gte: now },
+            OR: [
+              { startsAt: { gte: now } },
+              { status: 'CHANGE_REQUESTED', requestedStartsAt: { gte: now } },
+            ],
           },
           include: {
             parent: { select: { name: true } },
