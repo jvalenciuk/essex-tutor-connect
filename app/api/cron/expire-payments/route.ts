@@ -1,4 +1,5 @@
 import { expireUnpaidBookings } from '../../../../lib/payment-expiration';
+import { db } from '../../../../lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -14,6 +15,16 @@ export async function GET(req: Request) {
   }
 
   try {
+    const dryRun = new URL(req.url).searchParams.get('dryRun') === 'true';
+    if (dryRun) {
+      const [eligible, legacy] = await Promise.all([
+        db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: new Date() } } }),
+        db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: null } }),
+      ]);
+      return Response.json({ success: true, dryRun: true, eligible, legacyUnchanged: legacy }, {
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
     const expiration = await expireUnpaidBookings();
     return Response.json({ success: true, expiration }, {
       headers: { 'Cache-Control': 'no-store' },
