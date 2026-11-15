@@ -383,7 +383,7 @@ export default async function Dashboard() {
         <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
           <a href="#dashboard-overview">Overview</a>
           <a href="#my-calendar">Calendar</a>
-          {isParent && parentProposals.length > 0 && <a href="#session-proposals">Proposals ({parentProposals.length})</a>}
+          {isParent && parentProposals.length > 0 && <a href="#my-calendar">Proposals ({parentProposals.length})</a>}
           {isParent && <a href="#payments">Payments {awaitingPayment.length > 0 ? `(${awaitingPayment.length})` : ''}</a>}
           {isTutor && <a href="#needs-attention">Needs attention</a>}
           <Link href="/dashboard/bookings">My Sessions</Link>
@@ -398,7 +398,7 @@ export default async function Dashboard() {
             <strong>{parentProposals.length} {parentProposals.length === 1 ? 'session proposal needs' : 'session proposals need'} your response</strong>
             <p>Review the tutor's proposed time before confirming a booking.</p>
           </div>
-          <a href="#session-proposals">Review proposals</a>
+          <a href="#my-calendar">Review in calendar</a>
         </div>
       )}
 
@@ -740,26 +740,11 @@ export default async function Dashboard() {
             )}
           </section>
 
-          {parentProposals.length > 0 && (
-            <section className="card" id="session-proposals" style={{ marginTop: 24 }}>
-              <h2>Session proposals awaiting your response ({parentProposals.length})</h2>
-              <p className="muted">Review the tutor's proposed date and time. You can accept or request a change before payment.</p>
-              {parentProposals.map(booking => (
-                <div key={booking.id} style={{ padding: '12px 0', borderBottom: '1px solid #e5e7eb' }}>
-                  <strong>{booking.tutor.user.name}</strong> · {booking.inquiry?.subject || 'Tutoring'}
-                  <p>{sessionDate(booking.startsAt)} · {booking.durationMinutes} minutes · {money(booking.amountCents)}</p>
-                  <BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
-                </div>
-              ))}
-            </section>
-          )}
 
+
+          {awaitingPayment.length > 0 && (
           <section className="card" style={{ marginTop: 24 }} id="payments">
             <h2>Payments Awaiting Action ({awaitingPayment.length})</h2>
-
-            {awaitingPayment.length === 0 ? (
-              <p>No payments are currently awaiting action.</p>
-            ) : (
               <>
                 <p className="muted">
                   Your tutor has accepted these bookings. Pay securely below to confirm your session.
@@ -790,8 +775,8 @@ export default async function Dashboard() {
                   </div>
                 ))}
               </>
-            )}
           </section>
+          )}
         </>
       )}
 
