@@ -65,6 +65,16 @@ export async function expireUnpaidBookings(tutorId?: string) {
             { method: 'POST', headers, cache: 'no-store' }
           );
           if (!expire.ok) { deferred++; continue; }
+          const expiredSession = await expire.json();
+          if (
+            expiredSession.id !== booking.stripeSessionId ||
+            expiredSession.status !== 'expired' ||
+            expiredSession.payment_status === 'paid'
+          ) {
+            console.error('Stripe checkout expiration was not confirmed', booking.id);
+            deferred++;
+            continue;
+          }
         } else if (session.status !== 'expired') {
           deferred++;
           continue;
