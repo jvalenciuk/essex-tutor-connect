@@ -36,6 +36,18 @@ export async function expireUnpaidBookings(tutorId?: string) {
         );
         if (!response.ok) { deferred++; continue; }
         const session = await response.json();
+        // Do not cancel or expire a Stripe session that is not provably
+        // associated with this booking, amount and connected account.
+        if (
+          session.id !== booking.stripeSessionId ||
+          session.metadata?.bookingId !== booking.id ||
+          session.amount_total !== booking.amountCents ||
+          session.currency?.toLowerCase() !== 'cad'
+        ) {
+          console.error('Stripe expiration session mismatch', booking.id);
+          deferred++;
+          continue;
+        }
         if (session.payment_status === 'paid' || session.status === 'complete') {
           // A delayed webhook must still be allowed to confirm this payment.
           deferred++;
