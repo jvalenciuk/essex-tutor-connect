@@ -586,9 +586,7 @@ export default function BookingManager({
     >
       <h3>Session scheduling</h3>
 
-      <p className="muted">
-        Request a time, respond to proposals, and pay securely after both sides agree.
-      </p>
+      <p className="muted">Request a time, agree on scheduling, then pay securely to confirm.</p>
 
       {(role === 'TUTOR' || role === 'PARENT') &&
         !loading && (
@@ -758,6 +756,23 @@ export default function BookingManager({
                   {info.label}
                 </span>
               </div>
+
+              {['PROPOSED', 'CHANGE_REQUESTED', 'PENDING_PAYMENT', 'PAID'].includes(booking.status) && (
+                <div aria-label="Booking progress" style={{ display: 'flex', gap: 6, margin: '10px 0' }}>
+                  {[
+                    { label: 'Time proposed', done: true },
+                    { label: 'Time agreed', done: ['PENDING_PAYMENT', 'PAID'].includes(booking.status) },
+                    { label: 'Payment complete', done: booking.status === 'PAID' },
+                  ].map(step => (
+                    <span key={step.label} title={step.label} style={{
+                      flex: 1, padding: '7px 5px', textAlign: 'center', borderRadius: 6,
+                      fontSize: '0.75rem', fontWeight: step.done ? 700 : 400,
+                      background: step.done ? '#dcfce7' : '#f1f5f9',
+                      color: step.done ? '#166534' : '#475569',
+                    }}>{step.done ? '✓ ' : ''}{step.label}</span>
+                  ))}
+                </div>
+              )}
 
               <p style={{ margin: '8px 0', color: '#475569', fontSize: '0.92rem' }}>
                 {nextStep(booking.status, role)}
