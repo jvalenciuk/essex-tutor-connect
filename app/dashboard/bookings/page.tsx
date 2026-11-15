@@ -79,6 +79,7 @@ export default function MyBookingsPage() {
 
   const [role, setRole] = useState<Role>('');
   const [activeTab, setActiveTab] = useState<BookingTab>('action');
+  const [search, setSearch] = useState('');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -354,6 +355,13 @@ export default function MyBookingsPage() {
     { id: 'history', title: 'History', count: history.length, empty: 'No previous bookings yet.', items: history },
   ];
   const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
+  const filteredItems = selectedTab.items.filter(booking => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return [booking.parent?.name, booking.tutor?.user?.name, booking.inquiry?.subject,
+      booking.inquiry?.grade, labels[booking.status], booking.status,
+      dateText(booking.startsAt)].some(value => value?.toLowerCase().includes(query));
+  });
 
   function BookingCard({ booking }: { booking: Booking }) {
     const start = new Date(booking.startsAt).getTime();
@@ -422,20 +430,12 @@ export default function MyBookingsPage() {
           </strong>
         </div>
 
-        {booking.parent?.name && (
-          <p>Parent: {booking.parent.name}</p>
-        )}
-
-        {booking.tutor?.user?.name && (
-          <p>Tutor: {booking.tutor.user.name}</p>
-        )}
-
-        {booking.inquiry?.grade && (
-          <p>Grade: {booking.inquiry.grade}</p>
-        )}
-
-        <p>Duration: {booking.durationMinutes} minutes</p>
-        <p>Session price: {money(booking.amountCents)}</p>
+        <p style={{ margin: '10px 0' }}>
+          {booking.parent?.name && <span>Parent: {booking.parent.name} · </span>}
+          {booking.tutor?.user?.name && <span>Tutor: {booking.tutor.user.name} · </span>}
+          {booking.inquiry?.grade && <span>{booking.inquiry.grade} · </span>}
+          {booking.durationMinutes} min · <strong>{money(booking.amountCents)}</strong>
+        </p>
 
         {isTutor && (
           <p className="muted">
@@ -768,7 +768,7 @@ export default function MyBookingsPage() {
     >
       <Link href="/dashboard">Back to Dashboard</Link>
 
-      <h1>My Bookings</h1>
+      <h1>My Sessions</h1>
 
       <p className="muted">
         View confirmed sessions, respond to scheduling requests, and manage payments in one place.
@@ -788,12 +788,18 @@ export default function MyBookingsPage() {
         ))}
       </nav>
 
-      <button
-        disabled={loading || busyId !== null}
-        onClick={() => void load()}
-      >
-        {loading ? 'Loading...' : 'Refresh Bookings'}
-      </button>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16 }}>
+        <input
+          aria-label="Search sessions"
+          placeholder="Search tutor, parent, subject or date"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: '1 1 250px', padding: '11px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
+        />
+        <button disabled={loading || busyId !== null} onClick={() => void load()}>
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
 
       {!role && !loading && (
         <p className="muted">
@@ -817,8 +823,8 @@ export default function MyBookingsPage() {
       {!loading && (
         <Section
           title={selectedTab.title}
-          items={selectedTab.items}
-          empty={selectedTab.empty}
+          items={filteredItems}
+          empty={search.trim() ? 'No sessions match your search.' : selectedTab.empty}
         />
       )}
     </main>
