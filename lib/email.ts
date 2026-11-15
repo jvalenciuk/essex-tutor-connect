@@ -89,16 +89,15 @@ async function sendEmail(
     : null;
 }
 
-async function sendTrackedReminder(
+async function sendTrackedNotification(
   bookingId: string,
   role: RecipientRole,
   to: string,
   subject: string,
-  body: string
+  body: string,
+  type: 'REMINDER' | 'PAYMENT_EXPIRED'
 ): Promise<void> {
-  const type = 'REMINDER';
-  const idempotencyKey =
-    `reminder-${bookingId}-${role}`;
+  const idempotencyKey = `${type.toLowerCase()}-${bookingId}-${role}`;
 
   const existing = await db.notificationDelivery.upsert({
     where: {
@@ -165,8 +164,8 @@ async function sendTrackedReminder(
 
     if (
       !booking ||
-      booking.status !== 'PAID' ||
-      booking.startsAt <= new Date()
+      (type === 'REMINDER' && (booking.status !== 'PAID' || booking.startsAt <= new Date())) ||
+      (type === 'PAYMENT_EXPIRED' && booking.status !== 'CANCELLED')
     ) {
       await db.notificationDelivery.update({
         where: { id: existing.id },
@@ -423,13 +422,14 @@ export async function notifyBooking(
 
   const results = await Promise.allSettled(
     notifications.map(item =>
-      type === 'REMINDER'
-        ? sendTrackedReminder(
+      (type === 'REMINDER' || type === 'PAYMENT_EXPIRED')
+        ? sendTrackedNotification(
             booking.id,
             item.role,
             item.to,
             item.subject,
-            item.body
+            item.body,
+            type
           )
         : sendEmail(
             item.to,
