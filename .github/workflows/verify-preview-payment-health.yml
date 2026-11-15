@@ -1,0 +1,39 @@
+name: Verify Preview payment health
+
+on:
+  push:
+    branches: [stripe-testing]
+    paths:
+      - '.github/workflows/verify-preview-payment-health.yml'
+      - 'app/api/cron/payment-health/route.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check protected read-only Preview payment health endpoint
+        env:
+          PREVIEW_CRON_SECRET: ${{ secrets.PREVIEW_CRON_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_CRON_SECRET"
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          URL="https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/payment-health"
+          for attempt in 1 2 3 4 5 6; do
+            response=$(curl --fail-with-body --show-error --silent --max-time 30 \
+              -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
+              -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" \
+              "$URL") && \
+            echo "$response" | jq -e '.success == true and .readOnly == true and (.needsAttention | type == "boolean") and (.counts | type == "object")' && \
+            { echo "$response" | jq '{success,readOnly,needsAttention,counts}'; exit 0; }
+            echo "Preview deployment may still be building; retrying..."
+            sleep 20
+          done
+          echo "::error::Preview payment health endpoint did not pass verification"
+          exit 1

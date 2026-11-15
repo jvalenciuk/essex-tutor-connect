@@ -9,6 +9,7 @@ import {
 
 type CalendarBooking = {
   id: string;
+  inquiryId?: string | null;
   startsAt: string;
   durationMinutes: number;
   amountCents: number;
@@ -22,6 +23,8 @@ type CalendarBooking = {
     grade: string;
   } | null;
 };
+
+type BookingContact = { id: string; name: string; subject: string; grade: string };
 
 type AvailabilityResponse = {
   blockedDates: string[];
@@ -127,9 +130,21 @@ function money(cents: number) {
 
 export default function SessionCalendar({
   role,
+  bookingContacts = [],
 }: {
   role: string;
+  bookingContacts?: BookingContact[];
 }) {
+  const [showBookingForm, setShowBookingForm] = useState(false);
+  const [contactId, setContactId] = useState('');
+  const [bookingTime, setBookingTime] = useState('16:00');
+  const [bookingDuration, setBookingDuration] = useState('60');
+  const [bookingBusy, setBookingBusy] = useState(false);
+  const [bookingNotice, setBookingNotice] = useState('');
+  const [bookingError, setBookingError] = useState('');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [calendarFeedback, setCalendarFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
+
   const [bookings, setBookings] =
     useState<CalendarBooking[]>([]);
 
@@ -157,6 +172,8 @@ export default function SessionCalendar({
   ] = useState(() =>
     localDateKey(new Date())
   );
+
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   const [loading, setLoading] =
     useState(true);
@@ -187,11 +204,27 @@ export default function SessionCalendar({
         const bookingData =
           await bookingResponse.json();
 
-        setBookings(
-          Array.isArray(bookingData)
-            ? bookingData
-            : bookingData.bookings || []
-        );
+        const loadedBookings: CalendarBooking[] = Array.isArray(bookingData)
+          ? bookingData
+          : bookingData.bookings || [];
+        setBookings(loadedBookings);
+
+        // Start on the next relevant session instead of an empty today.
+        const now = Date.now();
+        const nextSession = loadedBookings
+          .filter(booking =>
+            !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED'].includes(booking.status) &&
+            new Date(booking.startsAt).getTime() >= now
+          )
+          .sort((a, b) =>
+            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+          )[0];
+        if (nextSession) {
+          const dateKey = localDateKey(nextSession.startsAt);
+          const [year, monthNumber] = dateKey.split('-').map(Number);
+          setMonth({ year, monthNumber });
+          setSelectedDate(dateKey);
+        }
 
         if (role === 'TUTOR') {
           const availabilityResponse =
@@ -233,7 +266,52 @@ export default function SessionCalendar({
 
   useEffect(() => {
     void loadCalendar();
+    const refreshAfterBookingChange = () => { void loadCalendar(); };
+    window.addEventListener('essex:bookings-updated', refreshAfterBookingChange);
+    return () => window.removeEventListener('essex:bookings-updated', refreshAfterBookingChange);
   }, [loadCalendar]);
+
+
+  async function proposeCalendarBooking(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBookingError('');
+    setBookingNotice('');
+    if (!contactId) { setBookingError(role === 'PARENT' ? 'Choose a tutor.' : 'Choose a parent.'); return; }
+    // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
+    const [year, monthNumber, day] = selectedDate.split('-').map(Number);
+    const [hour, minute] = bookingTime.split(':').map(Number);
+    const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
+    const offsetParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: ZONE, timeZoneName: 'shortOffset', hour: '2-digit',
+    }).formatToParts(new Date(wallClockUtc));
+    const offsetLabel = offsetParts.find(part => part.type === 'timeZoneName')?.value || 'GMT-5';
+    const offsetMatch = offsetLabel.match(/GMT([+-])(\\d{1,2})(?::(\\d{2}))?/);
+    const offsetMinutes = offsetMatch
+      ? (offsetMatch[1] === '+' ? 1 : -1) * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0))
+      : -300;
+    const localStart = new Date(wallClockUtc - offsetMinutes * 60000);
+    if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
+      setBookingError('Choose a future date and time.'); return;
+    }
+    setBookingBusy(true);
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inquiryId: contactId, startsAt: localStart.toISOString(), durationMinutes: Number(bookingDuration) }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
+      setBookingNotice(role === 'PARENT' ? 'Session requested. Your tutor can review and respond.' : 'Session proposed. The parent can now review and accept it.');
+      setShowBookingForm(false);
+      await loadCalendar();
+      window.dispatchEvent(new Event('essex:bookings-updated'));
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : 'Unable to propose session.');
+    } finally {
+      setBookingBusy(false);
+    }
+  }
 
   function changeMonth(
     amount: number
@@ -264,6 +342,65 @@ export default function SessionCalendar({
         monthNumber
       ).padStart(2, '0')}-01`
     );
+  }
+
+  async function acceptCalendarProposal(booking: CalendarBooking) {
+    if (acceptingId) return;
+    setAcceptingId(booking.id);
+    setCalendarFeedback(current => { const next = { ...current }; delete next[booking.id]; return next; });
+    try {
+      const response = await fetch(`/api/bookings/${encodeURIComponent(booking.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'ACCEPT' }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Unable to accept the proposal.');
+      await loadCalendar();
+      window.dispatchEvent(new Event('essex:bookings-updated'));
+      setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'success', message: 'Session accepted. Complete payment within 24 hours to confirm your booking.' } }));
+    } catch (error) {
+      setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'error', message: error instanceof Error ? error.message : 'Unable to accept the proposal.' } }));
+    } finally {
+      setAcceptingId(null);
+    }
+  }
+
+  function openBooking(booking: CalendarBooking) {
+    if (!booking.inquiryId) return;
+    const anchor = document.getElementById('inquiry-' + booking.inquiryId);
+    const conversation = anchor?.closest<HTMLDetailsElement>('details[data-conversation-group="true"]');
+    if (!conversation) return;
+
+    // Open the parent group, the inquiry, and its session panel.
+    let ancestor: HTMLElement | null = conversation;
+    while (ancestor) {
+      if (ancestor instanceof HTMLDetailsElement) ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
+    const sessionPanel = conversation.querySelector<HTMLDetailsElement>(
+      'details[data-session-panel="true"]'
+    );
+    if (sessionPanel) sessionPanel.open = true;
+    // Target the exact booking card, not merely the matching date or inquiry.
+    // A newly opened inquiry can mount its booking manager asynchronously.
+    const targetId = 'booking-' + booking.id;
+    let attempts = 0;
+    const focusExactBooking = () => {
+      const card = document.getElementById(targetId);
+      if (card && conversation.contains(card)) {
+        card.scrollIntoView({ behavior: 'auto', block: 'center' });
+        card.focus({ preventScroll: true });
+        return;
+      }
+      if (++attempts < 90) {
+        window.setTimeout(focusExactBooking, 100);
+      }
+    };
+    window.dispatchEvent(new CustomEvent('essex:focus-booking', {
+      detail: { bookingId: booking.id, inquiryId: booking.inquiryId },
+    }));
+    window.setTimeout(focusExactBooking, 100);
   }
 
   const firstWeekday =
@@ -558,11 +695,15 @@ export default function SessionCalendar({
               <button
                 key={dateKey}
                 type="button"
-                onClick={() =>
-                  setSelectedDate(
-                    dateKey
-                  )
-                }
+                onClick={() => {
+                  setSelectedDate(dateKey);
+                  window.requestAnimationFrame(() => {
+                    document.getElementById('calendar-selected-day')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    });
+                  });
+                }}
                 aria-pressed={
                   selected
                 }
@@ -680,9 +821,12 @@ export default function SessionCalendar({
       </div>
 
       <div
+        id="calendar-selected-day"
+        tabIndex={-1}
         style={{
           marginTop: 20,
           paddingTop: 12,
+          scrollMarginTop: 24,
           borderTop:
             '1px solid #ddd',
         }}
@@ -710,6 +854,45 @@ export default function SessionCalendar({
             </p>
           )}
 
+        {(role === 'TUTOR' || role === 'PARENT') && (
+          <div style={{ marginBottom: 16 }}>
+            <button type="button" onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
+              {showBookingForm ? 'Close booking form' : role === 'PARENT' ? '+ Request a session on this date' : '+ Propose a session on this date'}
+            </button>
+            {showBookingForm && (
+              <form onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                <p><strong>New session · {selectedDate}</strong></p>
+                <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
+                <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
+                <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
+                  <option value="">{role === 'PARENT' ? 'Select a tutor' : 'Select a parent'}</option>
+                  {bookingContacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name} — {contact.subject} ({contact.grade})</option>)}
+                </select>
+                {bookingContacts.length === 0 && <p className="muted">{role === 'PARENT' ? 'No accepted tutor inquiries yet. Contact a tutor and wait for their acceptance first.' : 'No accepted parent inquiries yet. Accept an inquiry first.'}</p>}
+                <label htmlFor="calendar-start">Start time (Eastern Time)</label>
+                <select id="calendar-start" className="field" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required>
+                  {Array.from({ length: 61 }, (_, index) => {
+                    const totalMinutes = 7 * 60 + index * 15;
+                    const hour = Math.floor(totalMinutes / 60);
+                    const minute = totalMinutes % 60;
+                    const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    const label = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
+                    return <option key={value} value={value}>{label}</option>;
+                  })}
+                </select>
+                <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
+                <label htmlFor="calendar-duration">Duration</label>
+                <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
+                  {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
+                </select>
+                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Creating...' : role === 'PARENT' ? 'Request session' : 'Propose session'}</button>
+                {bookingError && <p role="alert" className="error">{bookingError}</p>}
+              </form>
+            )}
+            {bookingNotice && <p role="status" style={{ color: '#15803d' }}>{bookingNotice}</p>}
+          </div>
+        )}
+
         {loading && (
           <p>
             Loading sessions...
@@ -726,8 +909,15 @@ export default function SessionCalendar({
             </p>
           )}
 
-        {!loading &&
-          selectedBookings.map(
+        {!loading && selectedBookings.length > 0 && (
+          <details key={selectedDate} open={selectedBookings.length === 1 ? true : undefined}
+            style={{ border: selectedBookings.length > 1 ? '1px solid #cbd5e1' : 'none', borderRadius: 8, padding: selectedBookings.length > 1 ? '12px 14px' : 0 }}>
+            {selectedBookings.length > 1 && (
+              <summary style={{ cursor: 'pointer', fontWeight: 700, marginBottom: 10 }}>
+                View {selectedBookings.length} sessions
+              </summary>
+            )}
+            {selectedBookings.map(
             booking => {
               const status =
                 statuses[
@@ -738,6 +928,16 @@ export default function SessionCalendar({
                   color:
                     '#64748b',
                 };
+
+              const starts = new Date(booking.startsAt).getTime();
+              const ends = starts + booking.durationMinutes * 60000;
+              const overlappingReservation = selectedBookings.some(other => {
+                if (other.id === booking.id ||
+                    !['PENDING_PAYMENT', 'PAID'].includes(other.status)) return false;
+                const otherStart = new Date(other.startsAt).getTime();
+                return starts < otherStart + other.durationMinutes * 60000 && otherStart < ends;
+              });
+              const tentativeConflict = ['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) && overlappingReservation;
 
               return (
                 <div
@@ -811,10 +1011,51 @@ export default function SessionCalendar({
                       }
                     </span>
                   </p>
+                  {tentativeConflict && (
+                    <p role="status" style={{ color: '#92400e', fontWeight: 700 }}>
+                      Conflicts with reserved session
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                    {role === 'PARENT' && booking.status === 'PROPOSED' && (
+                      <button type="button" disabled={acceptingId !== null}
+                        onClick={() => void acceptCalendarProposal(booking)}>
+                        {acceptingId === booking.id ? 'Accepting...' : 'Accept session'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBookingId(expandedBookingId === booking.id ? null : booking.id)}
+                      aria-expanded={expandedBookingId === booking.id}
+                    >
+                      {expandedBookingId === booking.id ? 'Hide details' : 'View details'}
+                    </button>
+                    {booking.inquiryId && (
+                      <button type="button" onClick={() => openBooking(booking)}>
+                        {role === 'TUTOR' ? 'Manage session / message parent' : 'Manage session / message tutor'}
+                      </button>
+                    )}
+                  </div>
+                  {calendarFeedback[booking.id] && (
+                    <p role={calendarFeedback[booking.id].kind === 'error' ? 'alert' : 'status'} style={{ marginTop: 10, padding: '10px 12px', borderRadius: 6, background: calendarFeedback[booking.id].kind === 'error' ? '#fef2f2' : '#f0fdf4', color: calendarFeedback[booking.id].kind === 'error' ? '#b42318' : '#166534' }}>
+                      {calendarFeedback[booking.id].message}
+                    </p>
+                  )}
+                  {expandedBookingId === booking.id && (
+                    <div style={{ marginTop: 12, padding: 12, background: '#f8fafc', borderRadius: 8 }}>
+                      <p><strong>Session:</strong> {booking.inquiry?.subject || 'Tutoring'} · {booking.inquiry?.grade || 'Grade not specified'}</p>
+                      <p><strong>Start:</strong> {formatTime(booking.startsAt)} Eastern · {booking.durationMinutes} minutes</p>
+                      <p><strong>Price:</strong> {money(booking.amountCents)}</p>
+                      {booking.status === 'PENDING_PAYMENT' && <p>{role === 'TUTOR' ? 'This time is reserved while the parent completes payment.' : 'Payment is required to confirm this session.'}</p>}
+                      {booking.status === 'PROPOSED' && <p>This is a proposal, not a confirmed reservation.</p>}
+                    </div>
+                  )}
                 </div>
               );
             }
           )}
+          </details>
+        )}
       </div>
 
       <button

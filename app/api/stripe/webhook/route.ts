@@ -2,6 +2,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from '../../../../lib/db';
 import { notifyBooking } from '../../../../lib/email';
+import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,7 +23,11 @@ type StripeEvent = {
   type: string;
   account?: string;
   data: {
-    object: CheckoutSession;
+    object: CheckoutSession & {
+      payment_intent?: string;
+      status?: string;
+      amount?: number;
+    };
   };
 };
 
@@ -97,6 +102,65 @@ export async function POST(req: Request) {
     });
   }
 
+  // Stripe refund events can arrive after a successful refund while
+  // the local database still says PAID. Verify against Stripe before
+  // changing the booking; never create a refund from a webhook.
+  if (event.type === 'refund.updated' || event.type === 'refund.created') {
+    const refund = event.data?.object;
+    const bookingId = refund?.metadata?.bookingId;
+    if (!bookingId || refund?.status !== 'succeeded' || !event.account) {
+      return Response.json({ received: true });
+    }
+
+    try {
+      const booking = await db.booking.findUnique({
+        where: { id: bookingId },
+        include: { tutor: { select: { stripeAccountId: true } } },
+      });
+      if (
+        !booking ||
+        booking.status !== 'PAID' ||
+        booking.tutor.stripeAccountId !== event.account ||
+        !booking.stripeSessionId ||
+        refund.amount !== booking.amountCents ||
+        typeof refund.payment_intent !== 'string'
+      ) return Response.json({ received: true });
+
+      const key = getConfiguredStripeSecret();
+      if (!key) return new Response('Stripe unavailable', { status: 503 });
+
+      const sessionResponse = await fetch(
+        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
+        {
+          headers: { Authorization: `Bearer ${key}`, 'Stripe-Account': event.account },
+          cache: 'no-store',
+        }
+      );
+      if (!sessionResponse.ok) return new Response('Stripe verification unavailable', { status: 503 });
+      const session = await sessionResponse.json();
+      if (
+        session.payment_intent !== refund.payment_intent ||
+        session.payment_status !== 'paid' ||
+        session.currency?.toLowerCase() !== 'cad' ||
+        session.amount_total !== booking.amountCents ||
+        session.metadata?.bookingId !== booking.id
+      ) return new Response('Refund payment mismatch', { status: 409 });
+
+      const result = await db.booking.updateMany({
+        where: { id: booking.id, status: 'PAID', stripeSessionId: booking.stripeSessionId },
+        data: { status: 'REFUNDED' },
+      });
+      if (result.count) {
+        try { await notifyBooking(booking.id, 'REFUNDED'); }
+        catch (error) { console.error('Refund notification failed', error); }
+      }
+      return Response.json({ received: true, reconciled: result.count === 1 });
+    } catch (error) {
+      console.error('Refund webhook reconciliation failed', error);
+      return new Response('Refund reconciliation failed', { status: 500 });
+    }
+  }
+
   if (
     event.type !== 'checkout.session.completed' &&
     event.type !== 'checkout.session.async_payment_succeeded'
@@ -143,6 +207,7 @@ export async function POST(req: Request) {
 
     if (
       booking.stripeSessionId !== session.id ||
+      session.metadata?.bookingId !== booking.id ||
       session.currency?.toLowerCase() !== 'cad' ||
       session.amount_total !== booking.amountCents
     ) {
@@ -166,6 +231,25 @@ export async function POST(req: Request) {
       });
     }
 
+    // A paid Checkout must never be silently acknowledged if the booking
+    // was cancelled or otherwise left the payment-pending state. In particular,
+    // reopening a cancelled slot here could double-book a tutor.
+    // A non-2xx response makes Stripe retry and surfaces the incident in logs
+    // for manual reconciliation/refund; it never creates a second charge.
+    if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'PAID') {
+      console.error('PAYMENT_RECONCILIATION_REQUIRED', {
+        bookingId: booking.id,
+        bookingStatus: booking.status,
+        stripeSessionId: session.id,
+        stripeEventId: event.id,
+        stripeAccountId: event.account,
+        reason: 'Stripe paid but booking cannot safely transition to PAID',
+      });
+      return new Response('Paid booking requires manual reconciliation', {
+        status: 409,
+      });
+    }
+
     const result = await db.booking.updateMany({
       where: {
         id: booking.id,
@@ -182,6 +266,27 @@ export async function POST(req: Request) {
       updated: result.count,
       eventType: event.type,
     });
+
+    // Handle a race where expiration or cancellation changed the booking
+    // after the initial read but before the conditional payment update.
+    if (result.count === 0 && booking.status === 'PENDING_PAYMENT') {
+      const latest = await db.booking.findUnique({
+        where: { id: booking.id },
+        select: { status: true },
+      });
+      if (latest?.status !== 'PAID') {
+        console.error('PAYMENT_RECONCILIATION_REQUIRED', {
+          bookingId: booking.id,
+          latestStatus: latest?.status ?? 'MISSING',
+          stripeSessionId: session.id,
+          stripeEventId: event.id,
+          reason: 'Paid checkout raced with booking state change',
+        });
+        return new Response('Paid booking requires manual reconciliation', {
+          status: 409,
+        });
+      }
+    }
 
     // Only notify when this event actually changed the status.
     // Stripe may deliver the same event more than once.

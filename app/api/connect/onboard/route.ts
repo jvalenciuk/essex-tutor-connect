@@ -1,3 +1,4 @@
+import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
@@ -69,16 +70,28 @@ export async function POST() {
     return fail('Approved tutor profile required', 403);
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = getConfiguredStripeSecret();
 
-  if (!secretKey || !secretKey.startsWith('sk_test_')) {
-    return fail('Stripe sandbox is not configured', 503);
+  if (!secretKey) {
+    return fail('Stripe payments are not configured for this environment', 503);
   }
 
-  const baseUrl = (
-    process.env.NEXTAUTH_URL ||
-    'https://essex-tutor-connect.vercel.app'
-  ).replace(/\/$/, '');
+  // Prefer the actual deployment host in preview, where APP_URL may be stale
+  // or configured as a bare hostname without an HTTPS scheme.
+  const deploymentHost = process.env.VERCEL_URL;
+  const candidate = process.env.VERCEL_ENV === 'preview' && deploymentHost
+    ? `https://${deploymentHost}`
+    : (process.env.APP_URL || process.env.NEXTAUTH_URL || 'https://essex-tutor-connect.vercel.app');
+  let baseUrl: string;
+  try {
+    const parsed = new URL(candidate.startsWith('http') ? candidate : `https://${candidate}`);
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) {
+      throw new Error('Invalid Stripe onboarding return URL');
+    }
+    baseUrl = parsed.origin;
+  } catch {
+    return fail('Stripe onboarding return URL is not configured correctly', 503);
+  }
 
   try {
     let accountId = profile.stripeAccountId;

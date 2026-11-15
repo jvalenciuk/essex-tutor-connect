@@ -6,7 +6,8 @@ import {
   useEffect,
   useState,
 } from 'react';
-import SessionCalendar from './session-calendar';
+import { useRouter } from 'next/navigation';
+import AvailableTimePicker from './available-time-picker';
 
 type Booking = {
   id: string;
@@ -19,11 +20,14 @@ type Booking = {
   amountCents: number;
   platformFeeCents: number;
   status: string;
+  paymentDueAt?: string | null;
 };
 
 type Props = {
   inquiryId: string;
+  inquiryIds?: string[];
   role: string;
+  tutorId: string;
 };
 
 const DAY_MS = 86400000;
@@ -98,11 +102,11 @@ function nextStep(
         : 'Waiting for the parent to respond to your proposal.';
     case 'CHANGE_REQUESTED':
       return role === 'TUTOR'
-        ? 'Review the requested time and send a revised proposal.'
-        : 'Waiting for the tutor to propose a revised session.';
+        ? 'Accept the parent’s requested time or propose an alternative.'
+        : 'Waiting for the tutor to accept your requested time or propose an alternative.';
     case 'PENDING_PAYMENT':
       return role === 'PARENT'
-        ? 'Your session time has been agreed upon. Complete secure payment to confirm it.'
+        ? 'Your session time has been agreed upon. Complete secure payment before the 24-hour deadline to confirm it.'
         : 'Waiting for the parent to complete payment.';
     case 'PAID':
       return 'Your session is confirmed. Check the date and time below.';
@@ -121,8 +125,12 @@ function nextStep(
 
 export default function BookingManager({
   inquiryId,
+  inquiryIds,
   role,
+  tutorId,
 }: Props) {
+  const router = useRouter();
+  const ids = inquiryIds?.join(',') || inquiryId;
   const [bookings, setBookings] =
     useState<Booking[]>([]);
   const [loading, setLoading] =
@@ -133,6 +141,7 @@ export default function BookingManager({
     useState('');
   const [notice, setNotice] =
     useState('');
+  const [bookingFeedback, setBookingFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
   const [startsAt, setStartsAt] =
     useState('');
   const [duration, setDuration] =
@@ -162,7 +171,7 @@ export default function BookingManager({
         setBookings(
           data.filter(
             item =>
-              item.inquiryId === inquiryId
+              ids.split(',').includes(item.inquiryId || '')
           )
         );
         setError('');
@@ -174,12 +183,45 @@ export default function BookingManager({
         setLoading(false);
       }
     },
-    [inquiryId]
+    [ids]
   );
 
   useEffect(() => {
     void loadBookings();
   }, [loadBookings]);
+
+  // Keep the session manager in sync with actions performed on the calendar.
+  useEffect(() => {
+    const refreshFromCalendar = () => { void loadBookings(); };
+    window.addEventListener('essex:bookings-updated', refreshFromCalendar);
+    return () => window.removeEventListener('essex:bookings-updated', refreshFromCalendar);
+  }, [loadBookings]);
+
+  const [focusBookingId, setFocusBookingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onFocusBooking(event: Event) {
+      const detail = (event as CustomEvent<{ bookingId: string; inquiryId: string }>).detail;
+      if (detail?.inquiryId && ids.split(',').includes(detail.inquiryId) && detail.bookingId) {
+        setFocusBookingId(detail.bookingId);
+      }
+    }
+    window.addEventListener('essex:focus-booking', onFocusBooking);
+    return () => window.removeEventListener('essex:focus-booking', onFocusBooking);
+  }, [ids]);
+
+  useEffect(() => {
+    if (!focusBookingId || loading || !bookings.some(booking => booking.id === focusBookingId)) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById('booking-' + focusBookingId);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.focus({ preventScroll: true });
+        setFocusBookingId(null);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusBookingId, loading, bookings]);
 
   function resetForm() {
     setStartsAt('');
@@ -193,11 +235,13 @@ export default function BookingManager({
     method: 'POST' | 'PATCH',
     payload: object,
     successMessage =
-      'Booking updated successfully.'
+      'Booking updated successfully.',
+    bookingId?: string
   ) {
     setBusy(true);
     setError('');
     setNotice('');
+    if (bookingId) setBookingFeedback(current => { const next = { ...current }; delete next[bookingId]; return next; });
 
     try {
       const response = await fetch(
@@ -228,13 +272,14 @@ export default function BookingManager({
 
       resetForm();
       await loadBookings();
-      setNotice(successMessage);
+      window.dispatchEvent(new Event('essex:bookings-updated'));
+      router.refresh();
+      if (bookingId) setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'success', message: successMessage } }));
+      else setNotice(successMessage);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Something went wrong.'
-      );
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      if (bookingId) setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'error', message } }));
+      else setError(message);
     } finally {
       setBusy(false);
     }
@@ -246,6 +291,7 @@ export default function BookingManager({
     setBusy(true);
     setError('');
     setNotice('');
+    setBookingFeedback(current => { const next = { ...current }; delete next[bookingId]; return next; });
 
     try {
       const response = await fetch(
@@ -290,20 +336,18 @@ export default function BookingManager({
         result.url
       );
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to start payment.'
-      );
+      setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'error', message: err instanceof Error ? err.message : 'Unable to start payment.' } }));
       setBusy(false);
     }
   }
 
-  function datePayload() {
+  function datePayload(bookingId?: string) {
+    const reportError = (message: string) => {
+      if (bookingId) setBookingFeedback(current => ({ ...current, [bookingId]: { kind: 'error', message } }));
+      else setError(message);
+    };
     if (!startsAt) {
-      setError(
-        'Please choose a date and time.'
-      );
+      reportError('Please choose a date and time.');
       return null;
     }
 
@@ -318,9 +362,7 @@ export default function BookingManager({
       ) ||
       date.getTime() <= Date.now()
     ) {
-      setError(
-        'Please choose a future date and time.'
-      );
+      reportError('Please choose a future date and time.');
       return null;
     }
 
@@ -329,9 +371,7 @@ export default function BookingManager({
       minutes < 30 ||
       minutes > 180
     ) {
-      setError(
-        'Choose a duration between 30 and 180 minutes.'
-      );
+      reportError('Choose a duration between 30 and 180 minutes.');
       return null;
     }
 
@@ -356,7 +396,9 @@ export default function BookingManager({
         inquiryId,
         ...details,
       },
-      'New session proposed successfully.'
+      role === 'PARENT'
+        ? 'Session request sent to the tutor.'
+        : 'New session proposed successfully.'
     );
   }
 
@@ -364,7 +406,7 @@ export default function BookingManager({
     bookingId: string
   ) {
     const details =
-      datePayload();
+      datePayload(bookingId);
 
     if (!details) return;
 
@@ -382,7 +424,9 @@ export default function BookingManager({
         ...(role === 'PARENT'
           ? { note }
           : {}),
-      }
+      },
+      'Session time request sent successfully.',
+      bookingId
     );
   }
 
@@ -398,7 +442,9 @@ export default function BookingManager({
         bookingId
       )}`,
       'PATCH',
-      { action }
+      { action },
+      action === 'ACCEPT' ? 'Session accepted. Complete payment to confirm.' : action === 'DECLINE' ? 'Session declined.' : 'Session marked completed.',
+      bookingId
     );
   }
 
@@ -426,7 +472,8 @@ export default function BookingManager({
       { action: 'CANCEL' },
       isPaid
         ? 'Cancellation processed. Stripe refund confirmed.'
-        : 'Booking cancelled successfully.'
+        : 'Booking cancelled successfully.',
+      booking.id
     );
   }
 
@@ -504,6 +551,31 @@ export default function BookingManager({
       ).getTime()
   );
 
+  const activeBookings = sortedBookings.filter(booking =>
+    !['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
+  ).sort((a, b) => {
+    const priority = (status: string) => {
+      if (status === 'CHANGE_REQUESTED') return 0;
+      if (status === 'PROPOSED') return 1;
+      if (status === 'PENDING_PAYMENT') return 2;
+      if (status === 'PAID') return 3;
+      return 4;
+    };
+    const aPriority = priority(a.status);
+    const bPriority = priority(b.status);
+    return aPriority - bPriority || new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+  });
+  const overduePaidBookings = activeBookings.filter(booking =>
+    booking.status === 'PAID' &&
+    new Date(booking.startsAt).getTime() + booking.durationMinutes * 60000 <= Date.now()
+  );
+  const upcomingActiveBookings = activeBookings.filter(booking =>
+    !overduePaidBookings.some(overdue => overdue.id === booking.id)
+  );
+  const pastBookings = sortedBookings.filter(booking =>
+    ['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
+  );
+
   return (
     <section
       style={{
@@ -514,49 +586,43 @@ export default function BookingManager({
         minWidth: 0,
       }}
     >
-      <h3>
-        Tutoring sessions
-      </h3>
+      <h3>Session scheduling</h3>
 
-      <p className="muted">
-        Manage session proposals,
-        scheduling, and secure
-        payments here.
-      </p>
+      <p className="muted">Request a time, agree on scheduling, then pay securely to confirm.</p>
 
-      <div
-        className="card"
-        style={{
-          marginBottom: 16,
-        }}
-      >
-        <h4>
-          How booking works
-        </h4>
+      {(role === 'TUTOR' || role === 'PARENT') &&
+        !loading && (
+          <div
+            className="card"
+            style={{ marginTop: 16, marginBottom: 20 }}
+          >
+            <h3>
+              {role === 'PARENT' ? 'Request a tutoring session' : 'Propose another tutoring session'}
+            </h3>
 
-        <ol>
-          <li>
-            The tutor proposes
-            a session.
-          </li>
-          <li>
-            The parent accepts
-            or requests a change.
-          </li>
-          <li>
-            The parent pays
-            securely through Stripe.
-          </li>
-          <li>
-            The session is
-            confirmed after payment.
-          </li>
-        </ol>
-      </div>
+            <p className="muted">
+              {role === 'PARENT'
+                ? 'Choose a preferred date and time. Your tutor can accept it or suggest an alternative. No payment is required until the tutor accepts.'
+                : 'You can schedule multiple sessions with the same parent. Choose a date and time within your availability.'}
+            </p>
 
-      <SessionCalendar
-        role={role}
-      />
+            <AvailableTimePicker tutorId={tutorId} duration={duration} onDurationChange={setDuration} startsAt={startsAt} onStartsAtChange={setStartsAt} />
+
+            <button
+              type="button"
+              disabled={
+                busy
+              }
+              onClick={
+                submitProposal
+              }
+            >
+              {busy
+                ? 'Submitting...'
+                : role === 'PARENT' ? 'Request session' : 'Propose session'}
+            </button>
+          </div>
+        )}
 
       {loading && (
         <p>
@@ -572,8 +638,31 @@ export default function BookingManager({
           </p>
         )}
 
-      {sortedBookings.map(
+      {[
+        ...(overduePaidBookings.length > 0
+          ? [{ title: 'Awaiting completion', items: overduePaidBookings, overdue: true }]
+          : []),
+        { title: 'Upcoming and pending', items: upcomingActiveBookings, overdue: false },
+      ].map(group => (
+        <div key={group.title} style={{ marginTop: 20 }}>
+          <h4 style={{ marginBottom: 12, color: group.overdue ? '#92400e' : 'inherit' }}>
+            {group.title} ({group.items.length})
+          </h4>
+          {group.overdue && group.items.length > 0 && (
+            <p className="muted">These paid sessions have ended. Mark each completed after confirming the tutoring took place.</p>
+          )}
+          {!group.overdue && group.items.length === 0 && !loading && (
+            <p className="muted">No upcoming or pending sessions.</p>
+          )}
+          {group.items.map(
         booking => {
+          const hasReservedTimeConflict = booking.status === 'PROPOSED' && bookings.some(other => {
+            if (other.id === booking.id || !['PAID', 'PENDING_PAYMENT'].includes(other.status)) return false;
+            const start = new Date(booking.startsAt).getTime();
+            const otherStart = new Date(other.startsAt).getTime();
+            return start < otherStart + other.durationMinutes * 60000 && otherStart < start + booking.durationMinutes * 60000;
+          });
+
           const startTime =
             new Date(
               booking.startsAt
@@ -609,16 +698,13 @@ export default function BookingManager({
               'TUTOR' &&
             beforeSession;
 
+          // Match the API's cancellation policy: parents may only cancel
+          // paid sessions at least 24 hours ahead; tutors may cancel
+          // their proposed or paid sessions before they begin.
           const canCancel =
-            (parentCanCancel ||
-              tutorCanCancel) &&
-            [
-              'PROPOSED',
-              'CHANGE_REQUESTED',
-              'PAID',
-            ].includes(
-              booking.status
-            );
+            (role === 'PARENT' && parentCanCancel && booking.status === 'PAID') ||
+            (role === 'TUTOR' && tutorCanCancel &&
+              ['PROPOSED', 'CHANGE_REQUESTED', 'PAID'].includes(booking.status));
 
           const info =
             statusInfo[
@@ -632,12 +718,13 @@ export default function BookingManager({
 
           return (
             <article
-              key={
-                booking.id
-              }
+              id={'booking-' + booking.id}
+              tabIndex={-1}
+              key={booking.id}
               className="card"
               style={{
-                marginBottom: 16,
+                marginBottom: 10,
+                padding: '14px 18px',
                 minWidth: 0,
                 overflowWrap:
                   'anywhere',
@@ -676,61 +763,65 @@ export default function BookingManager({
                 </span>
               </div>
 
-              <p>
-                <strong>
-                  Next step:
-                </strong>{' '}
-                {nextStep(
-                  booking.status,
-                  role
-                )}
-              </p>
-
-              <p>
-                <strong>
-                  Duration:
-                </strong>{' '}
-                {
-                  booking.durationMinutes
-                }{' '}
-                minutes
-              </p>
-
-              <p>
-                <strong>
-                  Session price:
-                </strong>{' '}
-                {money(
-                  booking.amountCents
-                )}
-              </p>
-
-              {role ===
-                'TUTOR' && (
-                <>
-                  <p>
-                    <strong>
-                      Platform
-                      commission (15%):
-                    </strong>{' '}
-                    {money(
-                      booking.platformFeeCents
-                    )}
-                  </p>
-
-                  <p>
-                    <strong>
-                      Tutor portion
-                      before processing
-                      fees:
-                    </strong>{' '}
-                    {money(
-                      booking.amountCents -
-                        booking.platformFeeCents
-                    )}
-                  </p>
-                </>
+              {hasReservedTimeConflict && (
+                <p role="status" style={{ margin: '10px 0', padding: '10px 12px', borderRadius: 6, background: '#fffbeb', color: '#92400e' }}>
+                  This proposed time overlaps another confirmed or awaiting-payment session. Request a different time instead of accepting this proposal.
+                </p>
               )}
+
+              {['PROPOSED', 'CHANGE_REQUESTED', 'PENDING_PAYMENT', 'PAID'].includes(booking.status) && (
+                <div aria-label="Booking progress" style={{ display: 'flex', gap: 6, margin: '10px 0' }}>
+                  {[
+                    { label: 'Time proposed', done: true },
+                    { label: 'Time agreed', done: ['PENDING_PAYMENT', 'PAID'].includes(booking.status) },
+                    { label: 'Payment complete', done: booking.status === 'PAID' },
+                  ].map(step => (
+                    <span key={step.label} title={step.label} style={{
+                      flex: 1, padding: '7px 5px', textAlign: 'center', borderRadius: 6,
+                      fontSize: '0.75rem', fontWeight: step.done ? 700 : 400,
+                      background: step.done ? '#dcfce7' : '#f1f5f9',
+                      color: step.done ? '#166534' : '#475569',
+                    }}>{step.done ? '✓ ' : ''}{step.label}</span>
+                  ))}
+                </div>
+              )}
+
+              {booking.status === 'PENDING_PAYMENT' && booking.paymentDueAt && (
+                <p role="status" style={{ margin: '8px 0', color: new Date(booking.paymentDueAt).getTime() <= Date.now() ? '#b91c1c' : '#92400e', fontWeight: 600 }}>
+                  {new Date(booking.paymentDueAt).getTime() <= Date.now()
+                    ? 'Payment deadline passed. Refresh bookings to check the latest status.'
+                    : `Pay by ${formatDate(booking.paymentDueAt)} to keep this reservation.`}
+                </p>
+              )}
+
+              <p style={{ margin: '8px 0', color: '#475569', fontSize: '0.92rem' }}>
+                {nextStep(booking.status, role)}
+              </p>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '6px 16px',
+                  margin: '8px 0 12px',
+                  fontSize: '0.92rem',
+                }}
+              >
+                <span><strong>{booking.durationMinutes} min</strong></span>
+                <span><strong>{money(booking.amountCents)}</strong></span>
+                {role === 'TUTOR' && (
+                  <details style={{ display: 'inline-block' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                      Earnings
+                    </summary>
+                    <div style={{ padding: '8px 0', lineHeight: 1.6 }}>
+                      <div>Platform commission (15%): {money(booking.platformFeeCents)}</div>
+                      <div>Tutor portion before processing fees: {money(booking.amountCents - booking.platformFeeCents)}</div>
+                    </div>
+                  </details>
+                )}
+              </div>
 
               {booking.status ===
                 'PROPOSED' &&
@@ -807,7 +898,7 @@ export default function BookingManager({
 
               {booking.status ===
                 'CHANGE_REQUESTED' && (
-                <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
                   <p>
                     <strong>
                       Requested
@@ -840,6 +931,28 @@ export default function BookingManager({
                         booking.requestNote
                       }
                     </p>
+                  )}
+
+                  {role === 'TUTOR' &&
+                    booking.requestedStartsAt &&
+                    booking.requestedDurationMinutes && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm('Accept the requested session time? The parent will then be able to pay.')) {
+                          void sendRequest(
+                            `/api/bookings/${encodeURIComponent(booking.id)}`,
+                            'PATCH',
+                            { action: 'ACCEPT_REQUESTED_TIME' },
+                            'Requested time accepted. The parent can now pay.',
+                            booking.id
+                          );
+                        }
+                      }}
+                    >
+                      Accept requested time
+                    </button>
                   )}
 
                   {role ===
@@ -894,13 +1007,7 @@ export default function BookingManager({
                             booking.amountCents
                           )} securely`}
                     </button>
-                  ) : (
-                    <p>
-                      Waiting
-                      for parent
-                      payment.
-                    </p>
-                  )}
+                  ) : null}
                 </div>
               )}
 
@@ -979,6 +1086,12 @@ export default function BookingManager({
                     assistance.
                   </p>
                 )}
+
+              {bookingFeedback[booking.id] && (
+                <p role={bookingFeedback[booking.id].kind === 'error' ? 'alert' : 'status'} style={{ marginTop: 12, padding: '10px 12px', borderRadius: 6, background: bookingFeedback[booking.id].kind === 'error' ? '#fef2f2' : '#f0fdf4', color: bookingFeedback[booking.id].kind === 'error' ? '#b42318' : '#166534' }}>
+                  {bookingFeedback[booking.id].message}
+                </p>
+              )}
 
               {changingId ===
                 booking.id && (
@@ -1065,48 +1178,46 @@ export default function BookingManager({
             </article>
           );
         }
+          )}
+        </div>
+      ))}
+
+      {pastBookings.length > 0 && (
+        <details style={{ marginTop: 20 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '12px 0' }}>
+            Past and cancelled sessions ({pastBookings.length})
+          </summary>
+      {pastBookings.map(booking => {
+        const info = statusInfo[booking.status] || { label: booking.status, color: '#64748b' };
+        return (
+          <article
+            id={'booking-' + booking.id}
+            tabIndex={-1}
+            key={booking.id}
+            className="card"
+            style={{ marginBottom: 10, padding: '14px 18px', minWidth: 0, borderLeft: `5px solid ${info.color}` }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <strong>{formatDate(booking.startsAt)}</strong>
+              <span style={{ color: info.color, fontWeight: 700 }}>{info.label}</span>
+            </div>
+            <p style={{ margin: '8px 0', color: '#475569', fontSize: '0.92rem' }}>
+              {booking.durationMinutes} min · {money(booking.amountCents)}
+            </p>
+            <details>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Session details</summary>
+              <p>{nextStep(booking.status, role)}</p>
+              {role === 'TUTOR' && (
+                <p>Platform commission (15%): {money(booking.platformFeeCents)} · Tutor portion before processing fees: {money(booking.amountCents - booking.platformFeeCents)}</p>
+              )}
+            </details>
+          </article>
+        );
+      })}
+
+        </details>
       )}
 
-      {role ===
-        'TUTOR' &&
-        !loading && (
-          <div
-            className="card"
-            style={{
-              marginTop: 16,
-            }}
-          >
-            <h3>
-              Propose another
-              tutoring session
-            </h3>
-
-            <p className="muted">
-              You can schedule
-              multiple sessions
-              with the same parent.
-              Choose a date and
-              time within your
-              availability.
-            </p>
-
-            {dateFields()}
-
-            <button
-              type="button"
-              disabled={
-                busy
-              }
-              onClick={
-                submitProposal
-              }
-            >
-              {busy
-                ? 'Submitting...'
-                : 'Propose session'}
-            </button>
-          </div>
-        )}
 
       <button
         type="button"

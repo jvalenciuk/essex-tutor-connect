@@ -1,0 +1,69 @@
+name: Verify Preview booking readiness
+
+on:
+  push:
+    branches: [stripe-testing]
+    paths:
+      - '.github/workflows/verify-preview-booking-readiness.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Verify Preview public routes, access control, and payment health
+        env:
+          PREVIEW_CRON_SECRET: ${{ secrets.PREVIEW_CRON_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$PREVIEW_CRON_SECRET"
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          BASE="https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app"
+          headers=(-H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET")
+          for attempt in 1 2 3 4 5 6 7 8; do
+            status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" "$BASE/tutors" || true)
+            health=$(curl -sS --max-time 25 "${headers[@]}" -H "Authorization: Bearer $PREVIEW_CRON_SECRET" "$BASE/api/cron/payment-health" || true)
+            if [[ "$status" == "200" ]] && echo "$health" | jq -e '.success == true and .readOnly == true and (.counts | type == "object") and (.needsAttention | type == "boolean")' >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == "8" ]]; then echo "::error::Preview public page or payment health unavailable"; exit 1; fi
+            sleep 20
+          done
+          echo "Public tutor listing: HTTP 200"
+          echo "$health" | jq '{success,readOnly,needsAttention,counts}'
+          unauthorized=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" "$BASE/api/cron/payment-health")
+          if [[ "$unauthorized" != "401" && "$unauthorized" != "403" ]]; then
+            echo "::error::Payment health endpoint unexpectedly accessible without cron authorization: $unauthorized"
+            exit 1
+          fi
+          echo "Payment health authorization: protected (HTTP $unauthorized)"
+          bookings=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" "$BASE/api/bookings")
+          if [[ "$bookings" != "401" && "$bookings" != "403" ]]; then
+            echo "::error::Bookings API unexpectedly accessible without sign-in: $bookings"
+            exit 1
+          fi
+          echo "Bookings authorization: protected (HTTP $bookings)"
+          inquiry=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" -H "Content-Type: application/json" -d '{"tutorId":"invalid","subject":"Math","grade":"7","message":"Test without authentication only"}' "$BASE/api/inquiries")
+          if [[ "$inquiry" != "401" && "$inquiry" != "403" ]]; then
+            echo "::error::Inquiry creation unexpectedly accessible without sign-in: $inquiry"
+            exit 1
+          fi
+          echo "Inquiry creation authorization: protected (HTTP $inquiry)"
+          checkout=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" -H "Content-Type: application/json" -d '{"bookingId":"invalid"}' "$BASE/api/checkout")
+          if [[ "$checkout" != "401" && "$checkout" != "403" ]]; then
+            echo "::error::Checkout unexpectedly accessible without parent sign-in: $checkout"
+            exit 1
+          fi
+          echo "Stripe checkout authorization: protected (HTTP $checkout)"
+          admin=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" "$BASE/admin")
+          if [[ "$admin" != "200" && "$admin" != "302" && "$admin" != "303" && "$admin" != "307" && "$admin" != "308" ]]; then
+            echo "::error::Unexpected admin page response: $admin"
+            exit 1
+          fi
+          echo "Admin page response: HTTP $admin (does not establish authenticated admin access)"
+          echo "Read-only Preview readiness checks passed; authenticated Stripe checkout and email delivery are not exercised by this workflow."

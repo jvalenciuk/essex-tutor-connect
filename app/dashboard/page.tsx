@@ -7,6 +7,10 @@ import { db } from '../../lib/db';
 import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
 import BookingManager from './booking-manager';
+import SessionCalendar from './session-calendar';
+import BookingJump from './booking-jump';
+import DirectPaymentButton from './direct-payment-button';
+import ConversationDeepLink from './conversation-deep-link';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +18,7 @@ type StripeStatus = {
   connected: boolean;
   paymentsEnabled: boolean;
   payoutsEnabled: boolean;
+  payoutsRestricted: boolean;
   error?: string;
 };
 
@@ -39,54 +44,54 @@ async function getStripeStatus(
     connected: false,
     paymentsEnabled: false,
     payoutsEnabled: false,
+    payoutsRestricted: false,
   };
 
   if (!accountId) return empty;
 
   const key = process.env.STRIPE_SECRET_KEY;
-
   if (!key) {
-    return {
-      ...empty,
-      connected: true,
-      error: 'Stripe configuration unavailable.',
-    };
+    return { ...empty, connected: true, error: 'Stripe configuration unavailable.' };
   }
 
   try {
-    const response = await fetch(
-      `https://api.stripe.com/v1/accounts/${encodeURIComponent(
-        accountId
-      )}`,
-      {
-        headers: {
-          Authorization: `Bearer ${key}`,
-        },
-        cache: 'no-store',
-      }
+    const url = new URL(
+      `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
     );
+    url.searchParams.append('include[0]', 'configuration.merchant');
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Stripe-Version': '2026-10-28.endive',
+      },
+      cache: 'no-store',
+    });
 
     if (!response.ok) {
-      return {
-        ...empty,
-        connected: true,
-        error: 'Unable to verify Stripe status.',
-      };
+      const errorBody = await response.json().catch(() => null);
+      console.error('Stripe account status lookup failed', response.status, errorBody?.error?.message ?? errorBody?.error?.code ?? 'No Stripe error details');
+      return { ...empty, connected: true, error: 'Unable to verify Stripe status.' };
     }
 
     const account = await response.json();
+    const capabilities = account.configuration?.merchant?.capabilities;
+    if (!capabilities) {
+      return { ...empty, connected: true, error: 'Stripe capabilities unavailable.' };
+    }
+
+    const paymentStatus = capabilities.card_payments?.status;
+    const payoutStatus = capabilities.stripe_balance?.payouts?.status;
 
     return {
       connected: true,
-      paymentsEnabled: account.charges_enabled === true,
-      payoutsEnabled: account.payouts_enabled === true,
+      paymentsEnabled: paymentStatus === 'active',
+      payoutsEnabled: payoutStatus === 'active',
+      payoutsRestricted: payoutStatus === 'restricted',
     };
-  } catch {
-    return {
-      ...empty,
-      connected: true,
-      error: 'Stripe status check failed.',
-    };
+  } catch (error) {
+    console.error('Stripe account status check failed', error);
+    return { ...empty, connected: true, error: 'Stripe status check failed.' };
   }
 }
 
@@ -229,6 +234,11 @@ export default async function Dashboard() {
         a.startsAt.getTime() - b.startsAt.getTime()
     );
 
+  const overdueTutorSessions = tutorBookings
+    .filter(booking => booking.status === 'PAID' &&
+      booking.startsAt.getTime() + booking.durationMinutes * 60000 <= now.getTime())
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+
   const totalValue = tutorBookings.reduce(
     (sum, booking) => sum + booking.amountCents,
     0
@@ -258,6 +268,10 @@ export default async function Dashboard() {
         orderBy: { startsAt: 'asc' },
       })
     : [];
+
+  const parentProposals = parentBookings.filter(
+    booking => booking.status === 'PROPOSED' && booking.startsAt > now
+  );
 
   const upcomingParentSessions = parentBookings.filter(
     booking =>
@@ -300,9 +314,51 @@ export default async function Dashboard() {
         })
       : [];
 
+  // Group conversations by the underlying account, not by display name.
+  const conversationGroups = Array.from(
+    inquiries.reduce((groups, inquiry) => {
+      const accountId = isTutor ? inquiry.parentId : inquiry.tutorId;
+      const key = String(accountId);
+      const existing = groups.get(key);
+      if (existing) existing.push(inquiry);
+      else groups.set(key, [inquiry]);
+      return groups;
+    }, new Map<string, typeof inquiries>())
+  );
+
+  // Keep action items separate from the full booking history.
+  const tutorActionBookings =
+    isTutor && profile
+      ? await db.booking.findMany({
+          where: {
+            tutorId: profile.id,
+            status: { in: ['CHANGE_REQUESTED', 'PROPOSED', 'PENDING_PAYMENT'] },
+            OR: [
+              { startsAt: { gte: now } },
+              { status: 'CHANGE_REQUESTED', requestedStartsAt: { gte: now } },
+            ],
+          },
+          include: {
+            parent: { select: { name: true } },
+            inquiry: { select: { subject: true } },
+          },
+          orderBy: { startsAt: 'asc' },
+        })
+      : [];
+
+  const tutorNeedsResponse = tutorActionBookings.filter(
+    booking => booking.status === 'CHANGE_REQUESTED'
+  );
+  const tutorWaitingForPayment = tutorActionBookings.filter(
+    booking => booking.status === 'PENDING_PAYMENT'
+  );
+
   const openInquiries = inquiries.filter(
     inquiry => inquiry.status === 'OPEN'
   ).length;
+
+  const pendingInquiryItems = inquiries.filter(inquiry => inquiry.status === 'OPEN');
+  const acceptedInquiryItems = inquiries.filter(inquiry => inquiry.status === 'ACCEPTED');
 
   const activeParentInquiries = inquiries.filter(
     inquiry =>
@@ -312,6 +368,7 @@ export default async function Dashboard() {
 
   return (
     <main>
+      <ConversationDeepLink />
       <h1>
         {isTutor
           ? 'Tutor Dashboard'
@@ -321,6 +378,60 @@ export default async function Dashboard() {
       </h1>
 
       <p className="muted">Account type: {who.role}</p>
+
+      {(isTutor || isParent) && (
+        <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
+          <a href="#dashboard-overview">Overview</a>
+          <a href="#my-calendar">Calendar</a>
+          {isParent && parentProposals.length > 0 && <a href="#my-calendar">Proposals ({parentProposals.length})</a>}
+          {isParent && awaitingPayment.length > 0 && <a href="#payments">Payments ({awaitingPayment.length})</a>}
+          {isTutor && <a href="#needs-attention">Needs attention</a>}
+          <Link href="/dashboard/bookings">My Sessions</Link>
+          <a href="#conversations">Messages &amp; inquiries</a>
+          {isParent && <Link href="/tutors">Find a tutor</Link>}
+        </nav>
+      )}
+
+      {isParent && parentProposals.length > 0 && (
+        <div className="dashboard-action-banner" role="status">
+          <div>
+            <strong>{parentProposals.length} {parentProposals.length === 1 ? 'session proposal needs' : 'session proposals need'} your response</strong>
+            <p>Review the tutor's proposed time before confirming a booking.</p>
+          </div>
+          <a href="#my-calendar">Review in calendar</a>
+        </div>
+      )}
+
+      {isParent && awaitingPayment.length > 0 && (
+        <div className="dashboard-action-banner" role="status">
+          <div>
+            <strong>{awaitingPayment.length} {awaitingPayment.length === 1 ? 'session needs payment' : 'sessions need payment'}</strong>
+            <p>Finish payment to confirm your tutoring {awaitingPayment.length === 1 ? 'session' : 'sessions'}.</p>
+          </div>
+          <a href="#payments">Review payments</a>
+        </div>
+      )}
+
+      {isTutor && (openInquiries > 0 || tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && (
+        <div className="dashboard-action-banner" role="status">
+          <div>
+            <strong>You have items needing attention</strong>
+            <p>{openInquiries} new inquiries · {tutorNeedsResponse.length} scheduling requests · {overdueTutorSessions.length} sessions to complete.</p>
+          </div>
+          <a href="#needs-attention">Review items</a>
+        </div>
+      )}
+
+
+
+      {(isTutor || isParent) && (
+        <section id="my-calendar" className="card" style={{ marginTop: 28 }}>
+          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
+          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : isParent ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.tutorId, { id: inquiry.id, name: inquiry.tutor.user.name || 'Tutor', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
+
+        </section>
+      )}
+
 
       {who.role === 'ADMIN' && (
         <section className="card">
@@ -337,7 +448,7 @@ export default async function Dashboard() {
 
       {isTutor && (
         <>
-          <section style={{ marginTop: 24 }}>
+          <section id="dashboard-overview" style={{ marginTop: 24 }}>
             <h2>Overview</h2>
 
             <div
@@ -369,8 +480,8 @@ export default async function Dashboard() {
             </div>
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Account Setup</h2>
+          <details className="card" style={{ marginTop: 24 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>Account setup · {completedSteps} of 5 steps complete{stripe?.payoutsRestricted ? " · Payouts restricted" : ""}</summary>
 
             <p>
               <strong>
@@ -408,15 +519,44 @@ export default async function Dashboard() {
             </p>
 
             <p>
-              Stripe payments:{' '}
+              <strong>Stripe connection:</strong>{' '}
               {!approved
                 ? 'Available after approval'
-                : stripe?.error
-                ? 'Status unavailable'
-                : stripeReady
-                ? 'Ready'
-                : 'Setup incomplete'}
+                : !stripe?.connected
+                ? 'Not connected'
+                : 'Connected'}
             </p>
+
+            {approved && stripe?.connected && (
+              <>
+                <p>
+                  <strong>Card payments:</strong>{' '}
+                  {stripe.error
+                    ? 'Status unavailable'
+                    : stripe.paymentsEnabled
+                    ? 'Active'
+                    : 'Not active'}
+                </p>
+                <p>
+                  <strong>Bank payouts:</strong>{' '}
+                  {stripe.error
+                    ? 'Status unavailable'
+                    : stripe.payoutsEnabled
+                    ? 'Active'
+                    : stripe.payoutsRestricted
+                    ? 'Restricted — verification required'
+                    : 'Not active'}
+                </p>
+                {stripe.payoutsRestricted && !stripe.error && (
+                  <p className="muted">
+                    Stripe has restricted payouts. Complete any outstanding
+                    identity or account verification requirements in Stripe
+                    before expecting bank payouts. Payments received are not
+                    the same as funds available to withdraw.
+                  </p>
+                )}
+              </>
+            )}
 
             {stripe?.error && (
               <p className="muted">{stripe.error}</p>
@@ -432,7 +572,7 @@ export default async function Dashboard() {
                 ? 'Manage Tutor Account'
                 : 'Complete Tutor Setup'}
             </SectionLink>
-          </section>
+          </details>
 
           <section className="card" style={{ marginTop: 24 }}>
             <h2>Upcoming Sessions</h2>
@@ -486,8 +626,8 @@ export default async function Dashboard() {
             )}
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Earnings Summary</h2>
+          <details className="card" style={{ marginTop: 24 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>Earnings breakdown · {money(tutorEarnings)}</summary>
 
             <p>
               <strong>Total booking value:</strong>{' '}
@@ -512,13 +652,13 @@ export default async function Dashboard() {
               other adjustments. They are not confirmed
               bank payouts.
             </p>
-          </section>
+          </details>
         </>
       )}
 
       {isParent && (
         <>
-          <section style={{ marginTop: 24 }}>
+          <section id="dashboard-overview" style={{ marginTop: 24 }}>
             <h2>Overview</h2>
 
             <div
@@ -542,23 +682,14 @@ export default async function Dashboard() {
                 value={activeParentInquiries}
               />
               <StatCard
-                label="Total Paid Bookings"
+                label="Total Session Spending"
                 value={money(totalParentSpending)}
                 detail={`${paidParentBookings.length} paid or completed sessions; excludes refunds`}
               />
             </div>
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Find a Tutor</h2>
-            <p>
-              Search for approved tutors, send inquiries,
-              and arrange your next tutoring session.
-            </p>
-            <SectionLink href="/tutors">
-              Find Tutors
-            </SectionLink>
-          </section>
+
 
           <section className="card" style={{ marginTop: 24 }}>
             <h2>Upcoming Sessions</h2>
@@ -609,17 +740,14 @@ export default async function Dashboard() {
             )}
           </section>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Payments Awaiting Action</h2>
 
-            {awaitingPayment.length === 0 ? (
-              <p>No payments are currently awaiting action.</p>
-            ) : (
+
+          {awaitingPayment.length > 0 && (
+          <section className="card" style={{ marginTop: 24 }} id="payments">
+            <h2>Payments Awaiting Action ({awaitingPayment.length})</h2>
               <>
                 <p className="muted">
-                  Your tutor has accepted these bookings.
-                  Complete payment through the booking
-                  manager below to confirm your session.
+                  Your tutor has accepted these bookings. Pay securely below to confirm your session.
                 </p>
 
                 {awaitingPayment.map(booking => (
@@ -640,25 +768,111 @@ export default async function Dashboard() {
                       {sessionDate(booking.startsAt)} —{' '}
                       {money(booking.amountCents)}
                     </p>
-                    <p className="muted">
-                      Open the corresponding accepted
-                      inquiry under Bookings &amp; Messages
-                      to pay securely.
-                    </p>
+                    {booking.paymentDueAt && (
+                      <p className="muted">Payment deadline: {sessionDate(booking.paymentDueAt)}</p>
+                    )}
+                    <DirectPaymentButton bookingId={booking.id} amount={money(booking.amountCents)} />
                   </div>
                 ))}
               </>
-            )}
           </section>
+          )}
         </>
       )}
 
-      {(isTutor || isParent) && (
-        <section style={{ marginTop: 28 }}>
-          <h2>Bookings &amp; Messages</h2>
+
+
+      {isParent && pendingInquiryItems.length > 0 && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h2>Waiting for tutor response ({pendingInquiryItems.length})</h2>
+          <p className="muted">Your requests have been sent. The tutor must accept the inquiry before scheduling can begin.</p>
+          {pendingInquiryItems.slice(0, 5).map(inquiry => (
+            <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span> · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.tutorId)}&panel=inquiries`}>View inquiry</a></p>
+          ))}
+          <a href="#conversations">View inquiries and messages</a>
+        </section>
+      )}
+
+      {isTutor && acceptedInquiryItems.length > 0 && (
+        <section className="card" style={{ marginTop: 20 }}>
+          <details>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Accepted inquiries — schedule another session ({acceptedInquiryItems.length})</summary>
+            <p className="muted">Open a conversation to propose another session or message the parent. Existing sessions are listed under My Sessions.</p>
+            {acceptedInquiryItems.slice(0, 8).map(inquiry => (
+              <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Open scheduling</a></p>
+            ))}
+            <a href="#conversations">Open messages and scheduling</a>
+          </details>
+        </section>
+      )}
+
+      {isTutor && pendingInquiryItems.length > 0 && (
+        <section className="card" style={{ marginTop: 24 }}>
+          <h2>New tutoring inquiries ({pendingInquiryItems.length})</h2>
+          <p className="muted">Review each request, then accept or decline. Accepting opens scheduling and messaging; it does not charge the parent.</p>
+          {pendingInquiryItems.slice(0, 10).map(inquiry => (
+            <div key={inquiry.id} style={{ padding: '12px 0', borderBottom: '1px solid #e5e7eb' }}>
+              <strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade}
+              <p style={{ whiteSpace: 'pre-wrap', margin: '8px 0' }}>{inquiry.message}</p>
+              <InquiryActions inquiryId={inquiry.id} status={inquiry.status} />
+            </div>
+          ))}
+          {pendingInquiryItems.length > 10 && <a href="#conversations">Review other inquiries</a>}
+        </section>
+      )}
+
+      {isTutor && (
+        <section className="card" style={{ marginTop: 24 }} id="needs-attention">
+          <h2>Needs Your Attention</h2>
+          {overdueTutorSessions.length > 0 && (
+            <div style={{ borderLeft: '4px solid #b45309', paddingLeft: 12, marginBottom: 18 }}>
+              <h3>Awaiting completion ({overdueTutorSessions.length})</h3>
+              <p className="muted">These paid sessions have ended but have not been marked completed.</p>
+              {overdueTutorSessions.map(booking => (
+                <p key={booking.id}>
+                  <strong>{booking.parent.name}</strong> · {sessionDate(booking.startsAt)}
+                  {' · '}{booking.inquiry?.subject || 'Tutoring'}
+                  {' · '}<BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
+                </p>
+              ))}
+            </div>
+          )}
           <p className="muted">
-            Manage tutoring inquiries, conversations,
-            session proposals, and booking updates.
+            Respond to scheduling requests by opening the relevant session. You can accept the proposed time or suggest another.
+          </p>
+          {tutorNeedsResponse.length === 0 ? (
+            <p>No scheduling requests need a response right now.</p>
+          ) : (
+            tutorNeedsResponse.map(booking => (
+              <p key={booking.id}>
+                <strong>{booking.parent.name}</strong> · {booking.inquiry?.subject || 'Tutoring'}
+                {' — '}requested {sessionDate(booking.requestedStartsAt || booking.startsAt)}
+                {' · '}<BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
+              </p>
+            ))
+          )}
+          <details style={{ marginTop: 16 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+              Waiting for parent payment ({tutorWaitingForPayment.length})
+            </summary>
+            {tutorWaitingForPayment.length === 0 ? (
+              <p className="muted">No payments pending.</p>
+            ) : tutorWaitingForPayment.map(booking => (
+              <p key={booking.id}>
+                {booking.parent.name} · {sessionDate(booking.startsAt)} · {money(booking.amountCents)}
+              </p>
+            ))}
+          </details>
+        </section>
+      )}
+
+
+      {(isTutor || isParent) && (
+        <section style={{ marginTop: 28 }} id="conversations">
+          <h2>Messages &amp; Inquiries</h2>
+          <p><Link href="/dashboard/bookings">View all sessions and payments</Link></p>
+          <p className="muted">
+            Choose a conversation to message a tutor or parent, review inquiries, or manage scheduling. For a quick view of all bookings, open My Sessions.
           </p>
 
           {inquiries.length === 0 && (
@@ -667,47 +881,46 @@ export default async function Dashboard() {
             </div>
           )}
 
-          {inquiries.map(inquiry => (
-            <div className="card" key={inquiry.id}>
-              <h3>
-                {inquiry.subject} — {inquiry.grade}
-              </h3>
-              <p>{inquiry.message}</p>
-
-              {isTutor ? (
-                <>
-                  <p>
-                    <strong>From:</strong>{' '}
-                    {inquiry.parent.name}
-                  </p>
-                  <InquiryActions
-                    inquiryId={inquiry.id}
-                    status={inquiry.status}
-                  />
-                </>
-              ) : (
-                <>
-                  <p>
-                    <strong>Tutor:</strong>{' '}
-                    {inquiry.tutor.user.name}
-                  </p>
-                  <p className="muted">
-                    Status: {inquiry.status}
-                  </p>
-                </>
-              )}
-
-              {inquiry.status === 'ACCEPTED' && (
-                <>
-                  <InquiryMessages inquiryId={inquiry.id} />
-                  <BookingManager
-                    inquiryId={inquiry.id}
-                    role={who.role}
-                  />
-                </>
-              )}
-            </div>
-          ))}
+          {conversationGroups.map(([accountId, conversations]) => {
+            const accepted = conversations.filter(inquiry => inquiry.status === 'ACCEPTED');
+            const primaryId = accepted[accepted.length - 1]?.id;
+            const inquiryIds = accepted.map(inquiry => inquiry.id);
+            const partnerName = isTutor ? conversations[0].parent.name : conversations[0].tutor.user.name;
+            return (
+              <details className="card conversation-card" data-conversation-group="true" data-conversation-id={accountId} key={accountId} style={{ marginBottom: 16 }}>
+                <summary className="conversation-summary">
+                  <span>{partnerName}</span>
+                  <span className="conversation-summary-meta">{accepted.length} accepted {accepted.length === 1 ? 'inquiry' : 'inquiries'}</span>
+                </summary>
+                <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+                  <details data-inquiry-panel="true">
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                      Inquiry history ({conversations.length})
+                    </summary>
+                    {conversations.map(inquiry => (
+                      <div id={`inquiry-${inquiry.id}`} key={inquiry.id} style={{ padding: '10px 0', borderBottom: '1px solid #e5e7eb' }}>
+                        <strong>{inquiry.subject} — {inquiry.grade} · {inquiry.status}</strong>
+                        <p>{inquiry.message}</p>
+                        {isTutor && <InquiryActions inquiryId={inquiry.id} status={inquiry.status} />}
+                      </div>
+                    ))}
+                  </details>
+                  {primaryId && (
+                    <>
+                      <details data-message-panel="true" className="conversation-panel">
+                        <summary className="conversation-panel-summary">Messages with {partnerName}</summary>
+                        <InquiryMessages inquiryId={primaryId} inquiryIds={inquiryIds} />
+                      </details>
+                      <details data-session-panel="true" className="conversation-panel">
+                        <summary className="conversation-panel-summary">Tutoring sessions · scheduling and payments</summary>
+                        <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} tutorId={conversations[0].tutorId} />
+                      </details>
+                    </>
+                  )}
+                </div>
+              </details>
+            );
+          })}
         </section>
       )}
     </main>

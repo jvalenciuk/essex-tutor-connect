@@ -1,6 +1,9 @@
+import { getConfiguredStripeSecret } from '../../../lib/stripe-config';
+import { expireUnpaidBookings } from '../../../lib/payment-expiration';
 
 import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
+import { tutorCanAcceptCardPayments } from '../../../lib/stripe-capabilities';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +87,8 @@ export async function POST(req: Request) {
     return fail('Invalid payment request', 400);
   }
 
+  await expireUnpaidBookings();
+
   const booking = await db.booking.findUnique({
     where: { id: bookingId },
     include: {
@@ -122,6 +127,10 @@ export async function POST(req: Request) {
     );
   }
 
+  if (booking.paymentDueAt && booking.paymentDueAt <= new Date()) {
+    return fail('The 24-hour payment deadline has passed. Refresh your bookings.', 409);
+  }
+
   if (booking.startsAt <= new Date()) {
     return fail(
       'The session start time has passed. Please contact your tutor to arrange a new session.',
@@ -149,7 +158,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const secretKey = getConfiguredStripeSecret();
 
   if (!secretKey) {
     return fail(
@@ -159,6 +168,15 @@ export async function POST(req: Request) {
   }
 
   const accountId = booking.tutor.stripeAccountId;
+
+  // Do not start Checkout unless Stripe confirms card payments are active.
+  // Payout restrictions alone do not prevent card payments.
+  if (!(await tutorCanAcceptCardPayments(accountId, secretKey))) {
+    return fail(
+      'This tutor cannot accept card payments right now. Please try another tutor or contact support.',
+      409
+    );
+  }
 
   if (booking.stripeSessionId) {
     const existing = await retrieveSession(
@@ -225,10 +243,51 @@ export async function POST(req: Request) {
     }
   }
 
-  const baseUrl = (
-    process.env.NEXTAUTH_URL ||
-    'https://essex-tutor-connect.vercel.app'
-  ).replace(/\/$/, '');
+  // APP_URL allows Preview and Production to use separate
+  // Stripe Checkout return URLs.
+  // Use the current preview deployment origin so Checkout returns to the
+  // same host as the parent's authenticated session.
+  const configuredBaseUrl =
+    process.env.VERCEL_ENV === 'preview'
+      ? (req.headers.get('origin') ||
+         (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ''))
+      : (process.env.APP_URL ||
+         process.env.NEXTAUTH_URL ||
+         'https://essex-tutor-connect.vercel.app');
+
+  let baseUrl: string;
+
+  try {
+    const parsedUrl = new URL(configuredBaseUrl);
+
+    if (
+      parsedUrl.protocol !== 'https:' ||
+      parsedUrl.username ||
+      parsedUrl.password ||
+      parsedUrl.search ||
+      parsedUrl.hash
+    ) {
+      throw new Error('Invalid application URL');
+    }
+
+    // Only allow our own preview domains as Stripe return destinations.
+    // A checkout launched on a stable branch alias must return to that
+    // same alias, otherwise the parent loses their session cookie.
+    if (process.env.VERCEL_ENV === 'preview' &&
+        !(parsedUrl.hostname.startsWith('essex-tutor-connect-') &&
+          parsedUrl.hostname.endsWith('-essex-tutors.vercel.app'))) {
+      throw new Error('Unexpected preview checkout origin');
+    }
+
+    baseUrl = parsedUrl.origin;
+  } catch {
+    console.error('Invalid application base URL configuration');
+
+    return fail(
+      'Payment return URL is not configured correctly.',
+      503
+    );
+  }
 
   const confirmationUrl =
     `${baseUrl}/dashboard/bookings/confirmation` +
@@ -237,6 +296,13 @@ export async function POST(req: Request) {
   const form = new URLSearchParams();
 
   form.set('mode', 'payment');
+  if (booking.paymentDueAt) {
+    const seconds = Math.floor(booking.paymentDueAt.getTime() / 1000);
+    if (seconds - Math.floor(Date.now() / 1000) < 1800) {
+      return fail('Less than 30 minutes remain to pay. Please arrange a new booking.', 409);
+    }
+    form.set('expires_at', String(seconds));
+  }
   form.set('success_url', `${confirmationUrl}&checkout=success`);
   form.set('cancel_url', `${confirmationUrl}&checkout=cancelled`);
 
@@ -317,6 +383,7 @@ export async function POST(req: Request) {
         startsAt: {
           gt: new Date(),
         },
+        ...(booking.paymentDueAt ? { paymentDueAt: { gt: new Date() } } : {}),
       },
       data: {
         stripeSessionId: session.id,
@@ -324,6 +391,20 @@ export async function POST(req: Request) {
     });
 
     if (!updated.count) {
+      // Another request may have saved this same idempotent session.
+      // Do not expire it: the winning request could already be using it.
+      const current = await db.booking.findUnique({
+        where: { id: booking.id },
+        select: { stripeSessionId: true, status: true },
+      });
+
+      if (
+        current?.status === 'PENDING_PAYMENT' &&
+        current.stripeSessionId === session.id
+      ) {
+        return Response.json({ url: session.url, reused: true });
+      }
+
       return fail(
         'This booking changed while checkout was starting. Refresh My Bookings before trying again.',
         409

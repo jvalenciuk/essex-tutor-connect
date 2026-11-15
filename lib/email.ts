@@ -5,7 +5,8 @@ type NotificationType =
   | 'CONFIRMED'
   | 'CANCELLED'
   | 'REFUNDED'
-  | 'REMINDER';
+  | 'REMINDER'
+  | 'PAYMENT_EXPIRED';
 
 type RecipientRole = 'parent' | 'tutor';
 
@@ -88,16 +89,15 @@ async function sendEmail(
     : null;
 }
 
-async function sendTrackedReminder(
+async function sendTrackedNotification(
   bookingId: string,
   role: RecipientRole,
   to: string,
   subject: string,
-  body: string
+  body: string,
+  type: 'REMINDER' | 'PAYMENT_EXPIRED'
 ): Promise<void> {
-  const type = 'REMINDER';
-  const idempotencyKey =
-    `reminder-${bookingId}-${role}`;
+  const idempotencyKey = `${type.toLowerCase()}-${bookingId}-${role}`;
 
   const existing = await db.notificationDelivery.upsert({
     where: {
@@ -164,8 +164,8 @@ async function sendTrackedReminder(
 
     if (
       !booking ||
-      booking.status !== 'PAID' ||
-      booking.startsAt <= new Date()
+      (type === 'REMINDER' && (booking.status !== 'PAID' || booking.startsAt <= new Date())) ||
+      (type === 'PAYMENT_EXPIRED' && booking.status !== 'CANCELLED')
     ) {
       await db.notificationDelivery.update({
         where: { id: existing.id },
@@ -332,6 +332,25 @@ export async function notifyBooking(
       `\nView your dashboard:\n${dashboard}`;
   }
 
+  if (type === 'PAYMENT_EXPIRED') {
+    heading = 'Tutoring reservation expired';
+
+    parentBody =
+      `Hello ${parent.name},\n\n` +
+      `Your tutoring reservation expired because payment was not completed within 24 hours of acceptance.\n\n` +
+      `Tutor: ${tutor.name}\n` +
+      details +
+      `\nNo payment was collected for this reservation. You can request another session through your existing conversation.\n\n` +
+      `View your dashboard:\n${dashboard}`;
+
+    tutorBody =
+      `Hello ${tutor.name},\n\n` +
+      `The parent's 24-hour payment window expired, so this tutoring time is available again.\n\n` +
+      `Parent: ${parent.name}\n` +
+      details +
+      `\nView your dashboard:\n${dashboard}`;
+  }
+
   if (type === 'REFUNDED') {
     heading =
       'Tutoring session refund confirmed';
@@ -403,13 +422,14 @@ export async function notifyBooking(
 
   const results = await Promise.allSettled(
     notifications.map(item =>
-      type === 'REMINDER'
-        ? sendTrackedReminder(
+      (type === 'REMINDER' || type === 'PAYMENT_EXPIRED')
+        ? sendTrackedNotification(
             booking.id,
             item.role,
             item.to,
             item.subject,
-            item.body
+            item.body,
+            type
           )
         : sendEmail(
             item.to,

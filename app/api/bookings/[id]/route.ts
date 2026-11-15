@@ -1,9 +1,11 @@
+import { getConfiguredStripeSecret } from '../../../../lib/stripe-config';
 
 import { db } from '../../../../lib/db';
 import { identity, fail } from '../../../../lib/security';
 import { notifyBooking } from '../../../../lib/email';
 import { checkTutorSlot } from '../../../../lib/booking-conflicts';
 import { z } from 'zod';
+import { PAYMENT_WINDOW_MS } from '../../../../lib/payment-expiration';
 
 export const dynamic = 'force-dynamic';
 
@@ -162,28 +164,42 @@ export async function PATCH(
       return fail('The proposed session is in the past', 409);
     }
 
-    const issue = await checkTutorSlot(
-      booking.tutorId,
-      booking.startsAt,
-      booking.durationMinutes,
-      booking.id
-    );
+    // Serialize all acceptance attempts for this tutor, including
+    // different bookings competing for the same time slot.
+    // The transaction-scoped PostgreSQL advisory lock is released on commit.
+    let accepted: { count: number };
+    try {
+      accepted = await db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
-    if (issue) {
-      return fail(issue, 409);
+        const issue = await checkTutorSlot(
+          booking.tutorId,
+          booking.startsAt,
+          booking.durationMinutes,
+          booking.id,
+          tx
+        );
+        if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+        return tx.booking.updateMany({
+          where: {
+            id,
+            status: 'PROPOSED',
+            parentId: who.id,
+            startsAt: { gt: new Date() },
+          },
+          data: { status: 'PENDING_PAYMENT', paymentDueAt: new Date(Date.now() + PAYMENT_WINDOW_MS) },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+        return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+      }
+      console.error('Booking acceptance transaction failed', error);
+      return fail('Unable to reserve the session. Please try again.', 503);
     }
 
-    const result = await db.booking.updateMany({
-      where: {
-        id,
-        status: 'PROPOSED',
-        parentId: who.id,
-        startsAt: { gt: new Date() },
-      },
-      data: { status: 'PENDING_PAYMENT' },
-    });
-
-    if (!result.count) {
+    if (!accepted.count) {
       return fail('Booking is no longer available', 409);
     }
 
@@ -230,52 +246,56 @@ export async function PATCH(
       return fail('Invalid requested duration', 409);
     }
 
-    const issue = await checkTutorSlot(
-      booking.tutorId,
-      requestedStartsAt,
-      requestedDurationMinutes,
-      booking.id
+    const amountCents = Math.round(
+      (booking.tutor.hourlyRateCents * requestedDurationMinutes) / 60
     );
+    const platformFeeCents = Math.round(amountCents * 0.15);
 
-    if (issue) {
-      return fail(issue, 409);
+    let acceptedRequested: { count: number };
+    try {
+      acceptedRequested = await db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
+
+        const issue = await checkTutorSlot(
+          booking.tutorId,
+          requestedStartsAt,
+          requestedDurationMinutes,
+          booking.id,
+          tx
+        );
+        if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+        return tx.booking.updateMany({
+          where: {
+            id,
+            status: 'CHANGE_REQUESTED',
+            tutor: { userId: who.id },
+            requestedStartsAt,
+            requestedDurationMinutes,
+          },
+          data: {
+            startsAt: requestedStartsAt,
+            durationMinutes: requestedDurationMinutes,
+            amountCents,
+            platformFeeCents,
+            status: 'PENDING_PAYMENT',
+            paymentDueAt: new Date(Date.now() + PAYMENT_WINDOW_MS),
+            requestedStartsAt: null,
+            requestedDurationMinutes: null,
+            requestNote: null,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+        return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+      }
+      console.error('Requested booking acceptance failed', error);
+      return fail('Unable to reserve the requested time. Please retry.', 503);
     }
 
-    const amountCents = Math.round(
-      (booking.tutor.hourlyRateCents *
-        requestedDurationMinutes) /
-        60
-    );
-
-    const platformFeeCents = Math.round(
-      amountCents * 0.15
-    );
-
-    const result = await db.booking.updateMany({
-      where: {
-        id,
-        status: 'CHANGE_REQUESTED',
-        tutor: { userId: who.id },
-        requestedStartsAt,
-        requestedDurationMinutes,
-      },
-      data: {
-        startsAt: requestedStartsAt,
-        durationMinutes: requestedDurationMinutes,
-        amountCents,
-        platformFeeCents,
-        status: 'PENDING_PAYMENT',
-        requestedStartsAt: null,
-        requestedDurationMinutes: null,
-        requestNote: null,
-      },
-    });
-
-    if (!result.count) {
-      return fail(
-        'The requested time has already changed. Refresh bookings.',
-        409
-      );
+    if (!acceptedRequested.count) {
+      return fail('The requested time has already changed. Refresh bookings.', 409);
     }
 
     return Response.json({
@@ -357,44 +377,53 @@ export async function PATCH(
       return fail('Choose a future date and time', 400);
     }
 
-    const issue = await checkTutorSlot(
-      booking.tutorId,
-      startsAt,
-      data.durationMinutes,
-      booking.id
-    );
-
-    if (issue) {
-      return fail(issue, 409);
-    }
-
     const amountCents = Math.round(
-      (booking.tutor.hourlyRateCents *
-        data.durationMinutes) /
-        60
+      (booking.tutor.hourlyRateCents * data.durationMinutes) / 60
     );
+    const platformFeeCents = Math.round(amountCents * 0.15);
 
-    const platformFeeCents = Math.round(
-      amountCents * 0.15
-    );
+    // Apply the same per-tutor lock used by both acceptance paths.
+    // A simultaneous ACCEPT cannot reserve this slot between
+    // the availability check and the revised proposal update.
+    let result: { count: number };
+    try {
+      result = await db.$transaction(async tx => {
+        await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${booking.tutorId}))`;
 
-    const result = await db.booking.updateMany({
-      where: {
-        id,
-        status: 'CHANGE_REQUESTED',
-        tutor: { userId: who.id },
-      },
-      data: {
-        startsAt,
-        durationMinutes: data.durationMinutes,
-        amountCents,
-        platformFeeCents,
-        status: 'PROPOSED',
-        requestedStartsAt: null,
-        requestedDurationMinutes: null,
-        requestNote: null,
-      },
-    });
+        const issue = await checkTutorSlot(
+          booking.tutorId,
+          startsAt,
+          data.durationMinutes,
+          booking.id,
+          tx
+        );
+        if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+        return tx.booking.updateMany({
+          where: {
+            id,
+            status: 'CHANGE_REQUESTED',
+            tutor: { userId: who.id },
+          },
+          data: {
+            startsAt,
+            durationMinutes: data.durationMinutes,
+            amountCents,
+            platformFeeCents,
+            status: 'PROPOSED',
+            requestedStartsAt: null,
+            requestedDurationMinutes: null,
+            requestNote: null,
+          },
+        });
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+        return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+      }
+      console.error('Booking revision transaction failed', error);
+      return fail('Unable to revise the session. Please retry.', 503);
+    }
 
     if (!result.count) {
       return fail('Booking has already changed', 409);
@@ -521,7 +550,7 @@ export async function PATCH(
 
     const accountId = booking.tutor.stripeAccountId;
     const sessionId = booking.stripeSessionId;
-    const secret = process.env.STRIPE_SECRET_KEY;
+    const secret = getConfiguredStripeSecret();
 
     if (!accountId || !sessionId || !secret) {
       return fail(

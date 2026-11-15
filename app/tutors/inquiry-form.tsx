@@ -38,6 +38,7 @@ export default function InquiryForm({
 
   const [preferredTime, setPreferredTime] =
     useState('');
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     function receiveTime(event: Event) {
@@ -56,6 +57,7 @@ export default function InquiryForm({
 
       setPreferredTime(detail.time);
       setOpen(true);
+      setSent(false);
       setStatus('');
     }
 
@@ -111,9 +113,8 @@ export default function InquiryForm({
         );
       }
 
-      setStatus(
-        'Inquiry sent. You can track it in your dashboard.'
-      );
+      setSent(true);
+      setStatus('Inquiry sent successfully. Your tutor can now review your request.');
 
       setOpen(false);
       setSubject('');
@@ -134,14 +135,8 @@ export default function InquiryForm({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() =>
-          setOpen(!open)
-        }
-      >
-        Contact{' '}
-        {name.split(' ')[0]}
+      <button type="button" aria-expanded={open} onClick={() => { setOpen(!open); setSent(false); setStatus(''); }}>
+        {open ? 'Close inquiry form' : `Request tutoring with ${name.split(' ')[0]}`}
       </button>
 
       {open && (
@@ -216,8 +211,7 @@ export default function InquiryForm({
           </label>
 
           <label>
-            Describe learning goals
-            and preferred schedule
+            Learning goals and preferred schedule
             <textarea
               className="field"
               required
@@ -244,15 +238,16 @@ export default function InquiryForm({
           <button disabled={busy}>
             {busy
               ? 'Sending…'
-              : 'Send inquiry'}
+              : 'Send free inquiry'}
           </button>
         </form>
       )}
 
       {status && (
-        <p role="status">
-          {status}
-        </p>
+        <div role="status" className={sent ? 'card' : undefined} style={{ marginTop: 12 }}>
+          <p>{status}</p>
+          {sent && <a href="/dashboard">Go to dashboard to track your inquiry</a>}
+        </div>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ type Filters = {
   city?: string;
   online?: string;
   maxRate?: string;
+  sort?: string;
 };
 
 function uniqueOptions(values: string[][]): string[] {
@@ -101,6 +102,8 @@ export default async function Tutors({
     Number.isFinite(maxRate) &&
     maxRate > 0;
 
+  const sort = ['price-asc', 'price-desc', 'name'].includes(q.sort || '') ? q.sort : 'price-asc';
+
   const tutors = approvedTutors
     .filter(tutor => {
       if (subject && !tutor.subjects.includes(subject)) {
@@ -128,6 +131,11 @@ export default async function Tutors({
 
       return true;
     })
+    .sort((a, b) => sort === 'price-desc'
+      ? b.hourlyRateCents - a.hourlyRateCents
+      : sort === 'name'
+        ? a.user.name.localeCompare(b.user.name, 'en-CA')
+        : a.hourlyRateCents - b.hourlyRateCents)
     .slice(0, 100);
 
   return (
@@ -146,7 +154,7 @@ export default async function Tutors({
           marginBottom: 24,
         }}
       >
-        <h2>Find the right match</h2>
+        <h2 style={{ marginTop: 0 }}>Find the right match</h2>
 
         <div
           style={{
@@ -218,6 +226,15 @@ export default async function Tutors({
           </label>
 
           <label>
+            Sort results
+            <select className="field" name="sort" defaultValue={sort}>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+              <option value="name">Tutor name: A to Z</option>
+            </select>
+          </label>
+
+          <label>
             Online tutoring
             <select
               className="field"
@@ -259,7 +276,7 @@ export default async function Tutors({
         </div>
       </form>
 
-      <p className="muted">
+      <p className="muted" role="status">
         <strong>{tutors.length}</strong>{' '}
         matching tutor{tutors.length === 1 ? '' : 's'}
         {tutors.length === 100
@@ -275,7 +292,7 @@ export default async function Tutors({
       >
         {tutors.map(tutor => (
           <article
-            className="card"
+            className="card tutor-result-card"
             key={tutor.id}
             style={{
               minWidth: 0,
@@ -318,43 +335,25 @@ export default async function Tutors({
                 : 'Contact tutor about session location'}
             </p>
 
-            <h3>About this tutor</h3>
+            <p style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{tutor.bio}</p>
 
-            <p style={{ whiteSpace: 'pre-wrap' }}>
-              {tutor.bio}
-            </p>
+            <div className="tutor-quick-facts">
+              <div><strong>Subjects</strong><Tags items={tutor.subjects} /></div>
+              <div><strong>Grades</strong><Tags items={tutor.grades} /></div>
+              <div><strong>Languages</strong><Tags items={tutor.languages} /></div>
+            </div>
 
-            <h3>Qualifications and experience</h3>
-
-            <p style={{ whiteSpace: 'pre-wrap' }}>
-              {tutor.qualifications ||
-                'Contact this tutor for details.'}
-            </p>
-
-            <h3>Subjects</h3>
-            <Tags items={tutor.subjects} />
-
-            <h3>Grades</h3>
-            <Tags items={tutor.grades} />
-
-            <h3>Languages</h3>
-            <Tags items={tutor.languages} />
-
-            <TutorAvailability tutorId={tutor.id} />
-
-            <div
-              style={{
-                marginTop: 18,
-                paddingTop: 14,
-                borderTop: '1px solid #ddd',
-              }}
-            >
-              <h3>Interested in tutoring?</h3>
-
-              <p className="muted">
-                Contact this tutor to discuss your learning
-                goals. No payment is required to send an inquiry.
+            <details className="tutor-more-details">
+              <summary>Qualifications, experience and availability</summary>
+              <h3>Qualifications and experience</h3>
+              <p style={{ whiteSpace: 'pre-wrap' }}>
+                {tutor.qualifications || 'Contact this tutor for details.'}
               </p>
+              <TutorAvailability tutorId={tutor.id} />
+            </details>
+
+            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #ddd' }}>
+              <p className="muted">Send a free inquiry to discuss tutoring and scheduling. No payment required.</p>
 
               <InquiryForm
                 tutorId={tutor.id}

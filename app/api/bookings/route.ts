@@ -3,6 +3,7 @@ import { db } from '../../../lib/db';
 import { identity, fail } from '../../../lib/security';
 import { checkTutorSlot } from '../../../lib/booking-conflicts';
 import { z } from 'zod';
+import { expireUnpaidBookings } from '../../../lib/payment-expiration';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,8 +18,8 @@ const bookingSchema = z.object({
 export async function POST(req: Request) {
   const who = await identity();
 
-  if (!who || who.role !== 'TUTOR') {
-    return fail('Tutor account required', 403);
+  if (!who || (who.role !== 'TUTOR' && who.role !== 'PARENT')) {
+    return fail('Parent or tutor account required', 403);
   }
 
   let data: z.infer<typeof bookingSchema>;
@@ -40,9 +41,10 @@ export async function POST(req: Request) {
       id: data.inquiryId,
       status: 'ACCEPTED',
       tutor: {
-        userId: who.id,
+        ...(who.role === 'TUTOR' ? { userId: who.id } : {}),
         verification: 'APPROVED',
       },
+      ...(who.role === 'PARENT' ? { parentId: who.id } : {}),
     },
     include: {
       tutor: true,
@@ -52,6 +54,8 @@ export async function POST(req: Request) {
   if (!inquiry) {
     return fail('Accepted inquiry not found', 403);
   }
+
+  await expireUnpaidBookings(inquiry.tutorId);
 
   const issue = await checkTutorSlot(
     inquiry.tutorId,
@@ -104,7 +108,11 @@ export async function POST(req: Request) {
       durationMinutes: data.durationMinutes,
       amountCents,
       platformFeeCents,
-      status: 'PROPOSED',
+      status: who.role === 'PARENT' ? 'CHANGE_REQUESTED' : 'PROPOSED',
+      ...(who.role === 'PARENT' ? {
+        requestedStartsAt: startsAt,
+        requestedDurationMinutes: data.durationMinutes,
+      } : {}),
     },
     select: {
       id: true,
@@ -142,6 +150,8 @@ export async function GET() {
       headers: responseHeaders,
     });
   }
+
+  await expireUnpaidBookings();
 
   const bookings = await db.booking.findMany({
     where:

@@ -15,10 +15,13 @@ type Message = {
 
 export default function InquiryMessages({
   inquiryId,
+  inquiryIds,
 }: {
   inquiryId: string;
+  inquiryIds?: string[];
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const ids = inquiryIds?.join(',') || inquiryId;
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -27,24 +30,24 @@ export default function InquiryMessages({
 
   const loadMessages = useCallback(async () => {
     try {
-      const response = await fetch(
-        `/api/messages?inquiryId=${encodeURIComponent(inquiryId)}`,
-        { cache: 'no-store' }
-      );
-
-      if (!response.ok) {
-        throw new Error('Unable to load messages');
-      }
-
-      const data: Message[] = await response.json();
-      setMessages(data);
+      const all = await Promise.all(ids.split(',').map(async id => {
+        const response = await fetch(
+          `/api/messages?inquiryId=${encodeURIComponent(id)}`,
+          { cache: 'no-store' }
+        );
+        if (!response.ok) throw new Error('Unable to load messages');
+        return (await response.json()) as Message[];
+      }));
+      setMessages(all.flat().sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      ));
       setError('');
     } catch {
       setError('Unable to load messages. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [inquiryId]);
+  }, [ids]);
 
   useEffect(() => {
     loadMessages();

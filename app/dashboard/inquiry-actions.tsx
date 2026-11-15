@@ -35,20 +35,21 @@ export default function InquiryActions({
       );
 
       if (!response.ok) {
-        throw new Error('Unable to update inquiry');
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || 'Unable to update inquiry');
       }
 
       setCurrentStatus(newStatus);
       router.refresh();
-    } catch {
-      setError('Something went wrong. Please try again.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
   if (currentStatus !== 'OPEN') {
-    return <p>Status: {currentStatus}</p>;
+    return <div role="status"><p className="muted">{currentStatus === 'ACCEPTED' ? 'Accepted — you can now arrange a session.' : 'Inquiry declined.'}</p>{currentStatus === 'ACCEPTED' && <a href="#conversations">Open messages and scheduling</a>}</div>;
   }
 
   return (
@@ -58,7 +59,7 @@ export default function InquiryActions({
         disabled={loading}
         onClick={() => updateStatus('ACCEPTED')}
       >
-        Accept inquiry
+        Accept & open scheduling
       </button>
 
       {' '}

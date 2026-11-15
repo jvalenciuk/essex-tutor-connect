@@ -25,6 +25,7 @@ type Booking = {
 };
 
 type Role = 'PARENT' | 'TUTOR' | 'ADMIN' | '';
+type BookingTab = 'action' | 'upcoming' | 'history';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +78,8 @@ export default function MyBookingsPage() {
   const { status: sessionStatus } = useSession();
 
   const [role, setRole] = useState<Role>('');
+  const [activeTab, setActiveTab] = useState<BookingTab>('action');
+  const [search, setSearch] = useState('');
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -346,6 +349,19 @@ export default function MyBookingsPage() {
   const history = sorted
     .filter(b => category(b) === 'history')
     .reverse();
+  const tabs: { id: BookingTab; title: string; count: number; empty: string; items: Booking[] }[] = [
+    { id: 'action', title: 'Awaiting Action', count: actionItems.length, empty: 'Nothing needs attention right now.', items: actionItems },
+    { id: 'upcoming', title: 'Upcoming', count: upcoming.length, empty: 'No upcoming confirmed sessions.', items: upcoming },
+    { id: 'history', title: 'History', count: history.length, empty: 'No previous bookings yet.', items: history },
+  ];
+  const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
+  const filteredItems = selectedTab.items.filter(booking => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return [booking.parent?.name, booking.tutor?.user?.name, booking.inquiry?.subject,
+      booking.inquiry?.grade, labels[booking.status], booking.status,
+      dateText(booking.startsAt)].some(value => value?.toLowerCase().includes(query));
+  });
 
   function BookingCard({ booking }: { booking: Booking }) {
     const start = new Date(booking.startsAt).getTime();
@@ -414,20 +430,12 @@ export default function MyBookingsPage() {
           </strong>
         </div>
 
-        {booking.parent?.name && (
-          <p>Parent: {booking.parent.name}</p>
-        )}
-
-        {booking.tutor?.user?.name && (
-          <p>Tutor: {booking.tutor.user.name}</p>
-        )}
-
-        {booking.inquiry?.grade && (
-          <p>Grade: {booking.inquiry.grade}</p>
-        )}
-
-        <p>Duration: {booking.durationMinutes} minutes</p>
-        <p>Session price: {money(booking.amountCents)}</p>
+        <p style={{ margin: '10px 0' }}>
+          {booking.parent?.name && <span>Parent: {booking.parent.name} · </span>}
+          {booking.tutor?.user?.name && <span>Tutor: {booking.tutor.user.name} · </span>}
+          {booking.inquiry?.grade && <span>{booking.inquiry.grade} · </span>}
+          {booking.durationMinutes} min · <strong>{money(booking.amountCents)}</strong>
+        </p>
 
         {isTutor && (
           <p className="muted">
@@ -743,7 +751,7 @@ export default function MyBookingsPage() {
   if (sessionStatus === 'unauthenticated') {
     return (
       <main>
-        <h1>My Bookings</h1>
+        <h1>My Sessions</h1>
         <p>Please sign in to view your bookings.</p>
         <Link href="/login">Sign In</Link>
       </main>
@@ -760,38 +768,38 @@ export default function MyBookingsPage() {
     >
       <Link href="/dashboard">Back to Dashboard</Link>
 
-      <h1>My Bookings</h1>
+      <h1>My Sessions</h1>
 
       <p className="muted">
-        Manage tutoring sessions, payments, scheduling
-        requests, and booking history in one place.
+        View confirmed sessions, respond to scheduling requests, and manage payments in one place.
       </p>
 
-      <div
-        className="cards"
-        style={{
-          gridTemplateColumns:
-            'repeat(auto-fit, minmax(190px, 1fr))',
-        }}
-      >
-        {[
-          ['Action Required', actionItems.length],
-          ['Upcoming Sessions', upcoming.length],
-          ['Booking History', history.length],
-        ].map(([label, count]) => (
-          <div className="card" key={String(label)}>
-            <p className="muted">{label}</p>
-            <h2>{count}</h2>
-          </div>
+      <nav className="booking-tabs" aria-label="Filter tutoring sessions">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            className={activeTab === tab.id ? 'booking-tab active' : 'booking-tab'}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+            onClick={() => { setActiveTab(tab.id); resetEditor(); setError(''); }}
+          >
+            {tab.title} <span className="booking-tab-count">{tab.count}</span>
+          </button>
         ))}
-      </div>
+      </nav>
 
-      <button
-        disabled={loading || busyId !== null}
-        onClick={() => void load()}
-      >
-        {loading ? 'Loading...' : 'Refresh Bookings'}
-      </button>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16 }}>
+        <input
+          aria-label="Search sessions"
+          placeholder="Search tutor, parent, subject or date"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: '1 1 250px', padding: '11px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
+        />
+        <button disabled={loading || busyId !== null} onClick={() => void load()}>
+          {loading ? 'Loading...' : 'Refresh'}
+        </button>
+      </div>
 
       {!role && !loading && (
         <p className="muted">
@@ -813,25 +821,11 @@ export default function MyBookingsPage() {
       )}
 
       {!loading && (
-        <>
-          <Section
-            title="Action Required"
-            items={actionItems}
-            empty="No bookings need attention."
-          />
-
-          <Section
-            title="Upcoming Sessions"
-            items={upcoming}
-            empty="No upcoming confirmed sessions."
-          />
-
-          <Section
-            title="Booking History"
-            items={history}
-            empty="No previous bookings yet."
-          />
-        </>
+        <Section
+          title={selectedTab.title}
+          items={filteredItems}
+          empty={search.trim() ? 'No sessions match your search.' : selectedTab.empty}
+        />
       )}
     </main>
   );

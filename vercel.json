@@ -1,9 +1,12 @@
-
 {
   "crons": [
     {
       "path": "/api/cron/booking-reminders",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/expire-payments",
+      "schedule": "15 12 * * *"
     }
   ]
 }

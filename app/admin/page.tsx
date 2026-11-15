@@ -1,398 +1,128 @@
-
 import { identity } from '../../lib/security';
 import { db } from '../../lib/db';
 import { redirect } from 'next/navigation';
 import Verify from './verify';
+import RefundReconcile from './refund-reconcile';
 
 export const dynamic = 'force-dynamic';
 
-function money(cents: number) {
-  return new Intl.NumberFormat('en-CA', {
-    style: 'currency',
-    currency: 'CAD',
-  }).format(cents / 100);
-}
-
-function dateTime(date: Date) {
-  return date.toLocaleString('en-CA', {
-    timeZone: 'America/Toronto',
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-}
+const money = (cents: number) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(cents / 100);
+const dateTime = (date: Date) => date.toLocaleString('en-CA', { timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short' });
 
 export default async function Admin() {
   const who = await identity();
-
-  if (who?.role !== 'ADMIN') {
-    redirect('/login');
-  }
-
-  const [tutors, bookings, bookingCounts] =
-    await Promise.all([
-      db.tutorProfile.findMany({
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      }),
-
-      db.booking.findMany({
-        include: {
-          parent: {
-            select: {
-              name: true,
-            },
-          },
-          tutor: {
-            include: {
-              user: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-          inquiry: {
-            select: {
-              subject: true,
-            },
-          },
-        },
-        orderBy: {
-          startsAt: 'desc',
-        },
-        take: 100,
-      }),
-
-      db.booking.groupBy({
-        by: ['status'],
-        _count: {
-          _all: true,
-        },
-      }),
-    ]);
-
-  const counts = Object.fromEntries(
-    bookingCounts.map(item => [
-      item.status,
-      item._count._all,
-    ])
-  );
-
-  const pendingTutors = tutors.filter(
-    tutor => tutor.verification === 'PENDING'
-  );
-
-  const approvedTutors = tutors.filter(
-    tutor => tutor.verification === 'APPROVED'
-  );
-
-  const pendingPayments =
-    counts['PENDING_PAYMENT'] || 0;
-
-  const paidBookings =
-    counts['PAID'] || 0;
-
-  const completedBookings =
-    counts['COMPLETED'] || 0;
-
-  const refundedBookings =
-    counts['REFUNDED'] || 0;
+  if (!who?.id) redirect('/login');
+  const admin = await db.user.findUnique({ where: { id: who.id }, select: { role: true } });
+  if (admin?.role !== 'ADMIN') return <main><h1>Access denied</h1><p>Administrator access is required.</p></main>;
 
   const now = new Date();
+  const [tutors, bookings, grouped, overdue, failedEmails] = await Promise.all([
+    db.tutorProfile.findMany({
+      include: { user: { select: { name: true, email: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+    db.booking.findMany({
+      include: {
+        parent: { select: { name: true } },
+        tutor: { include: { user: { select: { name: true } } } },
+        inquiry: { select: { subject: true } },
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 100,
+    }),
+    db.booking.groupBy({ by: ['status'], _count: { _all: true } }),
+    db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: now } } }),
+    db.notificationDelivery.count({ where: { type: 'PAYMENT_EXPIRED', status: 'FAILED' } }),
+  ]);
+  const counts = Object.fromEntries(grouped.map(g => [g.status, g._count._all]));
+  const pendingTutors = tutors.filter(t => t.verification === 'PENDING');
+  const attention = bookings.filter(b => b.status === 'PENDING_PAYMENT' &&
+    (b.startsAt <= now || (b.paymentDueAt !== null && b.paymentDueAt <= now)));
+  const upcoming = bookings.filter(b => b.startsAt > now &&
+    (b.status === 'PAID' || b.status === 'PENDING_PAYMENT'))
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()).slice(0, 20);
+  const metrics = [
+    { label: 'Tutor approvals', value: pendingTutors.length },
+    { label: 'Awaiting payment', value: counts.PENDING_PAYMENT || 0 },
+    { label: 'Paid sessions', value: counts.PAID || 0 },
+    { label: 'Completed', value: counts.COMPLETED || 0 },
+    { label: 'Refunded', value: counts.REFUNDED || 0 },
+    { label: 'Payment alerts', value: overdue + failedEmails },
+  ];
+  const tableStyle = { width: '100%', borderCollapse: 'collapse' as const };
+  const cellStyle = { padding: '10px 12px', borderBottom: '1px solid var(--border, #ddd)', textAlign: 'left' as const };
 
-  const upcoming = bookings
-    .filter(
-      booking =>
-        booking.startsAt > now &&
-        (booking.status === 'PAID' ||
-          booking.status === 'PENDING_PAYMENT')
-    )
-    .sort(
-      (a, b) =>
-        a.startsAt.getTime() -
-        b.startsAt.getTime()
-    );
+  return <main style={{ maxWidth: 1160, margin: '0 auto', paddingBottom: 48 }}>
+    <header style={{ marginBottom: 22 }}>
+      <h1 style={{ marginBottom: 6 }}>Administrator Dashboard</h1>
+      <p className="muted" style={{ marginTop: 0 }}>Tutor approvals, reservations and payments in one place.</p>
+    </header>
 
-  const attention = bookings.filter(
-    booking =>
-      booking.status === 'PENDING_PAYMENT' &&
-      booking.startsAt <= now
-  );
+    <section className="cards" style={{ marginBottom: 22 }}>
+      {metrics.map(m => <div className="card" key={m.label} style={{ padding: 16 }}>
+        <p className="muted" style={{ margin: '0 0 6px', fontSize: 13 }}>{m.label}</p>
+        <strong style={{ fontSize: 27 }}>{m.value}</strong>
+      </div>)}
+    </section>
 
-  return (
-    <main>
-      <h1>Administrator Dashboard</h1>
+    {(overdue > 0 || failedEmails > 0 || attention.length > 0) && <section className="card" style={{ marginBottom: 20 }}>
+      <h2 style={{ marginTop: 0 }}>Needs attention</h2>
+      <p>{overdue} overdue payment deadlines · {failedEmails} failed expiration emails</p>
+      {attention.map(b => <p key={b.id}><strong>{b.parent.name}</strong> with {b.tutor.user.name} · {dateTime(b.startsAt)} · {money(b.amountCents)} <span className="muted">({b.id})</span></p>)}
+      <p className="muted">Verify Stripe payment status before changing any reservation.</p>
+    </section>}
 
-      <p className="muted">
-        Review tutor applications, monitor bookings,
-        and identify payments requiring attention.
-      </p>
+    <section className="card" style={{ marginBottom: 20 }}>
+      <h2 style={{ marginTop: 0 }}>Upcoming sessions <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}>({upcoming.length})</span></h2>
+      {upcoming.length === 0 ? <p className="muted">No upcoming paid or awaiting-payment sessions.</p> :
+      <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
+        <thead><tr>{['Date & time', 'Parent', 'Tutor', 'Subject', 'Amount', 'Status'].map(h => <th key={h} style={cellStyle}>{h}</th>)}</tr></thead>
+        <tbody>{upcoming.map(b => <tr key={b.id}>
+          <td style={cellStyle}>{dateTime(b.startsAt)}</td>
+          <td style={cellStyle}>{b.parent.name}</td>
+          <td style={cellStyle}>{b.tutor.user.name}</td>
+          <td style={cellStyle}>{b.inquiry?.subject || 'Tutoring'}</td>
+          <td style={cellStyle}>{money(b.amountCents)}</td>
+          <td style={cellStyle}><strong>{b.status === 'PENDING_PAYMENT' ? 'Awaiting payment' : 'Paid'}</strong></td>
+        </tr>)}</tbody>
+      </table></div>}
+    </section>
 
-      <section className="cards">
-        {[
-          {
-            title: 'Pending tutor approvals',
-            value: pendingTutors.length,
-          },
-          {
-            title: 'Approved tutors',
-            value: approvedTutors.length,
-          },
-          {
-            title: 'Awaiting payment',
-            value: pendingPayments,
-          },
-          {
-            title: 'Paid sessions',
-            value: paidBookings,
-          },
-          {
-            title: 'Completed sessions',
-            value: completedBookings,
-          },
-          {
-            title: 'Refunded sessions',
-            value: refundedBookings,
-          },
-        ].map(item => (
-          <div className="card" key={item.title}>
-            <p className="muted">
-              {item.title}
-            </p>
+    <section className="card" style={{ marginBottom: 20 }}>
+      <h2 style={{ marginTop: 0 }}>Tutor applications <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}>({pendingTutors.length} pending · {tutors.filter(t => t.verification === 'APPROVED').length} approved)</span></h2>
+      {pendingTutors.length === 0 && <p className="muted">No applications awaiting review.</p>}
+      {pendingTutors.map(t => <div key={t.id} style={{ padding: '12px 0', borderTop: '1px solid var(--border, #ddd)' }}>
+        <strong>{t.user.name}</strong> · {t.user.email}
+        <p className="muted">{t.qualifications} · {t.subjects.join(', ')} · {t.grades.join(', ')} · {money(t.hourlyRateCents)}/hr</p>
+        <p className="muted">Verify credentials and safeguarding documents outside the platform before approving.</p>
+        <Verify id={t.id} />
+      </div>)}
+      {tutors.filter(t => t.verification !== 'PENDING').length > 0 &&
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600 }}>View approved and rejected tutors</summary>
+          {tutors.filter(t => t.verification !== 'PENDING').map(t => <div key={t.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border, #ddd)' }}>
+            <strong>{t.user.name}</strong> · {t.verification} · {t.user.email}
+            <p className="muted">{t.qualifications} · {t.subjects.join(', ')} · {t.grades.join(', ')} · {money(t.hourlyRateCents)}/hr · Stripe: {t.stripeAccountId ? 'Linked (payout status not verified)' : 'Not connected'}</p>
+            <Verify id={t.id} />
+          </div>)}
+        </details>}
+    </section>
 
-            <h2 style={{ fontSize: 30 }}>
-              {item.value}
-            </h2>
-          </div>
-        ))}
-      </section>
+    <details className="card" style={{ marginBottom: 20 }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 20 }}>Refund reconciliation</summary>
+      <p className="muted">Advanced tool: verify an existing Stripe refund. This does not issue a new refund.</p>
+      <RefundReconcile />
+    </details>
 
-      <section style={{ marginTop: 28 }}>
-        <h2>Bookings needing attention</h2>
-
-        <p className="muted">
-          Pending-payment bookings whose start time
-          has passed. Review their Stripe payment
-          status before taking further action.
-        </p>
-
-        {attention.length === 0 ? (
-          <p>
-            No overdue payments in the recent
-            booking list.
-          </p>
-        ) : (
-          attention.map(booking => (
-            <div
-              className="card"
-              key={booking.id}
-            >
-              <h3>
-                {booking.inquiry?.subject ||
-                  'Tutoring'}
-              </h3>
-
-              <p>
-                Parent: {booking.parent.name}
-                {' · '}
-                Tutor: {booking.tutor.user.name}
-              </p>
-
-              <p>
-                Scheduled:{' '}
-                {dateTime(booking.startsAt)}
-              </p>
-
-              <p>
-                Amount:{' '}
-                {money(booking.amountCents)}
-              </p>
-
-              <p>
-                <strong>
-                  Status: {booking.status}
-                </strong>
-              </p>
-
-              <p className="muted">
-                Booking ID: {booking.id}
-              </p>
-            </div>
-          ))
-        )}
-      </section>
-
-      <section style={{ marginTop: 28 }}>
-        <h2>Upcoming bookings</h2>
-
-        {upcoming.length === 0 ? (
-          <p>
-            No upcoming paid or pending-payment
-            sessions.
-          </p>
-        ) : (
-          upcoming.slice(0, 20).map(booking => (
-            <div
-              className="card"
-              key={booking.id}
-            >
-              <h3>
-                {booking.inquiry?.subject ||
-                  'Tutoring'}
-              </h3>
-
-              <p>
-                {booking.parent.name}
-                {' with '}
-                {booking.tutor.user.name}
-              </p>
-
-              <p>
-                {dateTime(booking.startsAt)}
-              </p>
-
-              <p>
-                {money(booking.amountCents)}
-                {' · '}
-                <strong>
-                  {booking.status}
-                </strong>
-              </p>
-            </div>
-          ))
-        )}
-      </section>
-
-      <section style={{ marginTop: 28 }}>
-        <h2>Tutor verification</h2>
-
-        <p className="muted">
-          Verify qualifications and required
-          safeguarding documents outside the
-          platform before approving tutors.
-        </p>
-
-        <h3>
-          Awaiting review ({pendingTutors.length})
-        </h3>
-
-        {pendingTutors.length === 0 && (
-          <p>
-            No tutor applications awaiting review.
-          </p>
-        )}
-
-        {[
-          ...pendingTutors,
-          ...tutors.filter(
-            tutor =>
-              tutor.verification !== 'PENDING'
-          ),
-        ].map(tutor => (
-          <div
-            className="card"
-            key={tutor.id}
-          >
-            <h3>
-              {tutor.user.name}
-            </h3>
-
-            <p>
-              {tutor.user.email}
-            </p>
-
-            <p>
-              <strong>Status:</strong>{' '}
-              {tutor.verification}
-            </p>
-
-            <p>
-              <strong>Qualifications:</strong>{' '}
-              {tutor.qualifications}
-            </p>
-
-            <p>
-              <strong>Subjects:</strong>{' '}
-              {tutor.subjects.join(', ')}
-            </p>
-
-            <p>
-              <strong>Grades:</strong>{' '}
-              {tutor.grades.join(', ')}
-            </p>
-
-            <p>
-              <strong>Hourly rate:</strong>{' '}
-              {money(tutor.hourlyRateCents)}
-            </p>
-
-            <p>
-              <strong>Stripe connection:</strong>{' '}
-              {tutor.stripeAccountId
-                ? 'Account linked'
-                : 'Not connected'}
-            </p>
-
-            <Verify id={tutor.id} />
-          </div>
-        ))}
-      </section>
-
-      <section
-        className="card"
-        style={{ marginTop: 28 }}
-      >
-        <h2>
-          Administrator checklist
-        </h2>
-
-        <ol>
-          <li>
-            Review pending tutor applications.
-          </li>
-
-          <li>
-            Verify credentials and safeguarding
-            documentation outside the platform.
-          </li>
-
-          <li>
-            Confirm tutors have configured
-            availability.
-          </li>
-
-          <li>
-            Check that tutors have completed
-            Stripe onboarding before accepting
-            payments.
-          </li>
-
-          <li>
-            Review overdue pending payments
-            against Stripe before making changes.
-          </li>
-
-          <li>
-            Monitor cancellations and refunds.
-          </li>
-        </ol>
-
-        <p className="muted">
-          A linked Stripe account does not
-          necessarily mean payouts are enabled.
-          Confirm the account status in Stripe
-          before treating it as ready.
-        </p>
-      </section>
-    </main>
-  );
+    <details className="card">
+      <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Administrator checklist</summary>
+      <ol>
+        <li>Review tutor applications and verify credentials and safeguarding documents.</li>
+        <li>Confirm tutor availability and Stripe onboarding.</li>
+        <li>Review overdue payments in Stripe before making changes.</li>
+        <li>Monitor cancellations and refunds.</li>
+      </ol>
+      <p className="muted">A linked Stripe account does not guarantee payouts are enabled.</p>
+    </details>
+  </main>;
 }

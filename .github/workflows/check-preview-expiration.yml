@@ -1,0 +1,40 @@
+name: Check preview payment expiration (read-only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [stripe-testing]
+    paths:
+      - '.github/workflows/check-preview-expiration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preview-expiration-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify preview endpoint without changing bookings
+        env:
+          PREVIEW_CRON_SECRET: ${{ secrets.PREVIEW_CRON_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          if [ -z "$PREVIEW_CRON_SECRET" ]; then
+            echo "PREVIEW_CRON_SECRET is missing; refusing to report a false-positive test pass."
+            exit 1
+          fi
+          if [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ]; then
+            echo "Missing VERCEL_AUTOMATION_BYPASS_SECRET repository secret"
+            exit 1
+          fi
+          curl --show-error --silent --fail-with-body \
+            --retry 2 --retry-delay 5 --max-time 90 \
+            --dump-header /tmp/preview-expiration-headers \
+            -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
+            -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" \
+            "https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/expire-payments?dryRun=true" || { \
+              echo "Diagnostic response header:"; \
+              grep -i '^x-etc-auth-diagnostic:' /tmp/preview-expiration-headers || true; \
+              exit 1; \
+            }
