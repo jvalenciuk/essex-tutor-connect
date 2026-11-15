@@ -32,8 +32,17 @@ export async function GET(req: Request) {
       db.booking.count({ where: { status: 'PAID', paymentDueAt: { lte: now } } }),
       db.booking.count({ where: { status: 'REFUNDED', stripeSessionId: null } }),
     ]);
+    const issues = {
+      overdueUnpaid,
+      paidWithoutCheckout,
+      cancelledWithCheckout,
+      refundedWithoutCheckout,
+      failedExpirationNotifications,
+    };
+    const needsAttention = Object.values(issues).some(count => count > 0);
     return Response.json({
       success: true,
+      needsAttention,
       readOnly: true,
       checkedAt: now.toISOString(),
       counts: {
