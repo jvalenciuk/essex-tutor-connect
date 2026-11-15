@@ -54,4 +54,16 @@ jobs:
             exit 1
           fi
           echo "Inquiry creation authorization: protected (HTTP $inquiry)"
+          checkout=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" -H "Content-Type: application/json" -d '{"bookingId":"invalid"}' "$BASE/api/checkout")
+          if [[ "$checkout" != "401" && "$checkout" != "403" ]]; then
+            echo "::error::Checkout unexpectedly accessible without parent sign-in: $checkout"
+            exit 1
+          fi
+          echo "Stripe checkout authorization: protected (HTTP $checkout)"
+          admin=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 "${headers[@]}" "$BASE/admin")
+          if [[ "$admin" != "200" && "$admin" != "302" && "$admin" != "303" && "$admin" != "307" && "$admin" != "308" ]]; then
+            echo "::error::Unexpected admin page response: $admin"
+            exit 1
+          fi
+          echo "Admin page response: HTTP $admin (does not establish authenticated admin access)"
           echo "Read-only Preview readiness checks passed; authenticated Stripe checkout and email delivery are not exercised by this workflow."
