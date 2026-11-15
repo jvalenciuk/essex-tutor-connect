@@ -6,16 +6,12 @@ const STRIPE = 'https://api.stripe.com/v1';
 export const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Existing reservations with no deadline are intentionally grandfathered.
-export async function expireUnpaidBookings(
-  tutorId?: string,
-  previewTest?: { bookingId: string; simulateDeadline: true }
-) {
+export async function expireUnpaidBookings(tutorId?: string) {
   const now = new Date();
   const bookings = await db.booking.findMany({
     where: {
       status: 'PENDING_PAYMENT',
-      paymentDueAt: previewTest ? { not: null } : { lte: now },
-      ...(previewTest ? { id: previewTest.bookingId } : {}),
+      paymentDueAt: { lte: now },
       ...(tutorId ? { tutorId } : {}),
     },
     include: { tutor: { select: { stripeAccountId: true } } },
@@ -96,7 +92,7 @@ export async function expireUnpaidBookings(
         // A new checkout session may have been attached while we checked Stripe.
         // Never cancel that newer attempt based on an older session's state.
         stripeSessionId: booking.stripeSessionId,
-        paymentDueAt: previewTest ? { not: null } : { lte: now },
+        paymentDueAt: { lte: now },
       },
       data: { status: 'CANCELLED' },
     });
