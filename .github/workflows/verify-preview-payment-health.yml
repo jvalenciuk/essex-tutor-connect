@@ -30,8 +30,8 @@ jobs:
               -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
               -H "x-vercel-protection-bypass: $VERCEL_AUTOMATION_BYPASS_SECRET" \
               "$URL") && \
-            echo "$response" | jq -e '.success == true and .readOnly == true and (.counts | type == "object")' && \
-            { echo "$response" | jq '{success,readOnly,counts}'; exit 0; }
+            echo "$response" | jq -e '.success == true and .readOnly == true and (.needsAttention | type == "boolean") and (.counts | type == "object")' && \
+            { echo "$response" | jq '{success,readOnly,needsAttention,counts}'; exit 0; }
             echo "Preview deployment may still be building; retrying..."
             sleep 20
           done
