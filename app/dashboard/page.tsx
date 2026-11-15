@@ -767,7 +767,7 @@ export default async function Dashboard() {
           <h2>Waiting for tutor response ({pendingInquiryItems.length})</h2>
           <p className="muted">Your requests have been sent. The tutor must accept the inquiry before scheduling can begin.</p>
           {pendingInquiryItems.slice(0, 5).map(inquiry => (
-            <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span> · <Link href={`/dashboard?conversation=${encodeURIComponent(inquiry.tutorId)}&panel=inquiries`}>View inquiry</Link></p>
+            <p key={inquiry.id}><strong>{inquiry.tutor.user.name}</strong> · {inquiry.subject} · {inquiry.grade} · <span className="muted">Awaiting reply</span> · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.tutorId)}&panel=inquiries`}>View inquiry</a></p>
           ))}
           <a href="#conversations">View inquiries and messages</a>
         </section>
@@ -778,7 +778,7 @@ export default async function Dashboard() {
           <h2>Ready to schedule ({acceptedInquiryItems.length})</h2>
           <p className="muted">These inquiries have been accepted. Open the conversation to propose a session or reply to the parent.</p>
           {acceptedInquiryItems.slice(0, 8).map(inquiry => (
-            <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <Link href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Schedule session</Link></p>
+            <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Schedule session</a></p>
           ))}
           <a href="#conversations">Open messages and scheduling</a>
         </section>
