@@ -369,11 +369,12 @@ export default async function Dashboard() {
 
       {(isTutor || isParent) && (
         <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
-          <a href="#my-calendar">Calendar</a>
           <a href="#dashboard-overview">Overview</a>
+          <a href="#my-calendar">Calendar</a>
           {isParent && <a href="#payments">Payments {awaitingPayment.length > 0 ? `(${awaitingPayment.length})` : ''}</a>}
           {isTutor && <a href="#needs-attention">Needs attention</a>}
-          <a href="#conversations">Bookings &amp; messages</a>
+          <Link href="/dashboard/bookings">My Sessions</Link>
+          <a href="#conversations">Messages &amp; inquiries</a>
           {isParent && <Link href="/tutors">Find a tutor</Link>}
         </nav>
       )}
@@ -398,13 +399,6 @@ export default async function Dashboard() {
         </div>
       )}
 
-      {(isTutor || isParent) && (
-        <section id="my-calendar" className="card" style={{ marginTop: 28 }}>
-          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
-          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
-
-        </section>
-      )}
 
 
       {who.role === 'ADMIN' && (
@@ -656,7 +650,7 @@ export default async function Dashboard() {
                 value={activeParentInquiries}
               />
               <StatCard
-                label="Total Paid Bookings"
+                label="Total Session Spending"
                 value={money(totalParentSpending)}
                 detail={`${paidParentBookings.length} paid or completed sessions; excludes refunds`}
               />
@@ -763,6 +757,15 @@ export default async function Dashboard() {
         </>
       )}
 
+      {(isTutor || isParent) && (
+        <section id="my-calendar" className="card" style={{ marginTop: 28 }}>
+          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
+          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
+
+        </section>
+      )}
+
+
       {isTutor && (
         <section className="card" style={{ marginTop: 24 }} id="needs-attention">
           <h2>Needs Your Attention</h2>
@@ -811,9 +814,9 @@ export default async function Dashboard() {
 
       {(isTutor || isParent) && (
         <section style={{ marginTop: 28 }} id="conversations">
-          <h2>Bookings &amp; Messages</h2>
+          <h2>Messages &amp; Inquiries</h2>
           <p className="muted">
-            Choose a conversation to manage tutoring sessions, send a message, or review earlier inquiries. Your session manager opens automatically.
+            Choose a conversation to message a tutor or parent, review inquiries, or manage scheduling. For a quick view of all bookings, open My Sessions.
           </p>
 
           {inquiries.length === 0 && (
