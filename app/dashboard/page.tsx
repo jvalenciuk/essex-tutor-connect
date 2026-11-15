@@ -771,6 +771,9 @@ export default async function Dashboard() {
                       {sessionDate(booking.startsAt)} —{' '}
                       {money(booking.amountCents)}
                     </p>
+                    {booking.paymentDueAt && (
+                      <p className="muted">Payment deadline: {sessionDate(booking.paymentDueAt)}</p>
+                    )}
                     <DirectPaymentButton bookingId={booking.id} amount={money(booking.amountCents)} />
                   </div>
                 ))}
