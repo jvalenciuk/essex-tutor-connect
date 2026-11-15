@@ -230,6 +230,25 @@ export async function POST(req: Request) {
       });
     }
 
+    // A paid Checkout must never be silently acknowledged if the booking
+    // was cancelled or otherwise left the payment-pending state. In particular,
+    // reopening a cancelled slot here could double-book a tutor.
+    // A non-2xx response makes Stripe retry and surfaces the incident in logs
+    // for manual reconciliation/refund; it never creates a second charge.
+    if (booking.status !== 'PENDING_PAYMENT' && booking.status !== 'PAID') {
+      console.error('PAYMENT_RECONCILIATION_REQUIRED', {
+        bookingId: booking.id,
+        bookingStatus: booking.status,
+        stripeSessionId: session.id,
+        stripeEventId: event.id,
+        stripeAccountId: event.account,
+        reason: 'Stripe paid but booking cannot safely transition to PAID',
+      });
+      return new Response('Paid booking requires manual reconciliation', {
+        status: 409,
+      });
+    }
+
     const result = await db.booking.updateMany({
       where: {
         id: booking.id,
