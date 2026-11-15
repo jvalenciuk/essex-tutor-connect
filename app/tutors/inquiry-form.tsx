@@ -112,7 +112,7 @@ export default function InquiryForm({
       }
 
       setStatus(
-        'Inquiry sent. You can track it in your dashboard.'
+        'Inquiry sent successfully. Track replies and scheduling in your dashboard.'
       );
 
       setOpen(false);
@@ -134,14 +134,8 @@ export default function InquiryForm({
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() =>
-          setOpen(!open)
-        }
-      >
-        Contact{' '}
-        {name.split(' ')[0]}
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {open ? 'Close inquiry form' : `Request tutoring with ${name.split(' ')[0]}`}
       </button>
 
       {open && (
@@ -216,8 +210,7 @@ export default function InquiryForm({
           </label>
 
           <label>
-            Describe learning goals
-            and preferred schedule
+            Learning goals and preferred schedule
             <textarea
               className="field"
               required
@@ -244,7 +237,7 @@ export default function InquiryForm({
           <button disabled={busy}>
             {busy
               ? 'Sending…'
-              : 'Send inquiry'}
+              : 'Send free inquiry'}
           </button>
         </form>
       )}
