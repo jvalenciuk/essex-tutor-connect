@@ -269,6 +269,10 @@ export default async function Dashboard() {
       })
     : [];
 
+  const parentProposals = parentBookings.filter(
+    booking => booking.status === 'PROPOSED' && booking.startsAt > now
+  );
+
   const upcomingParentSessions = parentBookings.filter(
     booking =>
       booking.status === 'PAID' && booking.startsAt > now
@@ -382,6 +386,16 @@ export default async function Dashboard() {
           <a href="#conversations">Messages &amp; inquiries</a>
           {isParent && <Link href="/tutors">Find a tutor</Link>}
         </nav>
+      )}
+
+      {isParent && parentProposals.length > 0 && (
+        <div className="dashboard-action-banner" role="status">
+          <div>
+            <strong>{parentProposals.length} {parentProposals.length === 1 ? 'session proposal needs' : 'session proposals need'} your response</strong>
+            <p>Review the tutor's proposed time before confirming a booking.</p>
+          </div>
+          <a href="#session-proposals">Review proposals</a>
+        </div>
       )}
 
       {isParent && awaitingPayment.length > 0 && (
@@ -713,6 +727,20 @@ export default async function Dashboard() {
             )}
           </section>
 
+          {parentProposals.length > 0 && (
+            <section className="card" id="session-proposals" style={{ marginTop: 24 }}>
+              <h2>Session proposals awaiting your response ({parentProposals.length})</h2>
+              <p className="muted">Review the tutor's proposed date and time. You can accept or request a change before payment.</p>
+              {parentProposals.map(booking => (
+                <div key={booking.id} style={{ padding: '12px 0', borderBottom: '1px solid #e5e7eb' }}>
+                  <strong>{booking.tutor.user.name}</strong> · {booking.inquiry?.subject || 'Tutoring'}
+                  <p>{sessionDate(booking.startsAt)} · {booking.durationMinutes} minutes · {money(booking.amountCents)}</p>
+                  <BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
+                </div>
+              ))}
+            </section>
+          )}
+
           <section className="card" style={{ marginTop: 24 }} id="payments">
             <h2>Payments Awaiting Action ({awaitingPayment.length})</h2>
 
@@ -721,9 +749,7 @@ export default async function Dashboard() {
             ) : (
               <>
                 <p className="muted">
-                  Your tutor has accepted these bookings.
-                  Complete payment through the booking
-                  manager below to confirm your session.
+                  Your tutor has accepted these bookings. Pay securely below to confirm your session.
                 </p>
 
                 {awaitingPayment.map(booking => (
@@ -816,8 +842,7 @@ export default async function Dashboard() {
             </div>
           )}
           <p className="muted">
-            Respond to scheduling requests below. Open the matching conversation
-            in Bookings &amp; Messages to accept or suggest a new time.
+            Respond to scheduling requests by opening the relevant session. You can accept the proposed time or suggest another.
           </p>
           {tutorNeedsResponse.length === 0 ? (
             <p>No scheduling requests need a response right now.</p>
@@ -826,6 +851,7 @@ export default async function Dashboard() {
               <p key={booking.id}>
                 <strong>{booking.parent.name}</strong> · {booking.inquiry?.subject || 'Tutoring'}
                 {' — '}requested a time change for {sessionDate(booking.startsAt)}
+                {' · '}<BookingJump bookingId={booking.id} inquiryId={booking.inquiryId} />
               </p>
             ))
           )}
