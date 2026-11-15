@@ -248,8 +248,9 @@ export async function POST(req: Request) {
   // Use the current preview deployment origin so Checkout returns to the
   // same host as the parent's authenticated session.
   const configuredBaseUrl =
-    process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
+    process.env.VERCEL_ENV === 'preview'
+      ? (req.headers.get('origin') ||
+         (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : ''))
       : (process.env.APP_URL ||
          process.env.NEXTAUTH_URL ||
          'https://essex-tutor-connect.vercel.app');
@@ -267,6 +268,15 @@ export async function POST(req: Request) {
       parsedUrl.hash
     ) {
       throw new Error('Invalid application URL');
+    }
+
+    // Only allow our own preview domains as Stripe return destinations.
+    // A checkout launched on a stable branch alias must return to that
+    // same alias, otherwise the parent loses their session cookie.
+    if (process.env.VERCEL_ENV === 'preview' &&
+        !(parsedUrl.hostname.startsWith('essex-tutor-connect-') &&
+          parsedUrl.hostname.endsWith('-essex-tutors.vercel.app'))) {
+      throw new Error('Unexpected preview checkout origin');
     }
 
     baseUrl = parsedUrl.origin;
