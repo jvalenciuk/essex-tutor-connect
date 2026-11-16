@@ -5,26 +5,26 @@ export function getConfiguredStripeSecret(): string | null {
   if (!key) return null;
 
   if (process.env.VERCEL_ENV === 'production') {
-    return process.env.STRIPE_LIVE_ENABLED === 'true' && key.startsWith('sk_live_')
+    return process.env.STRIPE_LIVE_ENABLED === 'true' && (key.startsWith('sk_live_') || key.startsWith('rk_live_'))
       ? key
       : null;
   }
 
-  return key.startsWith('sk_test_') ? key : null;
+  return (key.startsWith('sk_test_') || key.startsWith('rk_test_')) ? key : null;
 }
 
 
 // Tutor verification is deliberately permitted separately from card charging.
 // Enabling STRIPE_LIVE_ONBOARDING_ENABLED allows only Connect onboarding/status
-// with sk_live_; checkout/refunds continue requiring STRIPE_LIVE_ENABLED=true.
+// with sk_live_ or rk_live_; checkout/refunds continue requiring STRIPE_LIVE_ENABLED=true.
 export function getConfiguredStripeOnboardingSecret(): string | null {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return null;
   if (process.env.VERCEL_ENV === 'production') {
     return process.env.STRIPE_LIVE_ONBOARDING_ENABLED === 'true' &&
-      key.startsWith('sk_live_') ? key : null;
+      (key.startsWith('sk_live_') || key.startsWith('rk_live_')) ? key : null;
   }
-  return key.startsWith('sk_test_') ? key : null;
+  return (key.startsWith('sk_test_') || key.startsWith('rk_test_')) ? key : null;
 }
 
 // Account identifiers are isolated by payment mode. Existing stripeAccountId values

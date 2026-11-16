@@ -54,8 +54,8 @@ export default async function Admin() {
   ];
   // Show only the mode of the configured key, never its value or any credential.
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
-  const stripeKeyMode = stripeSecret?.startsWith('sk_live_') ? 'Live key configured'
-    : stripeSecret?.startsWith('sk_test_') ? 'Sandbox key configured'
+  const stripeKeyMode = (stripeSecret?.startsWith('sk_live_') || stripeSecret?.startsWith('rk_live_')) ? 'Live key configured'
+    : (stripeSecret?.startsWith('sk_test_') || stripeSecret?.startsWith('rk_test_')) ? 'Sandbox key configured'
     : stripeSecret ? 'Unrecognized Stripe key' : 'Missing Stripe key';
   const stripeLivePayments = process.env.STRIPE_LIVE_ENABLED === 'true';
   const stripeLiveOnboarding = process.env.STRIPE_LIVE_ONBOARDING_ENABLED === 'true';
