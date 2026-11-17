@@ -6,7 +6,9 @@ import TutorAvailability from './tutor-availability';
 export const dynamic = 'force-dynamic';
 
 type Filters = {
+  keyword?: string;
   subject?: string;
+  language?: string;
   grade?: string;
   city?: string;
   online?: string;
@@ -71,21 +73,45 @@ export default async function Tutors({
     },
   });
 
+  // Do not advertise an approved account that still lacks the minimum
+  // parent-facing profile details or a valid published hourly price.
+  const publishedTutors = approvedTutors.filter(tutor =>
+    tutor.bio.trim().length >= 30 &&
+    tutor.qualifications.trim().length >= 10 &&
+    tutor.subjects.length > 0 &&
+    tutor.grades.length > 0 &&
+    tutor.cities.length > 0 &&
+    tutor.languages.length > 0 &&
+    tutor.hourlyRateCents >= 2000 &&
+    tutor.hourlyRateCents <= 30000
+  );
+
   const subjects = uniqueOptions(
-    approvedTutors.map(tutor => tutor.subjects)
+    publishedTutors.map(tutor => tutor.subjects)
+  );
+
+  const languages = uniqueOptions(
+    publishedTutors.map(tutor => tutor.languages)
   );
 
   const grades = uniqueOptions(
-    approvedTutors.map(tutor => tutor.grades)
+    publishedTutors.map(tutor => tutor.grades)
   );
 
   const cities = uniqueOptions(
-    approvedTutors.map(tutor => tutor.cities)
+    publishedTutors.map(tutor => tutor.cities)
   );
 
   const subject = subjects.includes(q.subject || '')
     ? q.subject || ''
     : '';
+
+  const language = languages.includes(q.language || '')
+    ? q.language || ''
+    : '';
+
+  const keyword = typeof q.keyword === 'string' ? q.keyword.trim().slice(0, 100) : '';
+  const normalizedKeyword = keyword.toLocaleLowerCase('en-CA');
 
   const grade = grades.includes(q.grade || '')
     ? q.grade || ''
@@ -104,8 +130,24 @@ export default async function Tutors({
 
   const sort = ['price-asc', 'price-desc', 'name'].includes(q.sort || '') ? q.sort : 'price-asc';
 
-  const tutors = approvedTutors
+  const tutors = publishedTutors
     .filter(tutor => {
+      if (normalizedKeyword && ![
+        tutor.user.name,
+        tutor.bio,
+        tutor.qualifications,
+        ...tutor.subjects,
+        ...tutor.grades,
+        ...tutor.cities,
+        ...tutor.languages,
+      ].some(value => value.toLocaleLowerCase('en-CA').includes(normalizedKeyword))) {
+        return false;
+      }
+
+      if (language && !tutor.languages.includes(language)) {
+        return false;
+      }
+
       if (subject && !tutor.subjects.includes(subject)) {
         return false;
       }
@@ -165,6 +207,18 @@ export default async function Tutors({
           }}
         >
           <label>
+            Search by name, topic or experience
+            <input
+              className="field"
+              type="search"
+              name="keyword"
+              maxLength={100}
+              defaultValue={keyword}
+              placeholder="e.g. reading or French immersion"
+            />
+          </label>
+
+          <label>
             Subject
             <select
               className="field"
@@ -176,6 +230,16 @@ export default async function Tutors({
                 <option key={value} value={value}>
                   {value}
                 </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Language
+            <select className="field" name="language" defaultValue={language}>
+              <option value="">All languages</option>
+              {languages.map(value => (
+                <option key={value} value={value}>{value}</option>
               ))}
             </select>
           </label>
@@ -368,8 +432,9 @@ export default async function Tutors({
             <h2>No matching tutors</h2>
 
             <p>
-              Try removing a filter or increasing
-              your maximum hourly rate.
+              Try a broader search, remove a filter or increase
+              your maximum hourly rate. Only approved tutors with
+              complete public profiles appear here.
             </p>
 
             <a href="/tutors">
