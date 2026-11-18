@@ -51,7 +51,7 @@ function LoginForm() {
         <input id="login-password" className="field" type="password" name="password" autoComplete="current-password" required />
         {error && <p className="error" role="alert">{error}</p>}
         <button disabled={busy} type="submit" className="signup-submit">{busy ? 'Signing in...' : 'Sign in'}</button>
-        <p className="signup-signin">New to Essex Tutor Connect? <Link href="/register">Create an account</Link></p>
+        <p className="signup-signin">New to WE Learn? <Link href="/register">Create an account</Link></p>
       </form>
     </main>
   );
