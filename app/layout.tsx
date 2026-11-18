@@ -5,7 +5,7 @@ import Providers from './providers';
 import AuthNavigation from './auth-navigation';
 
 export const metadata = {
-  title: 'Essex Tutor Connect',
+  title: 'WE Learn',
   description: 'Find local tutors in Windsor and Essex County',
 };
 
@@ -20,7 +20,7 @@ export default function Layout({
         <Providers>
           <header>
             <a href="/" className="brand">
-              ✦ Essex Tutor Connect
+              ✦ WE Learn
             </a>
 
             <nav>
@@ -31,7 +31,7 @@ export default function Layout({
           {children}
 
           <footer>
-            Essex Tutor Connect · Windsor & Essex County
+            WE Learn · Windsor & Essex County
           </footer>
         </Providers>
       </body>

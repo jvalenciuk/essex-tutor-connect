@@ -2,10 +2,10 @@
 export default function HowItWorks() {
   return (
     <main style={{ maxWidth: 900, margin: '0 auto' }}>
-      <h1>How Essex Tutor Connect Works</h1>
+      <h1>How WE Learn Works</h1>
 
       <p>
-        Essex Tutor Connect helps parents, guardians,
+        WE Learn helps parents, guardians,
         adult learners, and tutors connect across
         Windsor and Essex County.
       </p>
@@ -71,7 +71,7 @@ export default function HowItWorks() {
         </ol>
 
         <p>
-          Essex Tutor Connect retains a 15% platform
+          WE Learn retains a 15% platform
           commission on paid tutoring sessions.
           Stripe processing fees may also apply.
         </p>

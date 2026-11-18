@@ -212,7 +212,7 @@ export default async function TutorOnboarding() {
 
       <p className="muted">
         Complete these steps to prepare your
-        Essex Tutor Connect account.
+        WE Learn account.
       </p>
 
       <section className="card">
@@ -391,7 +391,7 @@ export default async function TutorOnboarding() {
           />
 
           <p className="muted">
-            Essex Tutor Connect charges a
+            WE Learn charges a
             15% platform commission on bookings.
             Stripe processing fees may also apply.
           </p>
@@ -408,7 +408,7 @@ export default async function TutorOnboarding() {
           Once your profile is approved and
           Stripe onboarding is complete,
           parents can contact you through
-          Essex Tutor Connect.
+          WE Learn.
         </p>
 
         <p>
