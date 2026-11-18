@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 const steps = [
   { number: '01', title: 'Explore tutors', description: 'Filter approved profiles by subject, grade, location, price and online availability.' },
@@ -22,6 +23,7 @@ export default function Home() {
           <p className="home-small-note">Browsing tutor profiles and sending inquiries is free.</p>
         </div>
         <div className="home-hero-side" aria-label="How tutoring works">
+          <Image src="/we-learn-logo.webp" alt="WE Learn logo featuring Windsor–Essex, the Gordie Howe bridge and an open book" width={260} height={260} className="home-brand-logo" priority />
           <div className="home-highlight"><span>1</span><div><strong>Find your match</strong><small>Search by subject, grade and budget</small></div></div>
           <div className="home-highlight"><span>2</span><div><strong>Connect directly</strong><small>Discuss goals and scheduling</small></div></div>
           <div className="home-highlight"><span>3</span><div><strong>Book with confidence</strong><small>Pay securely after agreeing on a time</small></div></div>
