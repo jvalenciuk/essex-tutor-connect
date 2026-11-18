@@ -1,8 +1,8 @@
 name: Expire unpaid tutoring bookings
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
+  # Manual-only until the GitHub Actions CRON_SECRET matches the destination.
+  # Production retains its separate daily Vercel Cron schedule.
   workflow_dispatch:
 
 permissions:
