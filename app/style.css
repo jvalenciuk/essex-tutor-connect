@@ -471,3 +471,9 @@ footer {
 .signup-signin { text-align:center; margin:20px 0 0; }
 .signup-signin a { font-weight:800; text-decoration:underline; }
 @media(max-width:560px) { .signup-role-grid { grid-template-columns:1fr; } }
+
+/* WE Learn regional logo */
+header .brand { display:inline-flex; align-items:center; gap:12px; white-space:nowrap; }
+.brand-logo { width:74px; height:74px; object-fit:contain; background:#fff; border-radius:12px; border:2px solid var(--maize); }
+.home-brand-logo { display:block; width:min(260px,100%); height:auto; margin:0 auto 6px; border:3px solid var(--maize); border-radius:18px; background:#fff; }
+@media(max-width:600px) { .brand-logo { width:58px; height:58px; } header .brand { font-size:20px; } .home-brand-logo { width:min(210px,82%); } }

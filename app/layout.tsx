@@ -1,5 +1,6 @@
 
 import React from 'react';
+import Image from 'next/image';
 import './style.css';
 import Providers from './providers';
 import AuthNavigation from './auth-navigation';
@@ -20,7 +21,8 @@ export default function Layout({
         <Providers>
           <header>
             <a href="/" className="brand">
-              ✦ WE Learn
+              <Image src="/we-learn-logo.webp" alt="" width={74} height={74} className="brand-logo" priority />
+              <span>WE Learn</span>
             </a>
 
             <nav>
