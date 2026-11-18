@@ -31,7 +31,7 @@ export default function Layout({
           {children}
 
           <footer>
-            Essex Tutor Connect · Windsor & Essex County · Canada
+            Essex Tutor Connect · Windsor & Essex County
           </footer>
         </Providers>
       </body>
