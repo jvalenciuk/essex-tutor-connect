@@ -33,14 +33,14 @@ const actionSchema = z.discriminatedUnion('action', [
 async function stripeGet(
   path: string,
   secret: string,
-  accountId: string
+  accountId: string | null
 ) {
   const response = await fetch(
     `https://api.stripe.com${path}`,
     {
       headers: {
         Authorization: `Bearer ${secret}`,
-        'Stripe-Account': accountId,
+        ...(accountId ? { 'Stripe-Account': accountId } : {}),
       },
       cache: 'no-store',
     }
@@ -62,13 +62,18 @@ async function stripeGet(
 async function stripeRefund(
   paymentIntentId: string,
   secret: string,
-  accountId: string,
+  accountId: string | null,
   bookingId: string
 ) {
   const form = new URLSearchParams();
 
   form.set('payment_intent', paymentIntentId);
-  form.set('refund_application_fee', 'true');
+  if (accountId) {
+    form.set('refund_application_fee', 'true');
+  } else {
+    form.set('reverse_transfer', 'true');
+    form.set('refund_application_fee', 'true');
+  }
   form.set('metadata[bookingId]', bookingId);
 
   const response = await fetch(
@@ -552,7 +557,7 @@ export async function PATCH(
     const sessionId = booking.stripeSessionId;
     const secret = getConfiguredStripeSecret();
 
-    if (!accountId || !sessionId || !secret) {
+    if (!sessionId || !secret) {
       return fail(
         'Payment details are unavailable. Contact support.',
         503
@@ -560,11 +565,27 @@ export async function PATCH(
     }
 
     try {
-      const session = await stripeGet(
-        `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
-        secret,
-        accountId
-      );
+      // Check both charge models; existing bookings may be legacy direct charges.
+      let chargeAccountId: string | null = null;
+      let session: any;
+      try {
+        session = await stripeGet(
+          `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+          secret,
+          null
+        );
+        if (session.metadata?.chargeModel !== 'destination') {
+          return fail('Unexpected platform payment type. Contact support.', 409);
+        }
+      } catch {
+        if (!accountId) return fail('Tutor payment account unavailable.', 503);
+        session = await stripeGet(
+          `/v1/checkout/sessions/${encodeURIComponent(sessionId)}`,
+          secret,
+          accountId
+        );
+        chargeAccountId = accountId;
+      }
 
       if (
         session.payment_status !== 'paid' ||
@@ -582,7 +603,7 @@ export async function PATCH(
       const refund = await stripeRefund(
         session.payment_intent,
         secret,
-        accountId,
+        chargeAccountId,
         booking.id
       );
 
