@@ -327,6 +327,7 @@ export async function POST(req: Request) {
   );
   form.set('metadata[bookingId]', booking.id);
   form.set('metadata[chargeModel]', 'destination');
+  form.set('payment_intent_data[metadata][chargeModel]', 'destination');
   form.set(
     'payment_intent_data[metadata][bookingId]',
     booking.id
@@ -345,7 +346,7 @@ export async function POST(req: Request) {
           Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/x-www-form-urlencoded',
           'Idempotency-Key':
-            `checkout-${booking.id}-${windowNumber}`,
+            `destination-checkout-${booking.id}-${windowNumber}`,
         },
         body: form.toString(),
         cache: 'no-store',
