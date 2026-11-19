@@ -82,7 +82,7 @@ async function stripeRefund(
       method: 'POST',
       headers: {
         Authorization: `Bearer ${secret}`,
-        'Stripe-Account': accountId,
+        ...(accountId ? { 'Stripe-Account': accountId } : {}),
         'Content-Type': 'application/x-www-form-urlencoded',
         'Idempotency-Key': `booking-full-refund-${bookingId}`,
       },
