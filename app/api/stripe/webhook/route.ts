@@ -15,6 +15,7 @@ type CheckoutSession = {
   currency?: string;
   metadata?: {
     bookingId?: string;
+    chargeModel?: string;
   };
 };
 
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
   if (event.type === 'refund.updated' || event.type === 'refund.created') {
     const refund = event.data?.object;
     const bookingId = refund?.metadata?.bookingId;
-    if (!bookingId || refund?.status !== 'succeeded' || !event.account) {
+    if (!bookingId || refund?.status !== 'succeeded') {
       return Response.json({ received: true });
     }
 
@@ -120,7 +121,7 @@ export async function POST(req: Request) {
       if (
         !booking ||
         booking.status !== 'PAID' ||
-        getActiveTutorStripeAccountId(booking.tutor) !== event.account ||
+        (event.account && getActiveTutorStripeAccountId(booking.tutor) !== event.account) ||
         !booking.stripeSessionId ||
         refund.amount !== booking.amountCents ||
         typeof refund.payment_intent !== 'string'
@@ -132,7 +133,7 @@ export async function POST(req: Request) {
       const sessionResponse = await fetch(
         `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
         {
-          headers: { Authorization: `Bearer ${key}`, 'Stripe-Account': event.account },
+          headers: { Authorization: `Bearer ${key}`, ...(event.account ? { 'Stripe-Account': event.account } : {}) },
           cache: 'no-store',
         }
       );
@@ -223,8 +224,8 @@ export async function POST(req: Request) {
 
     // Payments use direct charges on connected accounts.
     if (
-      !event.account ||
-      getActiveTutorStripeAccountId(booking.tutor) !== event.account
+      (session.metadata?.chargeModel === 'destination' && !!event.account) ||
+      (session.metadata?.chargeModel !== 'destination' && (!event.account || getActiveTutorStripeAccountId(booking.tutor) !== event.account))
     ) {
       return new Response('Connected account mismatch', {
         status: 400,
