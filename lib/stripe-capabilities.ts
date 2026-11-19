@@ -1,5 +1,5 @@
 // Stripe Accounts v2 capability check for connected tutors.
-// Card payments and bank payouts are separate capabilities.
+// Destination charges require active recipient transfer capability.
 export async function tutorCanAcceptCardPayments(
   accountId: string,
   secretKey: string
@@ -8,7 +8,7 @@ export async function tutorCanAcceptCardPayments(
     const url = new URL(
       `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
     );
-    url.searchParams.set('include[0]', 'configuration.merchant');
+    url.searchParams.set('include[0]', 'configuration.recipient');
 
     const response = await fetch(url.toString(), {
       headers: {
@@ -20,7 +20,7 @@ export async function tutorCanAcceptCardPayments(
 
     if (!response.ok) {
       const error = await response.json().catch(() => null);
-      console.error('Stripe card payment capability lookup failed', {
+      console.error('Stripe recipient transfer capability lookup failed', {
         status: response.status,
         code: error?.error?.code,
         message: error?.error?.message,
@@ -30,7 +30,7 @@ export async function tutorCanAcceptCardPayments(
 
     const account = await response.json();
     return (
-      account?.configuration?.merchant?.capabilities?.card_payments?.status ===
+      account?.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers?.status ===
       'active'
     );
   } catch (error) {
