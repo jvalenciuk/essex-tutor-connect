@@ -285,7 +285,7 @@ export default function SessionCalendar({
       timeZone: ZONE, timeZoneName: 'shortOffset', hour: '2-digit',
     }).formatToParts(new Date(wallClockUtc));
     const offsetLabel = offsetParts.find(part => part.type === 'timeZoneName')?.value || 'GMT-5';
-    const offsetMatch = offsetLabel.match(/GMT([+-])(\\d{1,2})(?::(\\d{2}))?/);
+    const offsetMatch = offsetLabel.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
     const offsetMinutes = offsetMatch
       ? (offsetMatch[1] === '+' ? 1 : -1) * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0))
       : -300;
