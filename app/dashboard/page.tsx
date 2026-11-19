@@ -397,6 +397,14 @@ export default async function Dashboard() {
         <section className="card" aria-label="Book with your existing tutors" style={{ marginTop: 20 }}>
           <h2>Book with a tutor you already know</h2>
           <p className="muted">You do not need to search for your tutor again. Choose an existing tutoring connection in your calendar to request another session.</p>
+          <div style={{ display: 'grid', gap: 10, margin: '16px 0' }}>
+            {Array.from(new Map(acceptedInquiryItems.map(inquiry => [inquiry.tutorId, inquiry])).values()).map(inquiry => (
+              <div key={inquiry.tutorId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: 12, border: '1px solid #dce3ea', borderRadius: 10 }}>
+                <div><strong>{inquiry.tutor.user.name || 'Your tutor'}</strong><div className="muted">{inquiry.subject} · {inquiry.grade}</div></div>
+                <Link href={`/dashboard/messages/${encodeURIComponent(inquiry.id)}`}>Message tutor</Link>
+              </div>
+            ))}
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             <a className="button" href="#my-calendar">Book another session</a>
             <a href="#conversations" style={{ alignSelf: 'center' }}>Message your tutor</a>
