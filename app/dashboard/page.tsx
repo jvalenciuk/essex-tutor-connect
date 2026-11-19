@@ -393,6 +393,18 @@ export default async function Dashboard() {
         </nav>
       )}
 
+      {isParent && acceptedInquiryItems.length > 0 && (
+        <section className="card" aria-label="Book with your existing tutors" style={{ marginTop: 20 }}>
+          <h2>Book with a tutor you already know</h2>
+          <p className="muted">You do not need to search for your tutor again. Choose an existing tutoring connection in your calendar to request another session.</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <a className="button" href="#my-calendar">Book another session</a>
+            <a href="#conversations" style={{ alignSelf: 'center' }}>Message your tutor</a>
+            <Link href="/dashboard/bookings" style={{ alignSelf: 'center' }}>View all sessions</Link>
+          </div>
+        </section>
+      )}
+
       {isParent && parentProposals.length > 0 && (
         <div className="dashboard-action-banner" role="status">
           <div>
