@@ -38,7 +38,6 @@ async function retrieveSession(
         method: 'GET',
         headers: {
           Authorization: `Bearer ${secretKey}`,
-          'Stripe-Account': accountId,
         },
         cache: 'no-store',
       }
@@ -169,8 +168,8 @@ export async function POST(req: Request) {
 
   const accountId = getActiveTutorStripeAccountId(booking.tutor)!;
 
-  // Do not start Checkout unless Stripe confirms card payments are active.
-  // Payout restrictions alone do not prevent card payments.
+  // Destination charges require an eligible connected account to receive transfers.
+  // Verify this independently during Stripe sandbox testing.
   if (!(await tutorCanAcceptCardPayments(accountId, secretKey))) {
     return fail(
       'This tutor cannot accept card payments right now. Please try another tutor or contact support.',
@@ -204,6 +203,7 @@ export async function POST(req: Request) {
 
     const matchesBooking =
       existing.metadata?.bookingId === booking.id &&
+      existing.metadata?.chargeModel === 'destination' &&
       existing.amount_total === booking.amountCents &&
       existing.currency?.toLowerCase() === 'cad';
 
@@ -215,7 +215,7 @@ export async function POST(req: Request) {
     }
 
     if (
-      existing.status === 'open' &&
+      matchesBooking && existing.status === 'open' &&
       typeof existing.url === 'string' &&
       existing.url.startsWith('https://checkout.stripe.com/') &&
       typeof existing.expires_at === 'number' &&
@@ -228,7 +228,7 @@ export async function POST(req: Request) {
     }
 
     if (
-      existing.status !== 'expired' &&
+      !matchesBooking || existing.status !== 'expired' &&
       !(
         existing.status === 'open' &&
         typeof existing.expires_at === 'number' &&
@@ -317,11 +317,15 @@ export async function POST(req: Request) {
   );
   form.set('line_items[0][quantity]', '1');
 
+  // Destination charge: WE Learn is the merchant of record for Stripe fees.
+  // The tutor receives 85% before any separate adjustments.
+  form.set('payment_intent_data[transfer_data][destination]', accountId);
   form.set(
     'payment_intent_data[application_fee_amount]',
     String(booking.platformFeeCents)
   );
   form.set('metadata[bookingId]', booking.id);
+  form.set('metadata[chargeModel]', 'destination');
   form.set(
     'payment_intent_data[metadata][bookingId]',
     booking.id
@@ -338,7 +342,6 @@ export async function POST(req: Request) {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${secretKey}`,
-          'Stripe-Account': accountId,
           'Content-Type': 'application/x-www-form-urlencoded',
           'Idempotency-Key':
             `checkout-${booking.id}-${windowNumber}`,
