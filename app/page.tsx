@@ -5,7 +5,7 @@ const steps = [
   { number: '01', title: 'Explore tutors', description: 'Filter approved profiles by subject, grade, location, price and online availability.' },
   { number: '02', title: 'Ask a question', description: 'Send a tutor an inquiry about your learning goals. There is no charge to inquire.' },
   { number: '03', title: 'Choose a time', description: 'Review a proposed session or request a different time before you commit.' },
-  { number: '04', title: 'Confirm and learn', description: 'Pay securely to confirm your booking, then manage your sessions in one place.' },
+  { number: '04', title: 'Confirm and learn', description: 'Pay securely, manage your sessions, and rebook your tutor from your dashboard.' },
 ];
 
 export default function Home() {
@@ -54,7 +54,7 @@ export default function Home() {
         <article className="card home-audience-card">
           <p className="home-section-kicker">FOR FAMILIES</p>
           <h2>Personalized support starts here</h2>
-          <p>Browse tutor qualifications, subjects, grades and published availability. Message a tutor to discuss what your learner needs before booking.</p>
+          <p>Browse tutor qualifications, subjects, grades and published availability. Message a tutor before booking, then easily schedule more sessions with the same tutor from your dashboard.</p>
           <Link className="button" href="/tutors">Explore tutors</Link>
         </article>
         <article className="card home-audience-card">
