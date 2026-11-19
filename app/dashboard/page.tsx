@@ -21,6 +21,7 @@ type StripeStatus = {
   payoutsEnabled: boolean;
   payoutsRestricted: boolean;
   transfersStatus: string;
+  transfersDetail?: string;
   error?: string;
 };
 
@@ -89,12 +90,21 @@ async function getStripeStatus(
     const transferCapability = account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers;
     const transferStatus = transferCapability?.status;
     const transferRequested = transferCapability?.requested;
+    const recipient = account.configuration?.recipient;
+    const transferDetails = !recipient
+      ? 'Stripe did not return a recipient configuration. The account cannot yet receive destination transfers.'
+      : !transferCapability
+      ? 'Recipient configuration exists, but Stripe did not return the stripe_transfers capability.'
+      : transferCapability.status_details?.code
+      ? `Stripe reason: ${transferCapability.status_details.code}`
+      : undefined;
 
     return {
       connected: true,
       paymentsEnabled: paymentStatus === 'active',
       payoutsEnabled: payoutStatus === 'active',
       payoutsRestricted: payoutStatus === 'restricted',
+      transfersDetail: transferDetails,
       transfersStatus: transferStatus === 'active' ? 'Active — destination transfers allowed' : transferStatus === 'restricted' ? 'Restricted — Stripe requirements outstanding' : transferStatus === 'pending' ? 'Pending Stripe review' : transferRequested ? `Requested — ${transferStatus || 'awaiting activation'}` : transferStatus ? `Not active (${transferStatus})` : 'Not requested or not returned by Stripe',
     };
   } catch (error) {
@@ -571,6 +581,9 @@ export default async function Dashboard() {
                   <strong>Destination transfers:</strong>{' '}
                   {stripe.error ? 'Status unavailable' : stripe.transfersStatus}
                 </p>
+                {stripe.transfersDetail && !stripe.error && (
+                  <p className="muted">{stripe.transfersDetail}</p>
+                )}
                 <p>
                   <strong>Bank payouts:</strong>{' '}
                   {stripe.error
