@@ -20,6 +20,7 @@ type StripeStatus = {
   paymentsEnabled: boolean;
   payoutsEnabled: boolean;
   payoutsRestricted: boolean;
+  transfersStatus: string;
   error?: string;
 };
 
@@ -46,6 +47,7 @@ async function getStripeStatus(
     paymentsEnabled: false,
     payoutsEnabled: false,
     payoutsRestricted: false,
+    transfersStatus: 'Unavailable',
   };
 
   if (!accountId) return empty;
@@ -60,6 +62,7 @@ async function getStripeStatus(
       `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
     );
     url.searchParams.append('include[0]', 'configuration.merchant');
+    url.searchParams.append('include[1]', 'configuration.recipient');
 
     const response = await fetch(url.toString(), {
       headers: {
@@ -83,12 +86,16 @@ async function getStripeStatus(
 
     const paymentStatus = capabilities.card_payments?.status;
     const payoutStatus = capabilities.stripe_balance?.payouts?.status;
+    const transferCapability = account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers;
+    const transferStatus = transferCapability?.status;
+    const transferRequested = transferCapability?.requested;
 
     return {
       connected: true,
       paymentsEnabled: paymentStatus === 'active',
       payoutsEnabled: payoutStatus === 'active',
       payoutsRestricted: payoutStatus === 'restricted',
+      transfersStatus: transferStatus === 'active' ? 'Active — destination transfers allowed' : transferStatus === 'restricted' ? 'Restricted — Stripe requirements outstanding' : transferStatus === 'pending' ? 'Pending Stripe review' : transferRequested ? `Requested — ${transferStatus || 'awaiting activation'}` : transferStatus ? `Not active (${transferStatus})` : 'Not requested or not returned by Stripe',
     };
   } catch (error) {
     console.error('Stripe account status check failed', error);
@@ -559,6 +566,10 @@ export default async function Dashboard() {
                     : stripe.paymentsEnabled
                     ? 'Active'
                     : 'Not active'}
+                </p>
+                <p>
+                  <strong>Destination transfers:</strong>{' '}
+                  {stripe.error ? 'Status unavailable' : stripe.transfersStatus}
                 </p>
                 <p>
                   <strong>Bank payouts:</strong>{' '}
