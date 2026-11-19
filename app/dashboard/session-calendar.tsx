@@ -137,6 +137,20 @@ export default function SessionCalendar({
 }) {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [contactId, setContactId] = useState('');
+  // A repeat-booking shortcut may select an existing accepted inquiry.
+  // Only IDs in bookingContacts are accepted; the API still checks authorization.
+  useEffect(() => {
+    if (role !== 'PARENT' || bookingContacts.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('bookWith');
+    if (!requested || !bookingContacts.some(contact => contact.id === requested)) return;
+    setContactId(requested);
+    setShowBookingForm(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [role, bookingContacts.map(contact => contact.id).join('|')]);
+
   const [bookingTime, setBookingTime] = useState('16:00');
   const [bookingDuration, setBookingDuration] = useState('60');
   const [bookingBusy, setBookingBusy] = useState(false);
@@ -860,7 +874,7 @@ export default function SessionCalendar({
               {showBookingForm ? 'Close booking form' : role === 'PARENT' ? '+ Request a session on this date' : '+ Propose a session on this date'}
             </button>
             {showBookingForm && (
-              <form onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+              <form id="calendar-booking-form" onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
                 <p><strong>New session · {selectedDate}</strong></p>
                 <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
                 <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
