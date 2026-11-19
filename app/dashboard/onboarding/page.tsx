@@ -8,6 +8,7 @@ import { db } from '../../../lib/db';
 import DashboardForm from '../profile-form';
 import AvailabilityManager from '../availability-manager';
 import ConnectButton from '../connect-button';
+import EnableTransfersButton from '../enable-transfers-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -384,6 +385,8 @@ export default async function TutorOnboarding() {
               {stripe.error}
             </p>
           )}
+
+          {stripe.connected && <EnableTransfersButton />}
 
           <ConnectButton
             connected={stripe.connected}
