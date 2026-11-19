@@ -19,6 +19,7 @@ type StripeCheckoutSession = {
   currency?: string;
   metadata?: {
     bookingId?: string;
+    chargeModel?: string;
   };
   error?: {
     code?: string;
