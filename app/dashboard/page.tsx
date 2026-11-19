@@ -413,12 +413,15 @@ export default async function Dashboard() {
       {isParent && acceptedInquiryItems.length > 0 && (
         <section className="card" aria-label="Book with your existing tutors" style={{ marginTop: 20 }}>
           <h2>Book with a tutor you already know</h2>
-          <p className="muted">You do not need to search for your tutor again. Choose an existing tutoring connection in your calendar to request another session.</p>
+          <p className="muted">Choose a tutor below to open the calendar with your existing connection selected. No new inquiry or tutor search is needed.</p>
           <div style={{ display: 'grid', gap: 10, margin: '16px 0' }}>
             {Array.from(new Map(acceptedInquiryItems.map(inquiry => [inquiry.tutorId, inquiry])).values()).map(inquiry => (
               <div key={inquiry.tutorId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, padding: 12, border: '1px solid #dce3ea', borderRadius: 10 }}>
                 <div><strong>{inquiry.tutor.user.name || 'Your tutor'}</strong><div className="muted">{inquiry.subject} · {inquiry.grade}</div></div>
-                <Link href={`/dashboard/messages/${encodeURIComponent(inquiry.id)}`}>Message tutor</Link>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+                  <Link className="button" href={`/dashboard?bookWith=${encodeURIComponent(inquiry.id)}#my-calendar`}>Book again</Link>
+                  <Link href={`/dashboard/messages/${encodeURIComponent(inquiry.id)}`}>Message tutor</Link>
+                </div>
               </div>
             ))}
           </div>
@@ -506,7 +509,7 @@ export default async function Dashboard() {
               <StatCard
                 label="Tutor Earnings"
                 value={money(tutorEarnings)}
-                detail="Before Stripe fees and adjustments"
+                detail="Estimated tutor share; bank payouts and adjustments are separate"
               />
               <StatCard
                 label="Open Inquiries"
