@@ -51,7 +51,7 @@ function RegisterForm() {
   return (
     <main className="signup-page">
       <div className="signup-heading">
-        <p className="home-section-kicker">JOIN ESSEX TUTOR CONNECT</p>
+        <p className="home-section-kicker">JOIN WE LEARN</p>
         <h1>Create your account</h1>
         <p className="muted">Choose how you will use the platform. You can create an account for free.</p>
       </div>
