@@ -274,9 +274,13 @@ export async function POST(req: Request) {
     // Only allow our own preview domains as Stripe return destinations.
     // A checkout launched on a stable branch alias must return to that
     // same alias, otherwise the parent loses their session cookie.
+    const isLegacyPreviewHost =
+      parsedUrl.hostname.startsWith('essex-tutor-connect-') &&
+      parsedUrl.hostname.endsWith('-essex-tutors.vercel.app');
+    const isStablePreviewHost =
+      parsedUrl.hostname === 'we-learn-stripe-preview.vercel.app';
     if (process.env.VERCEL_ENV === 'preview' &&
-        !(parsedUrl.hostname.startsWith('essex-tutor-connect-') &&
-          parsedUrl.hostname.endsWith('-essex-tutors.vercel.app'))) {
+        !(isLegacyPreviewHost || isStablePreviewHost)) {
       throw new Error('Unexpected preview checkout origin');
     }
 
