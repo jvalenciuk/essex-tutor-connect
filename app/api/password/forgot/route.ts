@@ -13,9 +13,9 @@ export async function POST(req: Request) {
   // Atomic database-backed limit: at most 3 reset requests per email each hour.
   // The same generic response is used for unknown accounts and throttled requests.
   const throttleKey = createHash('sha256').update(email).digest('hex');
-  const attempts = await db.$queryRaw<Array<{ attempts: number }>>\`
+  const attempts = await db.$queryRaw<Array<{ attempts: number }>>`
     INSERT INTO "PasswordResetThrottle" ("key", "windowStart", "attempts")
-    VALUES (\${throttleKey}, NOW(), 1)
+    VALUES (${throttleKey}, NOW(), 1)
     ON CONFLICT ("key") DO UPDATE SET
       "attempts" = CASE
         WHEN "PasswordResetThrottle"."windowStart" < NOW() - INTERVAL '1 hour' THEN 1
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         WHEN "PasswordResetThrottle"."windowStart" < NOW() - INTERVAL '1 hour' THEN NOW()
         ELSE "PasswordResetThrottle"."windowStart" END
     RETURNING "attempts"
-  \`;
+  `;
   if ((attempts[0]?.attempts ?? 4) > 3) return Response.json(generic);
   const user = await db.user.findUnique({ where: { email }, select: { id: true, passwordHash: true } });
   if (!user) return Response.json(generic);
