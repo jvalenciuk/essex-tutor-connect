@@ -30,7 +30,7 @@ export async function sendVerificationEmail(user: { id: string; email: string; p
   const key = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
   const testTo = process.env.EMAIL_TEST_TO;
-  const base = process.env.APP_URL || process.env.NEXTAUTH_URL;
+  const base = process.env.VERCEL_ENV === 'preview' ? 'https://we-learn-stripe-preview.vercel.app' : (process.env.APP_URL || process.env.NEXTAUTH_URL);
   if (!key || !from || !testTo || !base) throw new Error('Verification email testing is not configured');
   const url = new URL('/verify-email', base);
   url.searchParams.set('token', makeEmailVerificationToken(user.id, user.email, user.passwordHash));
