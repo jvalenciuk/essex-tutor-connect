@@ -3,6 +3,7 @@ import { db } from '../../../lib/db';
 import { fail } from '../../../lib/security';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import { sendVerificationEmail } from '../../../lib/email-verification';
 
 const schema = z.object({
   name: z.string().trim().min(2).max(100),
@@ -53,8 +54,11 @@ export async function POST(req: Request) {
       },
     });
 
+    try { await sendVerificationEmail({ id: user.id, email: user.email, passwordHash }); }
+    catch (error) { console.error('Verification email could not be delivered', error); }
+
     return Response.json(
-      { id: user.id },
+      { id: user.id, verificationRequired: true },
       { status: 201 }
     );
   } catch (e) {
