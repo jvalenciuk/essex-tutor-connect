@@ -86,7 +86,7 @@ export default async function Admin() {
     <section className="card" style={{ marginBottom: 22 }}>
       <h2 style={{ marginTop: 0 }}>Production operations and delivery</h2>
       <p><strong>Email delivery:</strong> {process.env.EMAIL_TEST_TO ? 'Testing mode — all notification emails are redirected to the test recipient' : 'No test redirect set — verify RESEND configuration before sending'}</p>
-      <p><strong>Unpaid bookings without deadline:</strong> {legacyPending} (grandfathered; automatic expiration does not change these)</p>
+      <p><strong>Unpaid bookings without deadline:</strong> {legacyPending} (past sessions are eligible for expiration; future sessions remain protected)</p>
       <p><strong>Overdue payment deadlines:</strong> {overdue}</p>
       <p><strong>Historical Stripe Checkout sessions:</strong> {sandboxSessions} sandbox · {liveSessions} live</p>
       <p><strong>Failed expiration notifications:</strong> {failedEmails}</p>
