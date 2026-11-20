@@ -24,18 +24,25 @@ export async function expireUnpaidBookings(tutorId?: string) {
     if (booking.stripeSessionId) {
       const secret = getConfiguredStripeSecret();
       const account = getActiveTutorStripeAccountId(booking.tutor);
-      if (!secret || !account) { deferred++; continue; }
+      if (!secret) { deferred++; continue; }
       try {
-        const headers = {
-          Authorization: `Bearer ${secret}`,
-          'Stripe-Account': account,
-        };
-        const response = await fetch(
+        // Destination charges live on the platform; legacy direct charges
+        // live on the connected tutor account.
+        const headers = { Authorization: `Bearer ${secret}` };
+        let sessionResponse = await fetch(
           `${STRIPE}/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
           { headers, cache: 'no-store' }
         );
-        if (!response.ok) { deferred++; continue; }
-        const session = await response.json();
+        let sessionAccount: string | null = null;
+        if (!sessionResponse.ok && account) {
+          sessionResponse = await fetch(
+            `${STRIPE}/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
+            { headers: { ...headers, 'Stripe-Account': account }, cache: 'no-store' }
+          );
+          sessionAccount = account;
+        }
+        if (!sessionResponse.ok) { deferred++; continue; }
+        const session = await sessionResponse.json();
         // Do not cancel or expire a Stripe session that is not provably
         // associated with this booking, amount and connected account.
         if (
@@ -62,7 +69,7 @@ export async function expireUnpaidBookings(tutorId?: string) {
         if (session.status === 'open') {
           const expire = await fetch(
             `${STRIPE}/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}/expire`,
-            { method: 'POST', headers, cache: 'no-store' }
+            { method: 'POST', headers: sessionAccount ? { ...headers, 'Stripe-Account': sessionAccount } : headers, cache: 'no-store' }
           );
           if (!expire.ok) { deferred++; continue; }
           const expiredSession = await expire.json();
