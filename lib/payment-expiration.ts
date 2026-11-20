@@ -5,13 +5,16 @@ import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from './stri
 const STRIPE = 'https://api.stripe.com/v1';
 export const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-// Existing reservations with no deadline are intentionally grandfathered.
+// Preserve legacy future bookings without deadlines, but clean up unpaid sessions once their start time has passed.
 export async function expireUnpaidBookings(tutorId?: string) {
   const now = new Date();
   const bookings = await db.booking.findMany({
     where: {
       status: 'PENDING_PAYMENT',
-      paymentDueAt: { lte: now },
+      OR: [
+        { paymentDueAt: { lte: now } },
+        { startsAt: { lte: now } },
+      ],
       ...(tutorId ? { tutorId } : {}),
     },
     include: { tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true } } },
@@ -99,7 +102,10 @@ export async function expireUnpaidBookings(tutorId?: string) {
         // A new checkout session may have been attached while we checked Stripe.
         // Never cancel that newer attempt based on an older session's state.
         stripeSessionId: booking.stripeSessionId,
-        paymentDueAt: { lte: now },
+        OR: [
+          { paymentDueAt: { lte: now } },
+          { startsAt: { lte: now } },
+        ],
       },
       data: { status: 'CANCELLED' },
     });
