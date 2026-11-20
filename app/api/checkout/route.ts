@@ -138,6 +138,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // Approval can be revoked after a booking was proposed. Never allow a
+  // new checkout for a tutor whose verification is no longer approved.
+  if (booking.tutor.verification !== 'APPROVED') {
+    return fail(
+      'This tutor is not currently approved to accept bookings. Please contact support.',
+      409
+    );
+  }
+
   if (!getActiveTutorStripeAccountId(booking.tutor)) {
     return fail(
       'This tutor has not completed payment setup. Please try again after the tutor connects Stripe.',
