@@ -41,6 +41,10 @@ export async function POST(req: Request) {
       return fail('Email already registered', 409);
     }
 
+    if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM || !process.env.EMAIL_TEST_TO || !process.env.NEXTAUTH_SECRET) {
+      return fail('New account registration is temporarily unavailable while email verification is being configured.', 503);
+    }
+
     const passwordHash = await bcrypt.hash(v.password, 12);
 
     const user = await db.user.create({
@@ -71,7 +75,10 @@ export async function POST(req: Request) {
     });
 
     try { await sendVerificationEmail({ id: user.id, email: user.email, passwordHash }); }
-    catch (error) { console.error('Verification email could not be delivered', error); }
+    catch (error) {
+      console.error('Verification email could not be delivered', error);
+      return Response.json({ error: 'Account created, but the verification email could not be sent. Please use Resend verification email on the login page.', accountCreated: true }, { status: 503 });
+    }
 
     return Response.json(
       { id: user.id, verificationRequired: true },
