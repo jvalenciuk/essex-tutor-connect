@@ -14,6 +14,7 @@ function LoginForm() {
   const [verificationMessage, setVerificationMessage] = useState('');
   const registered = params.get('registered') === '1';
   const verificationRequired = params.get('verification') === 'required';
+  const deliveryFailed = params.get('delivery') === 'failed';
   const tutor = params.get('role') === 'tutor';
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -47,7 +48,7 @@ function LoginForm() {
         <p className="muted">Sign in to manage your tutoring sessions and messages.</p>
       </div>
       <form className="card signup-form" onSubmit={submit}>
-        {verificationRequired && <p className="signup-success" role="status">Account created. Please verify your email before signing in. During Preview testing, verification links are sent to the configured test inbox.</p>}
+        {verificationRequired && <p className={deliveryFailed ? 'error' : 'signup-success'} role="status">{deliveryFailed ? 'Your account was created, but the verification email could not be delivered. Use the resend form below. During Preview testing, messages go to the configured test inbox.' : 'Account created. Please verify your email before signing in. During Preview testing, verification links are sent to the configured test inbox.'}</p>}
         {registered && <p className="signup-success" role="status">Account created! Sign in with your new email and password.{tutor ? ' Next, you can complete your tutor profile.' : ''}</p>}
         <label htmlFor="login-email">Email address</label>
         <input id="login-email" className="field" type="email" name="email" autoComplete="email" required />
