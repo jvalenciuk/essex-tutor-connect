@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const user = await db.user.findUnique({ where: { email }, select: { id: true, email: true, passwordHash: true, emailVerifiedAt: true } });
   if (user && !user.emailVerifiedAt) {
     try { await sendVerificationEmail(user); }
-    catch (error) { console.error('Resend verification failed', error); return Response.json({ error: 'Verification email service is temporarily unavailable.' }, { status: 503 }); }
+    catch (error) { console.error('Resend verification failed', error); return Response.json(generic); }
   }
   return Response.json(generic);
 }
