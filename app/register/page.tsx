@@ -40,7 +40,7 @@ function RegisterForm() {
       if (!response.ok) {
         const result = await response.json().catch(() => null);
         if (result?.accountCreated) {
-          window.location.assign('/login?verification=required');
+          window.location.assign('/login?verification=required&delivery=failed');
           return;
         }
         throw new Error(result?.error || 'Could not create your account. Please try again.');
