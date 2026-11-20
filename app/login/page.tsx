@@ -10,6 +10,8 @@ function LoginForm() {
   const params = useSearchParams();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [verificationMessage, setVerificationMessage] = useState('');
   const registered = params.get('registered') === '1';
   const verificationRequired = params.get('verification') === 'required';
   const tutor = params.get('role') === 'tutor';
@@ -53,6 +55,7 @@ function LoginForm() {
         <input id="login-password" className="field" type="password" name="password" autoComplete="current-password" required />
         {error && <p className="error" role="alert">{error}</p>}
         <button disabled={busy} type="submit" className="signup-submit">{busy ? 'Signing in...' : 'Sign in'}</button>
+        {verificationRequired && <div><label htmlFor="verify-email-address">Resend verification link</label><input id="verify-email-address" className="field" type="email" placeholder="Your account email" value={verificationEmail} onChange={e => setVerificationEmail(e.target.value)} /><button type="button" className="signup-submit" onClick={async () => { try { const r = await fetch('/api/email/resend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: verificationEmail }) }); const data = await r.json(); setVerificationMessage(data.message || data.error || 'Please try again.'); } catch { setVerificationMessage('Please try again.'); } }}>Resend verification email</button>{verificationMessage && <p role="status">{verificationMessage}</p>}</div>}
         <p className="signup-signin"><Link href="/forgot-password">Forgot your password?</Link></p>
         <p className="signup-signin">New to WE Learn? <Link href="/register">Create an account</Link></p>
       </form>
