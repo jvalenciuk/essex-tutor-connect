@@ -452,17 +452,11 @@ export default function SessionCalendar({
       }
     );
 
-  const activeBookings =
-    bookings.filter(
-      booking =>
-        ![
-          'CANCELLED',
-          'REFUNDED',
-          'DECLINED',
-        ].includes(
-          booking.status
-        )
-    );
+  // Keep cancelled and refunded sessions in the calendar for booking history.
+  // Availability/conflict checks continue to consider only reserving statuses.
+  const visibleBookings = bookings.filter(
+    booking => booking.status !== 'DECLINED'
+  );
 
   const sessionsByDay =
     new Map<
@@ -471,7 +465,7 @@ export default function SessionCalendar({
     >();
 
   for (
-    const booking of activeBookings
+    const booking of visibleBookings
   ) {
     const key = localDateKey(
       booking.startsAt
@@ -594,6 +588,8 @@ export default function SessionCalendar({
           'PROPOSED',
           'CHANGE_REQUESTED',
           'COMPLETED',
+          'CANCELLED',
+          'REFUNDED',
         ].map(status => (
           <span key={status}>
             <span
@@ -1045,7 +1041,7 @@ export default function SessionCalendar({
                     >
                       {expandedBookingId === booking.id ? 'Hide details' : 'View details'}
                     </button>
-                    {booking.inquiryId && (
+                    {booking.inquiryId && !['CANCELLED', 'REFUNDED'].includes(booking.status) && (
                       <button type="button" onClick={() => openBooking(booking)}>
                         {role === 'TUTOR' ? 'Manage session / message parent' : 'Manage session / message tutor'}
                       </button>
