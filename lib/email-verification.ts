@@ -37,7 +37,7 @@ export async function sendVerificationEmail(user: { id: string; email: string; p
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [testTo], subject: 'WE Learn: verify your email (Preview test)', text: 'Intended recipient: ' + user.email + '\\nPreview testing only. Verify your email within 24 hours:\\n' + url.toString() }),
+    body: JSON.stringify({ from, to: [testTo], subject: 'WE Learn: verify your email (Preview test)', text: 'Intended recipient: ' + user.email + '\nPreview testing only. Verify your email within 24 hours:\n' + url.toString() }),
     cache: 'no-store',
   });
   if (!response.ok) throw new Error('Verification email delivery failed: ' + response.status);
