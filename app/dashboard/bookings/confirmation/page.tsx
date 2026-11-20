@@ -116,7 +116,20 @@ function ConfirmationContent() {
     }
 
     setLoading(true);
-    void checkBooking(0);
+    // Ask our server to verify the existing Stripe payment, without charging again.
+    // If the booking has expired or been cancelled, the server refuses to reopen it.
+    if (checkout === 'success') {
+      void fetch('/api/bookings/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId }),
+        cache: 'no-store',
+      }).catch(() => undefined).finally(() => {
+        if (active) void checkBooking(0);
+      });
+    } else {
+      void checkBooking(0);
+    }
 
     return () => {
       active = false;
