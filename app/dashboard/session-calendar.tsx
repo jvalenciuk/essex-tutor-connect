@@ -6,6 +6,7 @@ import {
   useEffect,
   useState,
 } from 'react';
+import DirectPaymentButton from './direct-payment-button';
 
 type CalendarBooking = {
   id: string;
@@ -1050,6 +1051,9 @@ export default function SessionCalendar({
                       </button>
                     )}
                   </div>
+                  {role === 'PARENT' && booking.status === 'PENDING_PAYMENT' && (
+                    <DirectPaymentButton bookingId={booking.id} amount={money(booking.amountCents)} />
+                  )}
                   {calendarFeedback[booking.id] && (
                     <p role={calendarFeedback[booking.id].kind === 'error' ? 'alert' : 'status'} style={{ marginTop: 10, padding: '10px 12px', borderRadius: 6, background: calendarFeedback[booking.id].kind === 'error' ? '#fef2f2' : '#f0fdf4', color: calendarFeedback[booking.id].kind === 'error' ? '#b42318' : '#166534' }}>
                       {calendarFeedback[booking.id].message}
