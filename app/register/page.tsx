@@ -41,7 +41,7 @@ function RegisterForm() {
         const result = await response.json().catch(() => null);
         throw new Error(result?.error || 'Could not create your account. Please try again.');
       }
-      window.location.assign('/login?registered=1&role=' + role.toLowerCase());
+      window.location.assign('/login?verification=required');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
       setBusy(false);
