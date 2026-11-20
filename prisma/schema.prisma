@@ -218,3 +218,10 @@ model NotificationDelivery {
   @@unique([bookingId, type, recipientRole])
   @@index([status, updatedAt])
 }
+
+// Database-backed abuse protection for password recovery.
+model PasswordResetThrottle {
+  key         String   @id
+  windowStart DateTime
+  attempts    Int      @default(1)
+}
