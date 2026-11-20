@@ -3,6 +3,7 @@ import { db } from '../../../lib/db';
 import { fail } from '../../../lib/security';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import { createHash } from 'node:crypto';
 import { sendVerificationEmail } from '../../../lib/email-verification';
 
 const schema = z.object({
@@ -16,6 +17,21 @@ export async function POST(req: Request) {
   try {
     const v = schema.parse(await req.json());
     const email = v.email.toLowerCase();
+    // A shared database throttle protects across serverless instances.
+    // Only accept a direct connecting address supplied by Vercel's proxy.
+    const ip = req.headers.get('x-real-ip') || req.headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const ipKey = createHash('sha256').update('register-ip:' + ip).digest('hex');
+    const emailKey = createHash('sha256').update('register-email:' + email).digest('hex');
+    for (const [key, limit] of [[ipKey, 10], [emailKey, 3]] as const) {
+      const counts = await db.$queryRaw<Array<{ attempts: number }>>`
+        INSERT INTO "PasswordResetThrottle" ("key", "windowStart", "attempts") VALUES (${key}, NOW(), 1)
+        ON CONFLICT ("key") DO UPDATE SET
+          "attempts" = CASE WHEN "PasswordResetThrottle"."windowStart" < NOW() - INTERVAL '1 hour' THEN 1 ELSE "PasswordResetThrottle"."attempts" + 1 END,
+          "windowStart" = CASE WHEN "PasswordResetThrottle"."windowStart" < NOW() - INTERVAL '1 hour' THEN NOW() ELSE "PasswordResetThrottle"."windowStart" END
+        RETURNING "attempts"
+      `;
+      if ((counts[0]?.attempts ?? limit + 1) > limit) return fail('Too many registration attempts. Please try again later.', 429);
+    }
 
     const existing = await db.user.findUnique({
       where: { email },
