@@ -459,12 +459,16 @@ export default function MyBookingsPage() {
       dateText(booking.startsAt),
       booking.requestedStartsAt ? dateText(booking.requestedStartsAt) : null,
       booking.requestNote,
+      booking.id,
+      category(booking, role) === 'action' ? 'needs action' :
+      category(booking, role) === 'upcoming' ? 'upcoming' :
+      category(booking, role) === 'waiting' ? 'waiting on others' : 'history',
       category(booking, role) === 'history' && ['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) ? 'past proposed time' : null
     ].some(value => value?.toLowerCase().includes(query));
   });
 
   const focusedBookingMissing = !loading && Boolean(focusedBookingId) && !bookings.some(booking => booking.id === focusedBookingId);
-  const filteredItems = activeTab === 'history' && !searchAllTabs && !showAllHistory
+  const filteredItems = activeTab === 'history' && !search.trim() && !showAllHistory
     ? matchingItems.slice(0, 5)
     : matchingItems;
 
@@ -946,13 +950,13 @@ export default function MyBookingsPage() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16 }}>
         <input
           aria-label="Search sessions"
-          placeholder="Search sessions"
+          placeholder="Search name, subject, status or booking ID"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); if (!e.target.value.trim()) setSearchAllTabs(false); }}
           style={{ flex: '1 1 250px', padding: '11px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
         />
         {search && (
-          <button type="button" onClick={() => setSearch('')} aria-label="Clear session search">
+          <button type="button" onClick={() => { setSearch(''); setSearchAllTabs(false); }} aria-label="Clear session search">
             Clear search
           </button>
         )}
@@ -1004,9 +1008,9 @@ export default function MyBookingsPage() {
           empty={search.trim() ? 'No sessions match your search.' : selectedTab.empty}
         />
       )}
-      {!loading && activeTab === 'history' && !searchAllTabs && matchingItems.length > 5 && (
+      {!loading && activeTab === 'history' && !search.trim() && matchingItems.length > 5 && (
         <div style={{ textAlign: 'center', margin: '16px 0 28px' }}>
-          <p className="muted">Showing {filteredItems.length} of {matchingItems.length} historical sessions · newest dates first</p>
+          <p className="muted">Showing {filteredItems.length} of {matchingItems.length} historical sessions · most recent dates first</p>
           <button type="button" onClick={() => setShowAllHistory(value => !value)}>
             {showAllHistory ? 'Show fewer sessions' : `Show all ${matchingItems.length} sessions`}
           </button>
