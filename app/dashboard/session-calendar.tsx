@@ -886,7 +886,14 @@ export default function SessionCalendar({
             </button>
             {showBookingForm && (
               <form id="calendar-booking-form" onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
-                <p><strong>New session · {selectedDate}</strong></p>
+                <h3 style={{ marginTop: 0 }}>{role === 'PARENT' ? 'Request a tutoring session' : 'Propose a tutoring session'}</h3>
+                {contactId && bookingContacts.some(contact => contact.id === contactId) && (
+                  <p role="status" style={{ padding: '10px 12px', background: '#eef5ff', borderRadius: 8 }}>
+                    <strong>{role === 'PARENT' ? 'Tutor' : 'Parent'}:</strong> {bookingContacts.find(contact => contact.id === contactId)?.name}
+                    {' · '}{bookingContacts.find(contact => contact.id === contactId)?.subject}
+                  </p>
+                )}
+                <p><strong>Session date: {selectedDate}</strong></p>
                 <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
                 <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
                 <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
@@ -910,7 +917,7 @@ export default function SessionCalendar({
                 <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
                 </select>
-                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Creating...' : role === 'PARENT' ? 'Request session' : 'Propose session'}</button>
+                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Submitting...' : role === 'PARENT' ? 'Send session request' : 'Send proposal to parent'}</button>
                 {bookingError && <p role="alert" className="error">{bookingError}</p>}
               </form>
             )}
