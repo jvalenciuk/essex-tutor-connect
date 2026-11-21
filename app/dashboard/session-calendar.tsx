@@ -925,7 +925,7 @@ export default function SessionCalendar({
                 </select>
                 {bookingContacts.length === 0 && <p className="muted">{role === 'PARENT' ? 'No accepted tutor inquiries yet. Contact a tutor and wait for their acceptance first.' : 'No accepted parent inquiries yet. Accept an inquiry first.'}</p>}
                 <label htmlFor="calendar-start">Start time (Eastern Time)</label>
-                <select id="calendar-start" className="field" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required>
+                <select id="calendar-start" className="field" value={bookingTime} onChange={event => { setBookingTime(event.target.value); setBookingError(''); }} required>
                   {Array.from({ length: 61 }, (_, index) => {
                     const totalMinutes = 7 * 60 + index * 15;
                     const hour = Math.floor(totalMinutes / 60);
@@ -943,7 +943,7 @@ export default function SessionCalendar({
                 </select>
                 <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
                 <label htmlFor="calendar-duration">Duration</label>
-                <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
+                <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => { setBookingDuration(event.target.value); setBookingError(''); }}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
                 </select>
                 <div aria-label="Review session details" style={{ margin: '16px 0', padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
