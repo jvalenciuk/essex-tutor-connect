@@ -395,6 +395,7 @@ export default function MyBookingsPage() {
       dateText(booking.startsAt)].some(value => value?.toLowerCase().includes(query));
   });
 
+  const focusedBookingMissing = !loading && Boolean(focusedBookingId) && !bookings.some(booking => booking.id === focusedBookingId);
   const filteredItems = activeTab === 'history' && !showAllHistory
     ? matchingItems.slice(0, 5)
     : matchingItems;
@@ -810,7 +811,8 @@ export default function MyBookingsPage() {
 
       {focusedBookingId && (
         <div role="status" style={{ marginTop: 16 }}>
-          Showing your selected session. <button type="button" onClick={() => { setFocusedBookingId(''); setShowAllHistory(false); window.history.replaceState(null, '', '/dashboard/bookings'); }}>Show all sessions</button>
+          {focusedBookingMissing ? 'That session could not be found in your account. It may be an outdated link.' : 'Showing your selected session.'}{' '}
+          <button type="button" onClick={() => { setFocusedBookingId(''); setShowAllHistory(false); window.history.replaceState(null, '', '/dashboard/bookings'); }}>Show all sessions</button>
         </div>
       )}
 
