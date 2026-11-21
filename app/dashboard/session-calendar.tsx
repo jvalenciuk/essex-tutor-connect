@@ -971,7 +971,7 @@ export default function SessionCalendar({
                 <p>{bookingNotice}</p>
                 <p className="muted">This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.</p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <a className="button" href={`/dashboard/bookings?tab=${role === 'TUTOR' ? 'waiting' : 'action'}${createdBookingId ? `&booking=${encodeURIComponent(createdBookingId)}` : ''}`}>Track in My Sessions</a>
+                  <a className="button" href={`/dashboard/bookings?tab=${'waiting'}${createdBookingId ? `&booking=${encodeURIComponent(createdBookingId)}` : ''}`}>Track in My Sessions</a>
                   <button type="button" onClick={() => {
                     setBookingNotice('');
                     setCreatedBookingId('');
