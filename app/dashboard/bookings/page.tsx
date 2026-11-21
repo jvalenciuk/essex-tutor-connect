@@ -427,8 +427,15 @@ export default function MyBookingsPage() {
       booking.status === 'PENDING_PAYMENT' ? 0 :
       booking.status === 'CHANGE_REQUESTED' ? 1 :
       booking.status === 'PROPOSED' ? 2 : 3;
-    return priority(a) - priority(b) ||
-      new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+    const priorityDifference = priority(a) - priority(b);
+    if (priorityDifference) return priorityDifference;
+    if (a.status === 'PENDING_PAYMENT' && b.status === 'PENDING_PAYMENT') {
+      const aDeadline = a.paymentDueAt ? new Date(a.paymentDueAt).getTime() : Infinity;
+      const bDeadline = b.paymentDueAt ? new Date(b.paymentDueAt).getTime() : Infinity;
+      if (aDeadline !== bDeadline) return aDeadline - bDeadline;
+    }
+    return new Date(a.requestedStartsAt || a.startsAt).getTime() -
+      new Date(b.requestedStartsAt || b.startsAt).getTime();
   });
 
   const upcoming = sorted.filter(
