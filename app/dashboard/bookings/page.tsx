@@ -85,6 +85,12 @@ export default function MyBookingsPage() {
 
   const [role, setRole] = useState<Role>('');
   const [activeTab, setActiveTab] = useState<BookingTab>('action');
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    if (requestedTab === 'action' || requestedTab === 'upcoming' || requestedTab === 'waiting' || requestedTab === 'history') {
+      setActiveTab(requestedTab);
+    }
+  }, []);
   const [search, setSearch] = useState('');
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
