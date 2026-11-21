@@ -141,12 +141,14 @@ export default function SessionCalendar({
   // A repeat-booking shortcut may select an existing accepted inquiry.
   // Only IDs in bookingContacts are accepted; the API still checks authorization.
   useEffect(() => {
-    if (role !== 'PARENT' || bookingContacts.length === 0) return;
+    if (!['PARENT', 'TUTOR'].includes(role) || bookingContacts.length === 0) return;
     const params = new URLSearchParams(window.location.search);
     const requested = params.get('bookWith');
     if (!requested || !bookingContacts.some(contact => contact.id === requested)) return;
     setContactId(requested);
     setShowBookingForm(true);
+    const calendarSection = document.getElementById('my-calendar');
+    if (calendarSection instanceof HTMLDetailsElement) calendarSection.open = true;
     window.requestAnimationFrame(() => {
       document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
