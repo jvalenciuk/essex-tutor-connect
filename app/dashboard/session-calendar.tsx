@@ -74,6 +74,10 @@ const statuses: Record<
     label: 'Declined',
     color: '#94a3b8',
   },
+  EXPIRED: {
+    label: 'Expired',
+    color: '#94a3b8',
+  },
 };
 
 function localDateKey(
