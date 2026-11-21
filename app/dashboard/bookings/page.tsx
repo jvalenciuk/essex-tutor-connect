@@ -952,11 +952,18 @@ export default function MyBookingsPage() {
           aria-label="Search sessions"
           placeholder="Search name, subject, status or booking ID"
           value={search}
-          onChange={e => { setSearch(e.target.value); if (!e.target.value.trim()) setSearchAllTabs(false); }}
+          onChange={e => {
+            setSearch(e.target.value);
+            if (focusedBookingId) {
+              setFocusedBookingId('');
+              if (window.location.search) window.history.replaceState(null, '', '/dashboard/bookings');
+            }
+            if (!e.target.value.trim()) setSearchAllTabs(false);
+          }}
           style={{ flex: '1 1 250px', padding: '11px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
         />
         {search && (
-          <button type="button" onClick={() => { setSearch(''); setSearchAllTabs(false); }} aria-label="Clear session search">
+          <button type="button" onClick={() => { setSearch(''); setSearchAllTabs(false); setShowAllHistory(false); }} aria-label="Clear session search">
             Clear search
           </button>
         )}
@@ -998,6 +1005,7 @@ export default function MyBookingsPage() {
       {!loading && search.trim() && (
         <p className="muted" role="status">
           {matchingItems.length} matching {matchingItems.length === 1 ? 'session' : 'sessions'} {searchAllTabs ? 'across all tabs' : `in ${selectedTab.title.toLowerCase()}`}.
+          {!searchAllTabs && ' Select “Search all tabs” to include other session categories.'}
         </p>
       )}
 
