@@ -326,7 +326,7 @@ export default function SessionCalendar({
       : -300;
     const localStart = new Date(wallClockUtc - offsetMinutes * 60000);
     if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
-      setBookingError('Choose a future date and time.'); return;
+      setBookingError('That start time has already passed. Choose a later time today or select another date.'); return;
     }
     setBookingBusy(true);
     try {
