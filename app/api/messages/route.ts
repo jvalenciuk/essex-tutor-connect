@@ -102,5 +102,36 @@ export async function POST(req: Request) {
     },
   });
 
+  // Notify the other participant without exposing the private message in email.
+  // Preview uses the designated test inbox rather than real user addresses.
+  try {
+    const conversation = await db.inquiry.findUnique({
+      where: { id: data.inquiryId },
+      select: { parentId: true, tutor: { select: { userId: true } } },
+    });
+    const recipientId = conversation?.parentId === who.id ? conversation.tutor.userId : conversation?.parentId;
+    const recipient = recipientId ? await db.user.findUnique({ where: { id: recipientId }, select: { email: true } }) : null;
+    const preview = process.env.VERCEL_ENV !== 'production';
+    const to = preview ? process.env.EMAIL_TEST_TO : recipient?.email;
+    const key = process.env.RESEND_API_KEY;
+    const from = process.env.EMAIL_FROM;
+    if (to && key && from && recipientId) {
+      const base = preview ? 'https://we-learn-stripe-preview.vercel.app' : (process.env.APP_URL || process.env.NEXTAUTH_URL || '');
+      const link = base ? new URL('/dashboard#conversations', base).toString() : '';
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from, to: [to], subject: 'WE Learn: New tutoring message',
+          text: 'You have received a new tutoring message. Sign in to read and reply: ' + link + (preview ? '\\nPreview test. Intended recipient: ' + (recipient?.email || 'unknown') : ''),
+        }),
+        cache: 'no-store',
+      });
+      if (!response.ok) console.error('Message email notification failed', response.status);
+    } else console.warn('Message email notification not configured');
+  } catch (error) {
+    console.error('Message email notification error', error);
+  }
+
   return Response.json(message, { status: 201 });
 }
