@@ -463,6 +463,8 @@ export default function MyBookingsPage() {
       dateText(booking.startsAt),
       booking.requestedStartsAt ? dateText(booking.requestedStartsAt) : null,
       booking.requestNote,
+      booking.paymentDueAt ? dateText(booking.paymentDueAt) : null,
+      booking.status === 'PENDING_PAYMENT' && booking.paymentDueAt && new Date(booking.paymentDueAt).getTime() <= Date.now() ? 'payment deadline passed overdue' : null,
       booking.id,
       category(booking, role) === 'action' ? 'needs action' :
       category(booking, role) === 'upcoming' ? 'upcoming' :
@@ -510,7 +512,11 @@ export default function MyBookingsPage() {
       section === 'history' ? null :
       booking.status === 'PROPOSED' ? (isParent ? 'Review this proposal and choose Accept, Request Different Time, or Decline.' : 'Waiting for the parent to respond to your proposal.') :
       booking.status === 'CHANGE_REQUESTED' ? (isTutor ? 'Review the requested time below and accept it or propose an alternative.' : 'Waiting for the tutor to respond to your requested time.') :
-      booking.status === 'PENDING_PAYMENT' ? (isParent ? 'Payment is required to confirm this session.' : 'Waiting for the parent to pay.') :
+      booking.status === 'PENDING_PAYMENT' ? (
+        booking.paymentDueAt && new Date(booking.paymentDueAt).getTime() <= now
+          ? 'The payment deadline has passed. Refresh your sessions to check whether the booking has expired.'
+          : isParent ? 'Payment is required to confirm this session.' : 'Waiting for the parent to pay.'
+      ) :
       booking.status === 'PAID' ? (end <= now ? (isTutor ? 'Mark this completed session when tutoring has finished.' : 'The session has ended. Waiting for the tutor to mark it complete.') : 'Your session is confirmed and paid.') : null;
 
     const accent =
@@ -713,6 +719,11 @@ export default function MyBookingsPage() {
                     <span style={{ color: '#b42318' }}> · Deadline passed; refresh to check availability</span>
                   )}
                 </p>
+              )}
+              {booking.paymentDueAt && new Date(booking.paymentDueAt).getTime() <= now && (
+                <button type="button" disabled={isBusy || loading} onClick={() => void load()} style={{ marginRight: 8 }}>
+                  Refresh booking status
+                </button>
               )}
               <button
                 disabled={isBusy || Boolean(booking.paymentDueAt && new Date(booking.paymentDueAt).getTime() <= now)}
