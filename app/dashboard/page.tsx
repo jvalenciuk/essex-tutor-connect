@@ -9,7 +9,6 @@ import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
 import MessagePartnerButton from './message-partner-button';
 import MessageReadRefresh from './message-read-refresh';
-import BookingManager from './booking-manager';
 import SessionCalendar from './session-calendar';
 import BookingJump from './booking-jump';
 import DirectPaymentButton from './direct-payment-button';
@@ -980,10 +979,9 @@ export default async function Dashboard() {
                         <summary className="conversation-panel-summary">Messages with {partnerName}</summary>
                         <InquiryMessages inquiryId={primaryId} inquiryIds={inquiryIds} />
                       </details>
-                      <details data-session-panel="true" className="conversation-panel">
-                        <summary className="conversation-panel-summary">Tutoring sessions · scheduling and payments</summary>
-                        <BookingManager inquiryId={primaryId} inquiryIds={inquiryIds} role={who.role} tutorId={conversations[0].tutorId} />
-                      </details>
+                      <div className="conversation-panel" style={{ padding: '12px 0' }}>
+                        <Link href="/dashboard/bookings">View sessions, scheduling &amp; payments</Link>
+                      </div>
                     </>
                   )}
                 </div>
