@@ -68,7 +68,7 @@ function category(booking: Booking, role: Role) {
     return 'history';
   }
 
-  if (booking.status === 'PROPOSED' && start <= Date.now()) return 'history';
+  if (['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) && start <= Date.now()) return 'history';
 
   if (booking.status === 'PAID') {
     return end > Date.now() ? 'upcoming' : 'action';
@@ -204,8 +204,8 @@ export default function MyBookingsPage() {
         ACCEPT: 'Session accepted. You can now complete payment to confirm the booking.',
         DECLINE: 'Session declined. No payment is required.',
         ACCEPT_REQUESTED_TIME: 'Requested time accepted. The parent can now complete payment.',
-        REQUEST_CHANGE: 'Your requested time was sent. Waiting for the other person to respond.',
-        PROPOSE_CHANGE: 'Your alternative time was sent for review.',
+        REQUEST_CHANGE: 'Your requested time was sent to the tutor for review.',
+        REVISE: 'Your alternative time was sent to the parent for review.',
         COMPLETE: 'Session marked as completed.',
         CANCEL: 'Session cancelled.',
       };
@@ -274,6 +274,7 @@ export default function MyBookingsPage() {
     );
     setNote('');
     setError('');
+    setNotice('');
   }
 
   function submitTimeChange(booking: Booking) {
@@ -605,12 +606,15 @@ export default function MyBookingsPage() {
 
         {booking.status === 'PENDING_PAYMENT' &&
           isParent && (
-            <button
-              disabled={isBusy}
-              onClick={() => void checkout(booking.id)}
-            >
-              Pay {money(booking.amountCents)} Securely
-            </button>
+            <div style={{ marginBottom: 12 }}>
+              <p className="muted">The session time is accepted. Complete secure payment to confirm your booking.</p>
+              <button
+                disabled={isBusy}
+                onClick={() => void checkout(booking.id)}
+              >
+                Pay {money(booking.amountCents)} Securely
+              </button>
+            </div>
           )}
 
         {booking.status === 'PENDING_PAYMENT' &&
