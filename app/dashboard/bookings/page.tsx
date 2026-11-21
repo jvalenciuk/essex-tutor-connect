@@ -101,6 +101,7 @@ export default function MyBookingsPage() {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -138,6 +139,7 @@ export default function MyBookingsPage() {
       );
 
       setBookings(data as Booking[]);
+      setLastRefreshed(new Date());
       setError('');
     } catch (err) {
       setError(
@@ -405,7 +407,9 @@ export default function MyBookingsPage() {
     if (!query) return true;
     return [booking.parent?.name, booking.tutor?.user?.name, booking.inquiry?.subject,
       booking.inquiry?.grade, labels[booking.status], booking.status,
-      dateText(booking.startsAt)].some(value => value?.toLowerCase().includes(query));
+      dateText(booking.startsAt),
+      booking.requestedStartsAt ? dateText(booking.requestedStartsAt) : null,
+      booking.requestNote].some(value => value?.toLowerCase().includes(query));
   });
 
   const focusedBookingMissing = !loading && Boolean(focusedBookingId) && !bookings.some(booking => booking.id === focusedBookingId);
@@ -828,7 +832,7 @@ export default function MyBookingsPage() {
             type="button"
             className={activeTab === tab.id ? 'booking-tab active' : 'booking-tab'}
             aria-current={activeTab === tab.id ? 'page' : undefined}
-            onClick={() => { setActiveTab(tab.id); setFocusedBookingId(''); setShowAllHistory(false); resetEditor(); setError(''); if (window.location.search) window.history.replaceState(null, '', '/dashboard/bookings'); }}
+            onClick={() => { setActiveTab(tab.id); setFocusedBookingId(''); setShowAllHistory(false); resetEditor(); setError(''); setNotice(''); if (window.location.search) window.history.replaceState(null, '', '/dashboard/bookings'); }}
           >
             {tab.title} <span className="booking-tab-count">{tab.count}</span>
           </button>
@@ -859,6 +863,11 @@ export default function MyBookingsPage() {
           {loading ? 'Loading...' : 'Refresh'}
         </button>
       </div>
+      {lastRefreshed && (
+        <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          Last updated {lastRefreshed.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })}
+        </p>
+      )}
 
       {!role && !loading && (
         <p className="muted">
