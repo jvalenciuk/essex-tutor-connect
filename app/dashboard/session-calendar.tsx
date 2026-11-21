@@ -935,6 +935,13 @@ export default function SessionCalendar({
                     setBookingNotice('');
                     setCreatedBookingId('');
                     setBookingError('');
+                    // Default repeat sessions to the following week to avoid
+                    // accidentally proposing the same date and time twice.
+                    const [year, monthNumber, day] = selectedDate.split('-').map(Number);
+                    const nextWeek = new Date(Date.UTC(year, monthNumber - 1, day + 7));
+                    const nextDate = nextWeek.toISOString().slice(0, 10);
+                    setSelectedDate(nextDate);
+                    setMonth({ year: nextWeek.getUTCFullYear(), monthNumber: nextWeek.getUTCMonth() + 1 });
                     setShowBookingForm(true);
                     window.requestAnimationFrame(() => document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
                   }}>Schedule another session</button>
