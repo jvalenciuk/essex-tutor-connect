@@ -349,6 +349,17 @@ export default function MyBookingsPage() {
     void updateBooking(booking.id, 'CANCEL');
   }
 
+  // A direct booking link follows the session even if its status has changed.
+  useEffect(() => {
+    if (!focusedBookingId || loading) return;
+    const selected = bookings.find(booking => booking.id === focusedBookingId);
+    if (!selected) return;
+    const currentTab = category(selected, role) as BookingTab;
+    setActiveTab(previous => previous === currentTab ? previous : currentTab);
+    setSearch('');
+    setShowAllHistory(true);
+  }, [focusedBookingId, bookings, role, loading]);
+
   const sorted = [...bookings].sort(
     (a, b) =>
       new Date(a.startsAt).getTime() -
@@ -798,7 +809,7 @@ export default function MyBookingsPage() {
 
       {focusedBookingId && (
         <div role="status" style={{ marginTop: 16 }}>
-          Showing your selected session. <button type="button" onClick={() => setFocusedBookingId('')}>Show all sessions</button>
+          Showing your selected session. <button type="button" onClick={() => { setFocusedBookingId(''); setShowAllHistory(false); window.history.replaceState(null, '', '/dashboard/bookings'); }}>Show all sessions</button>
         </div>
       )}
 
