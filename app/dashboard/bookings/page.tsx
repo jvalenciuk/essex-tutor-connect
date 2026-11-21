@@ -60,12 +60,16 @@ function easternWallTime(value: Date): string {
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
 }
 
-function easternToInstant(value: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+function easternTimeOptions(value: string): Date[] {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return [];
   const [year, month, day, hour, minute] = value.split(/[-T:]/).map(Number);
   const wall = Date.UTC(year, month - 1, day, hour, minute);
   const candidates = [4, 5].map(offset => new Date(wall + offset * 3600000));
-  return candidates.find(candidate => easternWallTime(candidate) === value) || null;
+  return candidates.filter(candidate => easternWallTime(candidate) === value);
+}
+
+function easternToInstant(value: string, occurrence = 0): Date | null {
+  return easternTimeOptions(value)[occurrence] || null;
 }
 
 function dateText(value: string) {
@@ -128,6 +132,7 @@ export default function MyBookingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [startsAt, setStartsAt] = useState('');
   const [duration, setDuration] = useState('60');
+  const [timeOccurrence, setTimeOccurrence] = useState(0);
   const [note, setNote] = useState('');
 
   const load = useCallback(async () => {
@@ -183,6 +188,7 @@ export default function MyBookingsPage() {
   function resetEditor() {
     setEditingId(null);
     setStartsAt('');
+    setTimeOccurrence(0);
     setDuration('60');
     setNote('');
   }
@@ -290,7 +296,9 @@ export default function MyBookingsPage() {
   function beginTimeChange(booking: Booking) {
     setEditingId(booking.id);
     const existingDate = new Date(booking.requestedStartsAt || booking.startsAt);
-    setStartsAt(easternWallTime(existingDate));
+    const wallTime = easternWallTime(existingDate);
+    setStartsAt(wallTime);
+    setTimeOccurrence(Math.max(0, easternTimeOptions(wallTime).findIndex(option => option.getTime() === existingDate.getTime())));
     setDuration(
       String(
         booking.requestedDurationMinutes ||
@@ -308,7 +316,7 @@ export default function MyBookingsPage() {
       return;
     }
 
-    const date = easternToInstant(startsAt);
+    const date = easternToInstant(startsAt, timeOccurrence);
     const minutes = Number(duration);
 
     if (
@@ -758,9 +766,20 @@ export default function MyBookingsPage() {
                 min={easternWallTime(new Date())}
                 step={900}
                 required
-                onChange={e => { setStartsAt(e.target.value); setError(''); }}
+                onChange={e => { setStartsAt(e.target.value); setTimeOccurrence(0); setError(''); }}
               />
             </label>
+
+            {easternTimeOptions(startsAt).length > 1 && (
+              <label>
+                This time occurs twice when clocks change
+                <select className="field" value={timeOccurrence}
+                  onChange={e => { setTimeOccurrence(Number(e.target.value)); setError(''); }}>
+                  <option value={0}>First occurrence (EDT, UTC−4)</option>
+                  <option value={1}>Second occurrence (EST, UTC−5)</option>
+                </select>
+              </label>
+            )}
 
             <label>
               Duration
@@ -794,9 +813,10 @@ export default function MyBookingsPage() {
               Times are in Windsor/Eastern Time. The current proposed time is prefilled; choose a different date, time, or duration.
             </p>
 
-            {startsAt && easternToInstant(startsAt) && (
+            {startsAt && easternToInstant(startsAt, timeOccurrence) && (
               <p className="muted" style={{ margin: '12px 0' }}>
-                <strong>Review replacement:</strong> {dateText(easternToInstant(startsAt)!.toISOString())}
+                <strong>Review replacement:</strong> {dateText(easternToInstant(startsAt, timeOccurrence)!.toISOString())}
+                {easternTimeOptions(startsAt).length > 1 ? (timeOccurrence === 0 ? ' (EDT, UTC−4)' : ' (EST, UTC−5)') : ''}
                 {' · '}{duration} minutes. The other person must review the change.
               </p>
             )}
