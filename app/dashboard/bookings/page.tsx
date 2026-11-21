@@ -444,39 +444,27 @@ export default function MyBookingsPage() {
         </div>
 
         <p style={{ margin: '10px 0' }}>
-          {booking.parent?.name && <span>Parent: {booking.parent.name} · </span>}
-          {booking.tutor?.user?.name && <span>Tutor: {booking.tutor.user.name} · </span>}
-          {booking.inquiry?.grade && <span>{booking.inquiry.grade} · </span>}
-          {booking.durationMinutes} min · <strong>{money(booking.amountCents)}</strong>
+          <strong>{isTutor ? booking.parent?.name || 'Parent' : booking.tutor?.user?.name || 'Tutor'}</strong>
+          {booking.inquiry?.grade && <span> · {booking.inquiry.grade}</span>}
+          <span> · {booking.durationMinutes} min</span>
+          <span> · <strong>{money(booking.amountCents)}</strong></span>
         </p>
 
-        {isTutor && (
-          <p className="muted">
-            Tutor portion before processing fees:{' '}
-            {money(
-              booking.amountCents -
-                booking.platformFeeCents
+        <details style={{ margin: '10px 0 16px' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 500 }}>More details &amp; messages</summary>
+          <div style={{ padding: '10px 0 0' }}>
+            {isTutor && (
+              <p className="muted">
+                Estimated tutor earnings: {money(booking.amountCents - booking.platformFeeCents)}
+              </p>
             )}
-          </p>
-        )}
-
-        {booking.inquiryId && (
-          <div style={{ margin: '16px 0' }}>
-            <Link
-              href={`/dashboard/messages/${encodeURIComponent(
-                booking.inquiryId
-              )}`}
-              className="button"
-              style={{ display: 'inline-block' }}
-            >
-              {isParent
-                ? 'Message Tutor'
-                : isTutor
-                  ? 'Message Parent'
-                  : 'View Conversation'}
-            </Link>
+            {booking.inquiryId && (
+              <Link href={`/dashboard/messages/${encodeURIComponent(booking.inquiryId)}`}>
+                {isParent ? 'Message tutor' : isTutor ? 'Message parent' : 'View conversation'}
+              </Link>
+            )}
           </div>
-        )}
+        </details>
 
         {booking.status === 'CHANGE_REQUESTED' && (
           <div
@@ -598,11 +586,7 @@ export default function MyBookingsPage() {
             </p>
           )}
 
-        {booking.status === 'PAID' && (
-          <p className="muted">
-            Payment received. Session confirmed.
-          </p>
-        )}
+
 
         {canComplete && (
           <button
