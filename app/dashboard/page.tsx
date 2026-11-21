@@ -482,15 +482,6 @@ export default async function Dashboard() {
 
 
 
-      {(isTutor || isParent) && (
-        <details id="my-calendar" className="card" style={{ marginTop: 20 }} open={isParent}>
-          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>{isParent ? "Schedule a session" : "Calendar & availability"} <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>· {isTutor ? "Expand to view your calendar" : "Choose a time"}</span></summary>
-          {isParent && <p className="muted">Choose an existing tutor connection and an available time below. Your tutor can confirm or propose an alternative.</p>}
-          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
-          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : isParent ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.tutorId, { id: inquiry.id, name: inquiry.tutor.user.name || 'Tutor', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
-
-        </details>
-      )}
 
 
       {who.role === 'ADMIN' && (
@@ -524,7 +515,7 @@ export default async function Dashboard() {
                 value={upcomingTutorSessions.length}
               />
               <StatCard
-                label="Tutor Earnings"
+                label="Estimated earnings"
                 value={money(tutorEarnings)}
                 detail="Estimated tutor share; bank payouts and adjustments are separate"
               />
@@ -533,7 +524,7 @@ export default async function Dashboard() {
                 value={openInquiries}
               />
               <StatCard
-                label="Tutor Setup"
+                label="Account setup"
                 value={`${setupPercentage}%`}
                 detail={`${completedSteps} of 5 steps complete`}
               />
@@ -931,6 +922,17 @@ export default async function Dashboard() {
             ))}
           </details>
         </section>
+      )}
+
+
+      {(isTutor || isParent) && (
+        <details id="my-calendar" className="card" style={{ marginTop: 20 }} open={isParent}>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>{isParent ? "Schedule a session" : "Calendar & availability"} <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>· {isTutor ? "Expand to view your calendar" : "Choose a time"}</span></summary>
+          {isParent && <p className="muted">Choose an existing tutor connection and an available time below. Your tutor can confirm or propose an alternative.</p>}
+          {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
+          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : isParent ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.tutorId, { id: inquiry.id, name: inquiry.tutor.user.name || 'Tutor', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
+
+        </details>
       )}
 
 
