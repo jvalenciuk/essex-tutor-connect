@@ -926,7 +926,7 @@ export default function SessionCalendar({
                 <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>Session {role === 'PARENT' ? 'request' : 'proposal'} sent successfully</p>
                 <p>{bookingNotice}</p>
                 <p className="muted">This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.</p>
-                <a className="button" href="/dashboard/bookings">View in My Sessions</a>
+                <a className="button" href={role === 'TUTOR' ? '/dashboard/bookings?tab=waiting' : '/dashboard/bookings?tab=action'}>Track in My Sessions</a>
               </div>
             )}
           </div>
