@@ -932,7 +932,13 @@ export default function SessionCalendar({
                     const minute = totalMinutes % 60;
                     const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
                     const label = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
-                    return <option key={value} value={value}>{label}</option>;
+                    const nowInWindsor = new Intl.DateTimeFormat('en-CA', {
+                      timeZone: ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+                    }).formatToParts(new Date());
+                    const currentHour = Number(nowInWindsor.find(part => part.type === 'hour')?.value || 0);
+                    const currentMinute = Number(nowInWindsor.find(part => part.type === 'minute')?.value || 0);
+                    const isPastToday = selectedDate === localDateKey(new Date()) && totalMinutes <= currentHour * 60 + currentMinute;
+                    return <option key={value} value={value} disabled={isPastToday}>{label}{isPastToday ? ' (passed)' : ''}</option>;
                   })}
                 </select>
                 <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
