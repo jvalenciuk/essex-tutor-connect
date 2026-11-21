@@ -1,5 +1,5 @@
-import { db } from '../../../lib/db';
-import { identity, fail } from '../../../lib/security';
+import { db } from '../../../../lib/db';
+import { identity, fail } from '../../../../lib/security';
 
 export async function POST(req: Request) {
   const who = await identity();
