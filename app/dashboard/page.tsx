@@ -631,8 +631,9 @@ export default async function Dashboard() {
             </SectionLink>
           </details>
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Upcoming Sessions</h2>
+          <details className="card" style={{ marginTop: 24 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Upcoming sessions · see schedule</summary>
+            <p className="muted">For booking actions, use <Link href="/dashboard/bookings">My Sessions</Link>.</p>
 
             {upcomingTutorSessions.length === 0 ? (
               <p>No upcoming paid sessions.</p>
@@ -681,7 +682,7 @@ export default async function Dashboard() {
                 </table>
               </div>
             )}
-          </section>
+          </details>
 
           <details className="card" style={{ marginTop: 24 }}>
             <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>Earnings breakdown · {money(tutorEarnings)}</summary>
@@ -748,8 +749,9 @@ export default async function Dashboard() {
 
 
 
-          <section className="card" style={{ marginTop: 24 }}>
-            <h2>Upcoming Sessions</h2>
+          <details className="card" style={{ marginTop: 24 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Upcoming sessions · see schedule</summary>
+            <p className="muted">For booking actions, use <Link href="/dashboard/bookings">My Sessions</Link>.</p>
 
             {upcomingParentSessions.length === 0 ? (
               <p>You have no upcoming paid sessions.</p>
@@ -795,7 +797,7 @@ export default async function Dashboard() {
                 </table>
               </div>
             )}
-          </section>
+          </details>
 
 
 
