@@ -942,6 +942,13 @@ export default function SessionCalendar({
                   <p style={{ margin: '4px 0' }}><strong>Date:</strong> {selectedDate}</p>
                   <p style={{ margin: '4px 0' }}><strong>Start:</strong> {bookingTime} Eastern Time</p>
                   <p style={{ margin: '4px 0' }}><strong>Duration:</strong> {bookingDuration} minutes</p>
+                  <p style={{ margin: '4px 0' }}><strong>Ends:</strong> {(() => {
+                    const [hours, minutes] = bookingTime.split(':').map(Number);
+                    const total = hours * 60 + minutes + Number(bookingDuration);
+                    const endHour = Math.floor(total / 60) % 24;
+                    const endMinute = total % 60;
+                    return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}${total >= 1440 ? ' (next day)' : ''}`;
+                  })()} Eastern Time</p>
                   <p className="muted" style={{ margin: '8px 0 0' }}>The other person must respond before the session is confirmed.</p>
                 </div>
                 <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Submitting...' : role === 'PARENT' ? 'Send session request' : 'Send proposal to parent'}</button>
