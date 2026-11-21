@@ -413,15 +413,23 @@ export default async function Dashboard() {
 
       <MessageReadRefresh />
       
-      {unreadMessages > 0 && <div className="card" style={{ borderLeft: "5px solid #f4b400", marginBottom: 20, padding: 16 }} role="status"><strong>You have {unreadMessages} new {unreadMessages === 1 ? "message" : "messages"}.</strong> <a href="#conversations">Read messages</a></div>}
+      {(unreadMessages > 0 || (isParent && (parentProposals.length > 0 || awaitingPayment.length > 0)) || (isTutor && (openInquiries > 0 || tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0))) && (
+        <section className="card" aria-label="Items needing attention" style={{ borderLeft: '5px solid #b45309', marginBottom: 20, padding: 16 }}>
+          <h2 style={{ marginTop: 0 }}>Needs your attention</h2>
+          {unreadMessages > 0 && <p><strong>{unreadMessages} unread {unreadMessages === 1 ? 'message' : 'messages'}</strong> · <a href="#conversations">Read messages</a></p>}
+          {isParent && parentProposals.length > 0 && <p><strong>{parentProposals.length} session {parentProposals.length === 1 ? 'proposal' : 'proposals'} to review</strong> · <Link href="/dashboard/bookings">Review sessions</Link></p>}
+          {isParent && awaitingPayment.length > 0 && <p><strong>{awaitingPayment.length} {awaitingPayment.length === 1 ? 'payment' : 'payments'} due</strong> · <a href="#payments">Pay now</a></p>}
+          {isTutor && openInquiries > 0 && <p><strong>{openInquiries} new {openInquiries === 1 ? 'inquiry' : 'inquiries'}</strong> · <a href="#new-inquiries">Review inquiries</a></p>}
+          {isTutor && tutorNeedsResponse.length > 0 && <p><strong>{tutorNeedsResponse.length} scheduling {tutorNeedsResponse.length === 1 ? 'request' : 'requests'}</strong> · <Link href="/dashboard/bookings">Respond in My Sessions</Link></p>}
+          {isTutor && overdueTutorSessions.length > 0 && <p><strong>{overdueTutorSessions.length} {overdueTutorSessions.length === 1 ? 'session' : 'sessions'} to complete</strong> · <Link href="/dashboard/bookings">Mark completed</Link></p>}
+        </section>
+      )
 
       {(isTutor || isParent) && (
         <nav className="dashboard-quick-nav" aria-label="Main dashboard actions">
           <Link href="/dashboard/bookings">My sessions</Link>
           <a href="#conversations">Messages{unreadMessages > 0 ? ` (${unreadMessages} new)` : ''}</a>
           <a href="#my-calendar">{isParent ? 'Book a session' : 'Calendar'}</a>
-          {isTutor && (openInquiries > 0 || tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && <a href="#needs-attention">Needs action</a>}
-          {isParent && awaitingPayment.length > 0 && <a href="#payments">Pay now ({awaitingPayment.length})</a>}
           {isParent && <Link href="/tutors">Find tutors</Link>}
         </nav>
       )}
@@ -441,47 +449,9 @@ export default async function Dashboard() {
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            <a className="button" href="#my-calendar">Book another session</a>
-            <a href="#conversations" style={{ alignSelf: 'center' }}>Message your tutor</a>
-            <Link href="/dashboard/bookings" style={{ alignSelf: 'center' }}>View all sessions</Link>
-          </div>
+          <a href="#my-calendar">Book another session</a>
         </section>
       )}
-
-      {isParent && parentProposals.length > 0 && (
-        <div className="dashboard-action-banner" role="status">
-          <div>
-            <strong>{parentProposals.length} {parentProposals.length === 1 ? 'session proposal needs' : 'session proposals need'} your response</strong>
-            <p>Review the tutor's proposed time before confirming a booking.</p>
-          </div>
-          <a href="#my-calendar">Review in calendar</a>
-        </div>
-      )}
-
-      {isParent && awaitingPayment.length > 0 && (
-        <div className="dashboard-action-banner" role="status">
-          <div>
-            <strong>{awaitingPayment.length} {awaitingPayment.length === 1 ? 'session needs payment' : 'sessions need payment'}</strong>
-            <p>Finish payment to confirm your tutoring {awaitingPayment.length === 1 ? 'session' : 'sessions'}.</p>
-          </div>
-          <a href="#payments">Review payments</a>
-        </div>
-      )}
-
-      {isTutor && (openInquiries > 0 || tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && (
-        <div className="dashboard-action-banner" role="status">
-          <div>
-            <strong>You have items needing attention</strong>
-            <p>{openInquiries} new inquiries · {tutorNeedsResponse.length} scheduling requests · {overdueTutorSessions.length} sessions to complete.</p>
-          </div>
-          <a href="#needs-attention">Review items</a>
-        </div>
-      )}
-
-
-
-
 
       {who.role === 'ADMIN' && (
         <section className="card">
@@ -866,7 +836,7 @@ export default async function Dashboard() {
       )}
 
       {isTutor && pendingInquiryItems.length > 0 && (
-        <section className="card" style={{ marginTop: 24 }}>
+        <section id="new-inquiries" className="card" style={{ marginTop: 24 }}>
           <h2>New tutoring inquiries ({pendingInquiryItems.length})</h2>
           <p className="muted">Review each request, then accept or decline. Accepting opens scheduling and messaging; it does not charge the parent.</p>
           {pendingInquiryItems.slice(0, 10).map(inquiry => (
