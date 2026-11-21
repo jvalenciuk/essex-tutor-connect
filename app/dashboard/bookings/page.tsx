@@ -392,7 +392,7 @@ export default function MyBookingsPage() {
   function cancelBooking(booking: Booking) {
     const paid = booking.status === 'PAID';
 
-    const session = `${dateText(booking.startsAt)}\n${booking.durationMinutes} minutes\n${money(booking.amountCents)} CAD`;
+    const session = `${dateText(booking.startsAt)}\n${booking.durationMinutes} minutes\n${money(booking.amountCents)}`;
     const message = paid
       ? `Cancel this paid session and request a full refund?\n\n${session}\n\nThis cannot be undone. Stripe must confirm the refund before WE Learn marks it refunded.`
       : `Cancel this unpaid session proposal?\n\n${session}\n\nNo payment has been collected for this proposal.`;
