@@ -153,10 +153,18 @@ export default function SessionCalendar({
     setShowBookingForm(true);
     const calendarSection = document.getElementById('my-calendar');
     if (calendarSection instanceof HTMLDetailsElement) calendarSection.open = true;
-    window.requestAnimationFrame(() => {
+  }, [role, bookingContacts.map(contact => contact.id).join('|')]);
+
+  // Scroll only after React has rendered the expanded booking form.
+  useEffect(() => {
+    if (!showBookingForm || !new URLSearchParams(window.location.search).get('bookWith')) return;
+    const calendarSection = document.getElementById('my-calendar');
+    if (calendarSection instanceof HTMLDetailsElement) calendarSection.open = true;
+    const frame = window.requestAnimationFrame(() => {
       document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  }, [role, bookingContacts.map(contact => contact.id).join('|')]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [showBookingForm]);
 
   const [bookingTime, setBookingTime] = useState('16:00');
   const [bookingDuration, setBookingDuration] = useState('60');
