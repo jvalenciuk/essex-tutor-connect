@@ -239,7 +239,9 @@ export default function MyBookingsPage() {
         REQUEST_CHANGE: 'Your requested time was sent to the tutor for review.',
         REVISE: 'Your alternative time was sent to the parent for review.',
         COMPLETE: 'Session marked as completed.',
-        CANCEL: 'Session cancelled.',
+        CANCEL: result?.refunded === true
+          ? 'Session cancelled. Stripe confirmed the full refund; your bank may take additional time to show it.'
+          : 'Unpaid session proposal cancelled. No refund was needed.',
       };
       setNotice(actionMessages[action] || 'Booking updated successfully.');
     } catch (err) {
@@ -390,9 +392,10 @@ export default function MyBookingsPage() {
   function cancelBooking(booking: Booking) {
     const paid = booking.status === 'PAID';
 
+    const session = `${dateText(booking.startsAt)}\n${booking.durationMinutes} minutes\n${money(booking.amountCents)} CAD`;
     const message = paid
-      ? 'Cancel this paid session and request a full Stripe refund?'
-      : 'Cancel this session proposal?';
+      ? `Cancel this paid session and request a full refund?\n\n${session}\n\nThis cannot be undone. Stripe must confirm the refund before WE Learn marks it refunded.`
+      : `Cancel this unpaid session proposal?\n\n${session}\n\nNo payment has been collected for this proposal.`;
 
     if (!window.confirm(message)) return;
 
@@ -746,7 +749,7 @@ export default function MyBookingsPage() {
           >
             {booking.status === 'PAID'
               ? 'Cancel and Refund'
-              : 'Cancel Session'}
+              : 'Cancel Proposal'}
           </button>
         )}
 
