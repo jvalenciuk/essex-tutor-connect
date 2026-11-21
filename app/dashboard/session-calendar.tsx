@@ -308,6 +308,10 @@ export default function SessionCalendar({
     setBookingNotice('');
     setCreatedBookingId('');
     if (!contactId) { setBookingError(role === 'PARENT' ? 'Choose a tutor.' : 'Choose a parent.'); return; }
+    if (selectedDate < localDateKey(new Date())) {
+      setBookingError('This date has already passed. Please choose a future session date.');
+      return;
+    }
     // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
     const [hour, minute] = bookingTime.split(':').map(Number);
