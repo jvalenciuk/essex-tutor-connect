@@ -38,6 +38,7 @@ const labels: Record<string, string> = {
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
   DECLINED: 'Declined',
+  EXPIRED: 'Expired',
 };
 
 function money(cents: number) {
@@ -60,12 +61,14 @@ function category(booking: Booking, role: Role) {
   const end = start + booking.durationMinutes * 60000;
 
   if (
-    ['COMPLETED', 'CANCELLED', 'REFUNDED', 'DECLINED'].includes(
+    ['COMPLETED', 'CANCELLED', 'REFUNDED', 'DECLINED', 'EXPIRED'].includes(
       booking.status
     )
   ) {
     return 'history';
   }
+
+  if (booking.status === 'PROPOSED' && start <= Date.now()) return 'history';
 
   if (booking.status === 'PAID') {
     return end > Date.now() ? 'upcoming' : 'action';
@@ -352,8 +355,7 @@ export default function MyBookingsPage() {
   const waiting = sorted.filter(b => category(b, role) === 'waiting');
 
   const history = sorted
-    .filter(b => category(b, role) === 'history')
-    .reverse();
+    .filter(b => category(b, role) === 'history');
   const tabs: { id: BookingTab; title: string; count: number; empty: string; items: Booking[] }[] = [
     { id: 'action', title: 'Needs action', count: actionItems.length, empty: 'You are all caught up.', items: actionItems },
     { id: 'upcoming', title: 'Upcoming', count: upcoming.length, empty: 'No upcoming confirmed sessions.', items: upcoming },
@@ -432,7 +434,7 @@ export default function MyBookingsPage() {
           </div>
 
           <strong style={{ color: accent }}>
-            {labels[booking.status] || booking.status}
+            {booking.status === 'PROPOSED' && new Date(booking.startsAt).getTime() <= Date.now() ? 'Expired' : labels[booking.status] || booking.status}
           </strong>
         </div>
 
@@ -506,7 +508,7 @@ export default function MyBookingsPage() {
           </div>
         )}
 
-        {booking.status === 'PROPOSED' && isParent && (
+        {booking.status === 'PROPOSED' && new Date(booking.startsAt).getTime() > Date.now() && isParent && (
           <div
             style={{
               display: 'flex',
