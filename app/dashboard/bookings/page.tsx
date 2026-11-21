@@ -68,7 +68,9 @@ function category(booking: Booking, role: Role) {
     return 'history';
   }
 
-  if (['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) && start <= Date.now()) return 'history';
+  if (booking.status === 'PROPOSED' && start <= Date.now()) return 'history';
+  if (booking.status === 'CHANGE_REQUESTED' &&
+      new Date(booking.requestedStartsAt || booking.startsAt).getTime() <= Date.now()) return 'history';
 
   if (booking.status === 'PAID') {
     return end > Date.now() ? 'upcoming' : 'action';
