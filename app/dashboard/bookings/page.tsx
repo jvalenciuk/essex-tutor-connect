@@ -48,6 +48,26 @@ function money(cents: number) {
   }).format(cents / 100);
 }
 
+
+const EASTERN_ZONE = 'America/Toronto';
+
+function easternWallTime(value: Date): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: EASTERN_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(value);
+  const get = (type: string) => parts.find(part => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+}
+
+function easternToInstant(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const [year, month, day, hour, minute] = value.split(/[-T:]/).map(Number);
+  const wall = Date.UTC(year, month - 1, day, hour, minute);
+  const candidates = [4, 5].map(offset => new Date(wall + offset * 3600000));
+  return candidates.find(candidate => easternWallTime(candidate) === value) || null;
+}
+
 function dateText(value: string) {
   return new Date(value).toLocaleString('en-CA', {
     timeZone: 'America/Toronto',
@@ -270,8 +290,7 @@ export default function MyBookingsPage() {
   function beginTimeChange(booking: Booking) {
     setEditingId(booking.id);
     const existingDate = new Date(booking.requestedStartsAt || booking.startsAt);
-    const localDate = new Date(existingDate.getTime() - existingDate.getTimezoneOffset() * 60000);
-    setStartsAt(localDate.toISOString().slice(0, 16));
+    setStartsAt(easternWallTime(existingDate));
     setDuration(
       String(
         booking.requestedDurationMinutes ||
@@ -289,14 +308,14 @@ export default function MyBookingsPage() {
       return;
     }
 
-    const date = new Date(startsAt);
+    const date = easternToInstant(startsAt);
     const minutes = Number(duration);
 
     if (
-      Number.isNaN(date.getTime()) ||
+      !date ||
       date.getTime() <= Date.now()
     ) {
-      setError('Please choose a future date and time.');
+      setError('Choose a valid future Eastern Time date and time. Some times do not exist when daylight saving time changes.');
       return;
     }
 
@@ -731,12 +750,12 @@ export default function MyBookingsPage() {
             </h4>
 
             <label>
-              New date and time
+              New date and time (Windsor / Eastern Time)
               <input
                 className="field"
                 type="datetime-local"
                 value={startsAt}
-                min={(() => { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()}
+                min={easternWallTime(new Date())}
                 step={900}
                 required
                 onChange={e => { setStartsAt(e.target.value); setError(''); }}
@@ -772,12 +791,12 @@ export default function MyBookingsPage() {
             )}
 
             <p className="muted" style={{ fontSize: 12, margin: '4px 0 12px' }}>
-              The current proposed time is prefilled. Choose a different date, time, or duration to request a change.
+              Times are in Windsor/Eastern Time. The current proposed time is prefilled; choose a different date, time, or duration.
             </p>
 
-            {startsAt && !Number.isNaN(new Date(startsAt).getTime()) && (
+            {startsAt && easternToInstant(startsAt) && (
               <p className="muted" style={{ margin: '12px 0' }}>
-                <strong>Review replacement:</strong> {dateText(new Date(startsAt).toISOString())}
+                <strong>Review replacement:</strong> {dateText(easternToInstant(startsAt)!.toISOString())}
                 {' · '}{duration} minutes. The other person must review the change.
               </p>
             )}
