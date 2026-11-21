@@ -929,7 +929,16 @@ export default function SessionCalendar({
                 <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>Session {role === 'PARENT' ? 'request' : 'proposal'} sent successfully</p>
                 <p>{bookingNotice}</p>
                 <p className="muted">This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.</p>
-                <a className="button" href={`/dashboard/bookings?tab=${role === 'TUTOR' ? 'waiting' : 'action'}${createdBookingId ? `&booking=${encodeURIComponent(createdBookingId)}` : ''}`}>Track in My Sessions</a>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <a className="button" href={`/dashboard/bookings?tab=${role === 'TUTOR' ? 'waiting' : 'action'}${createdBookingId ? `&booking=${encodeURIComponent(createdBookingId)}` : ''}`}>Track in My Sessions</a>
+                  <button type="button" onClick={() => {
+                    setBookingNotice('');
+                    setCreatedBookingId('');
+                    setBookingError('');
+                    setShowBookingForm(true);
+                    window.requestAnimationFrame(() => document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+                  }}>Schedule another session</button>
+                </div>
               </div>
             )}
           </div>
