@@ -86,6 +86,7 @@ export default function MyBookingsPage() {
   const [role, setRole] = useState<Role>('');
   const [activeTab, setActiveTab] = useState<BookingTab>('action');
   const [search, setSearch] = useState('');
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -363,13 +364,17 @@ export default function MyBookingsPage() {
     { id: 'history', title: 'History', count: history.length, empty: 'No previous bookings yet.', items: history },
   ];
   const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
-  const filteredItems = selectedTab.items.filter(booking => {
+  const matchingItems = selectedTab.items.filter(booking => {
     const query = search.trim().toLowerCase();
     if (!query) return true;
     return [booking.parent?.name, booking.tutor?.user?.name, booking.inquiry?.subject,
       booking.inquiry?.grade, labels[booking.status], booking.status,
       dateText(booking.startsAt)].some(value => value?.toLowerCase().includes(query));
   });
+
+  const filteredItems = activeTab === 'history' && !showAllHistory
+    ? matchingItems.slice(0, 5)
+    : matchingItems;
 
   function BookingCard({ booking }: { booking: Booking }) {
     const start = new Date(booking.startsAt).getTime();
@@ -789,7 +794,7 @@ export default function MyBookingsPage() {
             type="button"
             className={activeTab === tab.id ? 'booking-tab active' : 'booking-tab'}
             aria-current={activeTab === tab.id ? 'page' : undefined}
-            onClick={() => { setActiveTab(tab.id); resetEditor(); setError(''); }}
+            onClick={() => { setActiveTab(tab.id); setShowAllHistory(false); resetEditor(); setError(''); }}
           >
             {tab.title} <span className="booking-tab-count">{tab.count}</span>
           </button>
@@ -834,6 +839,14 @@ export default function MyBookingsPage() {
           items={filteredItems}
           empty={search.trim() ? 'No sessions match your search.' : selectedTab.empty}
         />
+      )}
+      {!loading && activeTab === 'history' && matchingItems.length > 5 && (
+        <div style={{ textAlign: 'center', margin: '16px 0 28px' }}>
+          <p className="muted">Showing {filteredItems.length} of {matchingItems.length} historical sessions · oldest dates first</p>
+          <button type="button" onClick={() => setShowAllHistory(value => !value)}>
+            {showAllHistory ? 'Show fewer sessions' : `Show all ${matchingItems.length} sessions`}
+          </button>
+        </div>
       )}
     </main>
   );
