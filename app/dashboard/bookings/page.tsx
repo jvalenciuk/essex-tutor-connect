@@ -122,6 +122,7 @@ export default function MyBookingsPage() {
     }
   }, []);
   const [search, setSearch] = useState('');
+  const [searchAllTabs, setSearchAllTabs] = useState(false);
   const [focusedBookingId, setFocusedBookingId] = useState('');
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -436,7 +437,8 @@ export default function MyBookingsPage() {
 
   const history = sorted
     .filter(b => category(b, role) === 'history')
-    .reverse();
+    .sort((a, b) => new Date(b.requestedStartsAt || b.startsAt).getTime() -
+      new Date(a.requestedStartsAt || a.startsAt).getTime());
   const tabs: { id: BookingTab; title: string; count: number; empty: string; items: Booking[] }[] = [
     { id: 'action', title: 'Needs action', count: actionItems.length, empty: 'You are all caught up.', items: actionItems },
     { id: 'upcoming', title: 'Upcoming', count: upcoming.length, empty: 'No upcoming confirmed sessions.', items: upcoming },
@@ -444,7 +446,11 @@ export default function MyBookingsPage() {
     { id: 'history', title: 'History', count: history.length, empty: 'No previous bookings yet.', items: history },
   ];
   const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
-  const matchingItems = selectedTab.items.filter(booking => {
+  const searchPool = searchAllTabs && search.trim() ? [...bookings].sort(
+    (a, b) => new Date(b.requestedStartsAt || b.startsAt).getTime() -
+      new Date(a.requestedStartsAt || a.startsAt).getTime()
+  ) : selectedTab.items;
+  const matchingItems = searchPool.filter(booking => {
     if (focusedBookingId && booking.id !== focusedBookingId) return false;
     const query = search.trim().toLowerCase();
     if (!query) return true;
@@ -452,11 +458,13 @@ export default function MyBookingsPage() {
       booking.inquiry?.grade, labels[booking.status], booking.status,
       dateText(booking.startsAt),
       booking.requestedStartsAt ? dateText(booking.requestedStartsAt) : null,
-      booking.requestNote].some(value => value?.toLowerCase().includes(query));
+      booking.requestNote,
+      category(booking, role) === 'history' && ['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) ? 'past proposed time' : null
+    ].some(value => value?.toLowerCase().includes(query));
   });
 
   const focusedBookingMissing = !loading && Boolean(focusedBookingId) && !bookings.some(booking => booking.id === focusedBookingId);
-  const filteredItems = activeTab === 'history' && !showAllHistory
+  const filteredItems = activeTab === 'history' && !searchAllTabs && !showAllHistory
     ? matchingItems.slice(0, 5)
     : matchingItems;
 
@@ -948,6 +956,12 @@ export default function MyBookingsPage() {
             Clear search
           </button>
         )}
+        {search.trim() && (
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={searchAllTabs} onChange={e => setSearchAllTabs(e.target.checked)} />
+            Search all tabs
+          </label>
+        )}
         <button disabled={loading || busyId !== null} onClick={() => void load()}>
           {loading ? 'Loading...' : 'Refresh'}
         </button>
@@ -979,18 +993,18 @@ export default function MyBookingsPage() {
 
       {!loading && search.trim() && (
         <p className="muted" role="status">
-          {matchingItems.length} matching {matchingItems.length === 1 ? 'session' : 'sessions'} in {selectedTab.title.toLowerCase()}.
+          {matchingItems.length} matching {matchingItems.length === 1 ? 'session' : 'sessions'} {searchAllTabs ? 'across all tabs' : `in ${selectedTab.title.toLowerCase()}`}.
         </p>
       )}
 
       {!loading && (
         <Section
-          title={selectedTab.title}
+          title={searchAllTabs && search.trim() ? 'Search results across all tabs' : selectedTab.title}
           items={filteredItems}
           empty={search.trim() ? 'No sessions match your search.' : selectedTab.empty}
         />
       )}
-      {!loading && activeTab === 'history' && matchingItems.length > 5 && (
+      {!loading && activeTab === 'history' && !searchAllTabs && matchingItems.length > 5 && (
         <div style={{ textAlign: 'center', margin: '16px 0 28px' }}>
           <p className="muted">Showing {filteredItems.length} of {matchingItems.length} historical sessions · newest dates first</p>
           <button type="button" onClick={() => setShowAllHistory(value => !value)}>
