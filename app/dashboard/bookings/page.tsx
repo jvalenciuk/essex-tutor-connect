@@ -13,6 +13,7 @@ type Booking = {
   requestedStartsAt: string | null;
   requestedDurationMinutes: number | null;
   requestNote: string | null;
+  paymentDueAt?: string | null;
   amountCents: number;
   platformFeeCents: number;
   status: string;
@@ -705,8 +706,16 @@ export default function MyBookingsPage() {
           isParent && (
             <div style={{ marginBottom: 12 }}>
               <p className="muted">The session time is accepted. Complete secure payment to confirm your booking.</p>
+              {booking.paymentDueAt && (
+                <p style={{ fontWeight: 600, margin: '6px 0 10px' }}>
+                  Payment deadline: {dateText(booking.paymentDueAt)} (Windsor / Eastern Time)
+                  {new Date(booking.paymentDueAt).getTime() <= now && (
+                    <span style={{ color: '#b42318' }}> · Deadline passed; refresh to check availability</span>
+                  )}
+                </p>
+              )}
               <button
-                disabled={isBusy}
+                disabled={isBusy || Boolean(booking.paymentDueAt && new Date(booking.paymentDueAt).getTime() <= now)}
                 onClick={() => void checkout(booking.id)}
               >
                 Pay {money(booking.amountCents)} Securely
@@ -719,6 +728,9 @@ export default function MyBookingsPage() {
             <p className="muted">
               The requested session time has been accepted.
               Waiting for the parent to complete payment.
+              {booking.paymentDueAt && (
+                <> Payment deadline: {dateText(booking.paymentDueAt)} (Windsor / Eastern Time).</>
+              )}
             </p>
           )}
 
