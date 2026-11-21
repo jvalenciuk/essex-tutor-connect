@@ -166,7 +166,12 @@ function SectionLink({
   );
 }
 
-export default async function Dashboard() {
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ bookWith?: string }>;
+}) {
+  const { bookWith } = await searchParams;
   const who = await identity();
 
   if (!who) redirect('/login');
@@ -896,7 +901,7 @@ export default async function Dashboard() {
 
 
       {(isTutor || isParent) && (
-        <details id="my-calendar" className="card" style={{ marginTop: 20 }} open={isParent}>
+        <details id="my-calendar" className="card" style={{ marginTop: 20 }} open={isParent || Boolean(bookWith)}>
           <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>{isParent ? "Schedule a session" : "Calendar & availability"} <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>· {isTutor ? "Expand to view your calendar" : "Choose a time"}</span></summary>
           {isParent && <p className="muted">Choose an existing tutor connection and an available time below. Your tutor can confirm or propose an alternative.</p>}
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
