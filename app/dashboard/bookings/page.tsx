@@ -65,7 +65,8 @@ function easternTimeOptions(value: string): Date[] {
   const [year, month, day, hour, minute] = value.split(/[-T:]/).map(Number);
   const wall = Date.UTC(year, month - 1, day, hour, minute);
   const candidates = [4, 5].map(offset => new Date(wall + offset * 3600000));
-  return candidates.filter(candidate => easternWallTime(candidate) === value);
+  return candidates.filter(candidate => easternWallTime(candidate) === value)
+    .sort((a, b) => a.getTime() - b.getTime());
 }
 
 function easternToInstant(value: string, occurrence = 0): Date | null {
@@ -97,7 +98,7 @@ function category(booking: Booking, role: Role) {
       new Date(booking.requestedStartsAt || booking.startsAt).getTime() <= Date.now()) return 'history';
 
   if (booking.status === 'PAID') {
-    return end > Date.now() ? 'upcoming' : 'action';
+    return end > Date.now() ? 'upcoming' : role === 'TUTOR' ? 'action' : 'waiting';
   }
 
   if (booking.status === 'PROPOSED' && role === 'TUTOR') return 'waiting';
@@ -305,7 +306,7 @@ export default function MyBookingsPage() {
           booking.durationMinutes
       )
     );
-    setNote('');
+    setNote(booking.requestNote || '');
     setError('');
     setNotice('');
   }
@@ -494,7 +495,7 @@ export default function MyBookingsPage() {
       booking.status === 'PROPOSED' ? (isParent ? 'Review this proposal and choose Accept, Request Different Time, or Decline.' : 'Waiting for the parent to respond to your proposal.') :
       booking.status === 'CHANGE_REQUESTED' ? (isTutor ? 'Review the requested time below and accept it or propose an alternative.' : 'Waiting for the tutor to respond to your requested time.') :
       booking.status === 'PENDING_PAYMENT' ? (isParent ? 'Payment is required to confirm this session.' : 'Waiting for the parent to pay.') :
-      booking.status === 'PAID' ? (end <= now && isTutor ? 'Mark this completed session when tutoring has finished.' : 'Your session is confirmed and paid.') : null;
+      booking.status === 'PAID' ? (end <= now ? (isTutor ? 'Mark this completed session when tutoring has finished.' : 'The session has ended. Waiting for the tutor to mark it complete.') : 'Your session is confirmed and paid.') : null;
 
     const accent =
       section === 'upcoming'
