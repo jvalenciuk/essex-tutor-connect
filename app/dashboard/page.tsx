@@ -417,15 +417,13 @@ export default async function Dashboard() {
       {unreadMessages > 0 && <div className="card" style={{ borderLeft: "5px solid #f4b400", marginBottom: 20, padding: 16 }} role="status"><strong>You have {unreadMessages} new {unreadMessages === 1 ? "message" : "messages"}.</strong> <a href="#conversations">Read messages</a></div>}
 
       {(isTutor || isParent) && (
-        <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
-          <a href="#dashboard-overview">Overview</a>
-          <a href="#my-calendar">Calendar</a>
-          {isParent && parentProposals.length > 0 && <a href="#my-calendar">Proposals ({parentProposals.length})</a>}
-          {isParent && awaitingPayment.length > 0 && <a href="#payments">Payments ({awaitingPayment.length})</a>}
-          {isTutor && <a href="#needs-attention">Needs attention</a>}
-          <Link href="/dashboard/bookings">My Sessions</Link>
-          <a href="#conversations">Messages &amp; inquiries{unreadMessages > 0 ? ` (${unreadMessages} new)` : isTutor && openInquiries > 0 ? ` (${openInquiries} inquiries)` : ''} </a>
-          {isParent && <Link href="/tutors">Find a tutor</Link>}
+        <nav className="dashboard-quick-nav" aria-label="Main dashboard actions">
+          <Link href="/dashboard/bookings">My sessions</Link>
+          <a href="#conversations">Messages{unreadMessages > 0 ? ` (${unreadMessages} new)` : ''}</a>
+          <a href="#my-calendar">{isParent ? 'Book a session' : 'Calendar'}</a>
+          {isTutor && (openInquiries > 0 || tutorNeedsResponse.length > 0 || overdueTutorSessions.length > 0) && <a href="#needs-attention">Needs action</a>}
+          {isParent && awaitingPayment.length > 0 && <a href="#payments">Pay now ({awaitingPayment.length})</a>}
+          {isParent && <Link href="/tutors">Find tutors</Link>}
         </nav>
       )}
 
@@ -511,7 +509,7 @@ export default async function Dashboard() {
       {isTutor && (
         <>
           <section id="dashboard-overview" style={{ marginTop: 24 }}>
-            <h2>Overview</h2>
+            <h2>At a glance</h2>
 
             <div
               style={{
@@ -892,7 +890,7 @@ export default async function Dashboard() {
 
       {isTutor && (
         <section className="card" style={{ marginTop: 24 }} id="needs-attention">
-          <h2>Needs Your Attention</h2>
+          <h2>Needs action</h2>
           {overdueTutorSessions.length > 0 && (
             <div style={{ borderLeft: '4px solid #b45309', paddingLeft: 12, marginBottom: 18 }}>
               <h3>Awaiting completion ({overdueTutorSessions.length})</h3>
@@ -938,7 +936,7 @@ export default async function Dashboard() {
 
       {(isTutor || isParent) && (
         <section style={{ marginTop: 28 }} id="conversations">
-          <h2>Messages &amp; Inquiries {unreadMessages > 0 && <span style={{ color: "#b45309", fontSize: "0.75em" }}>({unreadMessages} new)</span>}</h2>
+          <h2>Messages {unreadMessages > 0 && <span style={{ color: "#b45309", fontSize: "0.75em" }}>({unreadMessages} new)</span>}</h2>
           <p className="muted">
             Select a person to read or send messages.
           </p>
