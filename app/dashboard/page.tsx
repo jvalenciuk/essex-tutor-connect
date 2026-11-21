@@ -405,7 +405,7 @@ export default async function Dashboard() {
           {isParent && awaitingPayment.length > 0 && <a href="#payments">Payments ({awaitingPayment.length})</a>}
           {isTutor && <a href="#needs-attention">Needs attention</a>}
           <Link href="/dashboard/bookings">My Sessions</Link>
-          <a href="#conversations">Messages &amp; inquiries</a>
+          <a href="#conversations">Messages &amp; inquiries{isTutor && openInquiries > 0 ? ` (${openInquiries})` : ''} </a>
           {isParent && <Link href="/tutors">Find a tutor</Link>}
         </nav>
       )}
