@@ -374,7 +374,14 @@ export default function MyBookingsPage() {
 
   const actionItems = sorted.filter(
     b => category(b, role) === 'action'
-  );
+  ).sort((a, b) => {
+    const priority = (booking: Booking) =>
+      booking.status === 'PENDING_PAYMENT' ? 0 :
+      booking.status === 'CHANGE_REQUESTED' ? 1 :
+      booking.status === 'PROPOSED' ? 2 : 3;
+    return priority(a) - priority(b) ||
+      new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+  });
 
   const upcoming = sorted.filter(
     b => category(b, role) === 'upcoming'
@@ -469,7 +476,9 @@ export default function MyBookingsPage() {
           </div>
 
           <strong style={{ color: accent }}>
-            {booking.status === 'PROPOSED' && new Date(booking.startsAt).getTime() <= Date.now() ? 'Expired' : labels[booking.status] || booking.status}
+            {['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) &&
+              new Date(booking.status === 'CHANGE_REQUESTED' ? booking.requestedStartsAt || booking.startsAt : booking.startsAt).getTime() <= now
+              ? 'Proposed time passed' : labels[booking.status] || booking.status}
           </strong>
         </div>
 
@@ -841,6 +850,11 @@ export default function MyBookingsPage() {
           onChange={e => setSearch(e.target.value)}
           style={{ flex: '1 1 250px', padding: '11px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
         />
+        {search && (
+          <button type="button" onClick={() => setSearch('')} aria-label="Clear session search">
+            Clear search
+          </button>
+        )}
         <button disabled={loading || busyId !== null} onClick={() => void load()}>
           {loading ? 'Loading...' : 'Refresh'}
         </button>
@@ -862,6 +876,12 @@ export default function MyBookingsPage() {
       {error && (
         <p role="alert" style={{ color: '#b42318' }}>
           {error}
+        </p>
+      )}
+
+      {!loading && search.trim() && (
+        <p className="muted" role="status">
+          {matchingItems.length} matching {matchingItems.length === 1 ? 'session' : 'sessions'} in {selectedTab.title.toLowerCase()}.
         </p>
       )}
 
