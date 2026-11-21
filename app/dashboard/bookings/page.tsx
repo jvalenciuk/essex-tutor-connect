@@ -25,7 +25,7 @@ type Booking = {
 };
 
 type Role = 'PARENT' | 'TUTOR' | 'ADMIN' | '';
-type BookingTab = 'action' | 'upcoming' | 'history';
+type BookingTab = 'action' | 'upcoming' | 'waiting' | 'history';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -55,7 +55,7 @@ function dateText(value: string) {
   });
 }
 
-function category(booking: Booking) {
+function category(booking: Booking, role: Role) {
   const start = new Date(booking.startsAt).getTime();
   const end = start + booking.durationMinutes * 60000;
 
@@ -71,6 +71,9 @@ function category(booking: Booking) {
     return end > Date.now() ? 'upcoming' : 'action';
   }
 
+  if (booking.status === 'PROPOSED' && role === 'TUTOR') return 'waiting';
+  if (booking.status === 'CHANGE_REQUESTED' && role === 'PARENT') return 'waiting';
+  if (booking.status === 'PENDING_PAYMENT' && role === 'TUTOR') return 'waiting';
   return 'action';
 }
 
@@ -339,19 +342,22 @@ export default function MyBookingsPage() {
   );
 
   const actionItems = sorted.filter(
-    b => category(b) === 'action'
+    b => category(b, role) === 'action'
   );
 
   const upcoming = sorted.filter(
-    b => category(b) === 'upcoming'
+    b => category(b, role) === 'upcoming'
   );
 
+  const waiting = sorted.filter(b => category(b, role) === 'waiting');
+
   const history = sorted
-    .filter(b => category(b) === 'history')
+    .filter(b => category(b, role) === 'history')
     .reverse();
   const tabs: { id: BookingTab; title: string; count: number; empty: string; items: Booking[] }[] = [
-    { id: 'action', title: 'Awaiting Action', count: actionItems.length, empty: 'Nothing needs attention right now.', items: actionItems },
+    { id: 'action', title: 'Needs action', count: actionItems.length, empty: 'You are all caught up.', items: actionItems },
     { id: 'upcoming', title: 'Upcoming', count: upcoming.length, empty: 'No upcoming confirmed sessions.', items: upcoming },
+    { id: 'waiting', title: 'Waiting on others', count: waiting.length, empty: 'No sessions waiting on someone else.', items: waiting },
     { id: 'history', title: 'History', count: history.length, empty: 'No previous bookings yet.', items: history },
   ];
   const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
@@ -392,7 +398,7 @@ export default function MyBookingsPage() {
       booking.status === 'PAID' &&
       end <= now;
 
-    const section = category(booking);
+    const section = category(booking, role);
 
     const accent =
       section === 'upcoming'
@@ -771,7 +777,7 @@ export default function MyBookingsPage() {
       <h1>My Sessions</h1>
 
       <p className="muted">
-        View confirmed sessions, respond to scheduling requests, and manage payments in one place.
+        See what needs your attention, what is coming up, and what is waiting on someone else.
       </p>
 
       <nav className="booking-tabs" aria-label="Filter tutoring sessions">
@@ -791,7 +797,7 @@ export default function MyBookingsPage() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16 }}>
         <input
           aria-label="Search sessions"
-          placeholder="Search tutor, parent, subject or date"
+          placeholder="Search sessions"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ flex: '1 1 250px', padding: '11px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
