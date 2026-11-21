@@ -86,12 +86,16 @@ export default function MyBookingsPage() {
   const [role, setRole] = useState<Role>('');
   const [activeTab, setActiveTab] = useState<BookingTab>('action');
   useEffect(() => {
-    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    const params = new URLSearchParams(window.location.search);
+    const requestedTab = params.get('tab');
+    const requestedBooking = params.get('booking');
+    if (requestedBooking) setFocusedBookingId(requestedBooking);
     if (requestedTab === 'action' || requestedTab === 'upcoming' || requestedTab === 'waiting' || requestedTab === 'history') {
       setActiveTab(requestedTab);
     }
   }, []);
   const [search, setSearch] = useState('');
+  const [focusedBookingId, setFocusedBookingId] = useState('');
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -371,6 +375,7 @@ export default function MyBookingsPage() {
   ];
   const selectedTab = tabs.find(tab => tab.id === activeTab) || tabs[0];
   const matchingItems = selectedTab.items.filter(booking => {
+    if (focusedBookingId && booking.id !== focusedBookingId) return false;
     const query = search.trim().toLowerCase();
     if (!query) return true;
     return [booking.parent?.name, booking.tutor?.user?.name, booking.inquiry?.subject,
@@ -790,6 +795,12 @@ export default function MyBookingsPage() {
           </button>
         ))}
       </nav>
+
+      {focusedBookingId && (
+        <div role="status" style={{ marginTop: 16 }}>
+          Showing your selected session. <button type="button" onClick={() => setFocusedBookingId('')}>Show all sessions</button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16 }}>
         <input
