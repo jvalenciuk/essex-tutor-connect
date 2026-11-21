@@ -936,6 +936,14 @@ export default function SessionCalendar({
                 <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
                 </select>
+                <div aria-label="Review session details" style={{ margin: '16px 0', padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                  <strong>Review before sending</strong>
+                  <p style={{ margin: '8px 0 4px' }}><strong>{role === 'PARENT' ? 'Tutor' : 'Parent'}:</strong> {bookingContacts.find(contact => contact.id === contactId)?.name || 'Not selected'}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Date:</strong> {selectedDate}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Start:</strong> {bookingTime} Eastern Time</p>
+                  <p style={{ margin: '4px 0' }}><strong>Duration:</strong> {bookingDuration} minutes</p>
+                  <p className="muted" style={{ margin: '8px 0 0' }}>The other person must respond before the session is confirmed.</p>
+                </div>
                 <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Submitting...' : role === 'PARENT' ? 'Send session request' : 'Send proposal to parent'}</button>
                 {bookingError && <p role="alert" className="error">{bookingError}</p>}
               </form>
