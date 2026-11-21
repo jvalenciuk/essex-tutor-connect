@@ -921,7 +921,14 @@ export default function SessionCalendar({
                 {bookingError && <p role="alert" className="error">{bookingError}</p>}
               </form>
             )}
-            {bookingNotice && <p role="status" style={{ color: '#15803d' }}>{bookingNotice}</p>}
+            {bookingNotice && (
+              <div role="status" style={{ marginTop: 12, padding: 16, border: '1px solid #86b89b', borderRadius: 8 }}>
+                <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>Session {role === 'PARENT' ? 'request' : 'proposal'} sent successfully</p>
+                <p>{bookingNotice}</p>
+                <p className="muted">This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.</p>
+                <a className="button" href="/dashboard/bookings">View in My Sessions</a>
+              </div>
+            )}
           </div>
         )}
 
