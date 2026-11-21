@@ -389,7 +389,9 @@ export default function MyBookingsPage() {
     b => category(b, role) === 'upcoming'
   );
 
-  const waiting = sorted.filter(b => category(b, role) === 'waiting');
+  const waiting = sorted.filter(b => category(b, role) === 'waiting')
+    .sort((a, b) => new Date(a.requestedStartsAt || a.startsAt).getTime() -
+      new Date(b.requestedStartsAt || b.startsAt).getTime());
 
   const history = sorted
     .filter(b => category(b, role) === 'history')
@@ -447,6 +449,12 @@ export default function MyBookingsPage() {
       end <= now;
 
     const section = category(booking, role);
+    const nextStep =
+      section === 'history' ? null :
+      booking.status === 'PROPOSED' ? (isParent ? 'Review this proposal and choose Accept, Request Different Time, or Decline.' : 'Waiting for the parent to respond to your proposal.') :
+      booking.status === 'CHANGE_REQUESTED' ? (isTutor ? 'Review the requested time below and accept it or propose an alternative.' : 'Waiting for the tutor to respond to your requested time.') :
+      booking.status === 'PENDING_PAYMENT' ? (isParent ? 'Payment is required to confirm this session.' : 'Waiting for the parent to pay.') :
+      booking.status === 'PAID' ? (end <= now && isTutor ? 'Mark this completed session when tutoring has finished.' : 'Your session is confirmed and paid.') : null;
 
     const accent =
       section === 'upcoming'
@@ -477,6 +485,11 @@ export default function MyBookingsPage() {
               {booking.inquiry?.subject || 'Tutoring session'}
             </h3>
             <strong>{dateText(booking.startsAt)}</strong>
+            {booking.status === 'CHANGE_REQUESTED' && booking.requestedStartsAt && (
+              <p style={{ margin: '6px 0 0', fontSize: 13 }}>
+                Requested replacement: {dateText(booking.requestedStartsAt)}
+              </p>
+            )}
           </div>
 
           <strong style={{ color: accent }}>
@@ -492,6 +505,12 @@ export default function MyBookingsPage() {
           <span> · {booking.durationMinutes} min</span>
           <span> · <strong>{money(booking.amountCents)}</strong></span>
         </p>
+
+        {nextStep && (
+          <p style={{ margin: '8px 0 14px', fontSize: 14 }}>
+            <strong>Next step:</strong> {nextStep}
+          </p>
+        )}
 
         <details style={{ margin: '10px 0 16px' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 500 }}>More details &amp; messages</summary>
@@ -519,6 +538,9 @@ export default function MyBookingsPage() {
             }}
           >
             <strong>Parent's requested time</strong>
+            <p className="muted" style={{ margin: '6px 0' }}>
+              Original session time: {dateText(booking.startsAt)}
+            </p>
 
             <p>
               {booking.requestedStartsAt
