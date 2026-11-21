@@ -41,7 +41,12 @@ export async function GET(req: Request) {
       });
     }
     const expiration = await expireUnpaidBookings();
-    return Response.json({ success: true, expiration }, {
+    const now = new Date();
+    const proposals = await db.booking.updateMany({
+      where: { status: 'PROPOSED', startsAt: { lte: now } },
+      data: { status: 'EXPIRED' },
+    });
+    return Response.json({ success: true, expiration, expiredProposals: proposals.count }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
