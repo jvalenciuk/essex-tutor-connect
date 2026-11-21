@@ -377,7 +377,8 @@ export default function MyBookingsPage() {
   const waiting = sorted.filter(b => category(b, role) === 'waiting');
 
   const history = sorted
-    .filter(b => category(b, role) === 'history');
+    .filter(b => category(b, role) === 'history')
+    .reverse();
   const tabs: { id: BookingTab; title: string; count: number; empty: string; items: Booking[] }[] = [
     { id: 'action', title: 'Needs action', count: actionItems.length, empty: 'You are all caught up.', items: actionItems },
     { id: 'upcoming', title: 'Upcoming', count: upcoming.length, empty: 'No upcoming confirmed sessions.', items: upcoming },
@@ -800,7 +801,7 @@ export default function MyBookingsPage() {
             type="button"
             className={activeTab === tab.id ? 'booking-tab active' : 'booking-tab'}
             aria-current={activeTab === tab.id ? 'page' : undefined}
-            onClick={() => { setActiveTab(tab.id); setShowAllHistory(false); resetEditor(); setError(''); }}
+            onClick={() => { setActiveTab(tab.id); setFocusedBookingId(''); setShowAllHistory(false); resetEditor(); setError(''); if (window.location.search) window.history.replaceState(null, '', '/dashboard/bookings'); }}
           >
             {tab.title} <span className="booking-tab-count">{tab.count}</span>
           </button>
@@ -854,7 +855,7 @@ export default function MyBookingsPage() {
       )}
       {!loading && activeTab === 'history' && matchingItems.length > 5 && (
         <div style={{ textAlign: 'center', margin: '16px 0 28px' }}>
-          <p className="muted">Showing {filteredItems.length} of {matchingItems.length} historical sessions · oldest dates first</p>
+          <p className="muted">Showing {filteredItems.length} of {matchingItems.length} historical sessions · newest dates first</p>
           <button type="button" onClick={() => setShowAllHistory(value => !value)}>
             {showAllHistory ? 'Show fewer sessions' : `Show all ${matchingItems.length} sessions`}
           </button>
