@@ -828,7 +828,7 @@ export default async function Dashboard() {
             <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Accepted parents — schedule again ({new Set(acceptedInquiryItems.map(inquiry => inquiry.parentId)).size})</summary>
             <p className="muted">Select a parent to open the calendar with their existing inquiry selected. No new inquiry is needed.</p>
             {Array.from(new Map(acceptedInquiryItems.map(inquiry => [inquiry.parentId, inquiry])).values()).slice(0, 8).map(inquiry => (
-              <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <Link href={`/dashboard?bookWith=${encodeURIComponent(inquiry.id)}#my-calendar`}>Propose session</Link></p>
+              <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <Link className="button" href={`/dashboard?bookWith=${encodeURIComponent(inquiry.id)}#my-calendar`} style={{ display: 'inline-block', marginLeft: 10 }}>Propose session</Link></p>
             ))}
           </details>
         </section>
