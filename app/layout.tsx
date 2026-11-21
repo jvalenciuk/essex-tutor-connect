@@ -21,7 +21,7 @@ export default function Layout({
         <Providers>
           <header>
             <a href="/" className="brand">
-              <Image src="/we-learn-logo.webp" alt="WE Learn" width={74} height={74} className="brand-logo" priority />
+              <Image src="/WE%20Learn%20Logo-%20Version%202.png" alt="WE Learn" width={74} height={74} className="brand-logo" priority />
               <span>WE Learn</span>
             </a>
 
