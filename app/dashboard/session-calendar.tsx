@@ -170,6 +170,7 @@ export default function SessionCalendar({
   const [bookingDuration, setBookingDuration] = useState('60');
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingNotice, setBookingNotice] = useState('');
+  const [createdBookingId, setCreatedBookingId] = useState('');
   const [bookingError, setBookingError] = useState('');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [calendarFeedback, setCalendarFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
@@ -305,6 +306,7 @@ export default function SessionCalendar({
     event.preventDefault();
     setBookingError('');
     setBookingNotice('');
+    setCreatedBookingId('');
     if (!contactId) { setBookingError(role === 'PARENT' ? 'Choose a tutor.' : 'Choose a parent.'); return; }
     // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
@@ -331,6 +333,7 @@ export default function SessionCalendar({
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
+      setCreatedBookingId(typeof result.id === 'string' ? result.id : '');
       setBookingNotice(role === 'PARENT' ? 'Session requested. Your tutor can review and respond.' : 'Session proposed. The parent can now review and accept it.');
       setShowBookingForm(false);
       await loadCalendar();
@@ -926,7 +929,7 @@ export default function SessionCalendar({
                 <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>Session {role === 'PARENT' ? 'request' : 'proposal'} sent successfully</p>
                 <p>{bookingNotice}</p>
                 <p className="muted">This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.</p>
-                <a className="button" href={role === 'TUTOR' ? '/dashboard/bookings?tab=waiting' : '/dashboard/bookings?tab=action'}>Track in My Sessions</a>
+                <a className="button" href={`/dashboard/bookings?tab=${role === 'TUTOR' ? 'waiting' : 'action'}${createdBookingId ? `&booking=${encodeURIComponent(createdBookingId)}` : ''}`}>Track in My Sessions</a>
               </div>
             )}
           </div>
