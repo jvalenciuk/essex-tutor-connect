@@ -412,6 +412,7 @@ export default async function Dashboard() {
       </h1>
 
       <p className="muted">Account type: {who.role}</p>
+      {unreadMessages > 0 && <div className="card" style={{ borderLeft: "5px solid #f4b400", marginBottom: 20, padding: 16 }} role="status"><strong>You have {unreadMessages} new {unreadMessages === 1 ? "message" : "messages"}.</strong> <a href="#conversations">Read messages</a></div>}
 
       {(isTutor || isParent) && (
         <nav className="dashboard-quick-nav" aria-label="Dashboard shortcuts">
