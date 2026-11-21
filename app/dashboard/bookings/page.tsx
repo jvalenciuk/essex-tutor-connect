@@ -310,6 +310,10 @@ export default function MyBookingsPage() {
     const action =
       role === 'TUTOR' ? 'REVISE' : 'REQUEST_CHANGE';
 
+    if (!window.confirm(
+      `Send this ${role === 'TUTOR' ? 'alternative proposal' : 'time-change request'}?\n\n${dateText(date.toISOString())}\n${minutes} minutes\n\nThe other person will need to review it.`
+    )) return;
+
     void updateBooking(booking.id, action, {
       startsAt: date.toISOString(),
       durationMinutes: minutes,
@@ -723,7 +727,9 @@ export default function MyBookingsPage() {
                 className="field"
                 type="datetime-local"
                 value={startsAt}
-                onChange={e => setStartsAt(e.target.value)}
+                min={(() => { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()}
+                step={900}
+                onChange={e => { setStartsAt(e.target.value); setError(''); }}
               />
             </label>
 
@@ -732,7 +738,7 @@ export default function MyBookingsPage() {
               <select
                 className="field"
                 value={duration}
-                onChange={e => setDuration(e.target.value)}
+                onChange={e => { setDuration(e.target.value); setError(''); }}
               >
                 <option value="30">30 minutes</option>
                 <option value="60">60 minutes</option>
@@ -750,9 +756,16 @@ export default function MyBookingsPage() {
                   rows={3}
                   maxLength={1000}
                   value={note}
-                  onChange={e => setNote(e.target.value)}
+                  onChange={e => { setNote(e.target.value); setError(''); }}
                 />
               </label>
+            )}
+
+            {startsAt && !Number.isNaN(new Date(startsAt).getTime()) && (
+              <p className="muted" style={{ margin: '12px 0' }}>
+                <strong>Review replacement:</strong> {dateText(new Date(startsAt).toISOString())}
+                {' · '}{duration} minutes. The other person must review the change.
+              </p>
             )}
 
             <div
@@ -773,9 +786,9 @@ export default function MyBookingsPage() {
 
               <button
                 disabled={isBusy}
-                onClick={resetEditor}
+                onClick={() => { resetEditor(); setError(''); }}
               >
-                Close
+                Discard changes
               </button>
             </div>
           </div>
