@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { useState, type FormEvent } from 'react';
@@ -9,6 +12,9 @@ type AccountRole = 'PARENT' | 'TUTOR';
 
 function RegisterForm() {
   const params = useSearchParams();
+  const router = useRouter();
+  const { status } = useSession();
+  useEffect(() => { if (status === 'authenticated') router.replace('/dashboard'); }, [status, router]);
   const [role, setRole] = useState<AccountRole>(params.get('role')?.toUpperCase() === 'TUTOR' ? 'TUTOR' : 'PARENT');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,6 +57,8 @@ function RegisterForm() {
       setBusy(false);
     }
   }
+
+  if (status === 'loading' || status === 'authenticated') return <main className="signup-page"><p>Checking your account...</p></main>;
 
   return (
     <main className="signup-page">
