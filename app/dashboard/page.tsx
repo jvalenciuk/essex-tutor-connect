@@ -8,6 +8,7 @@ import { db } from '../../lib/db';
 import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
 import MessagePartnerButton from './message-partner-button';
+import MessageReadRefresh from './message-read-refresh';
 import BookingManager from './booking-manager';
 import SessionCalendar from './session-calendar';
 import BookingJump from './booking-jump';
@@ -411,6 +412,7 @@ export default async function Dashboard() {
           : 'Dashboard'}
       </h1>
 
+      <MessageReadRefresh />
       <p className="muted">Account type: {who.role}</p>
       {unreadMessages > 0 && <div className="card" style={{ borderLeft: "5px solid #f4b400", marginBottom: 20, padding: 16 }} role="status"><strong>You have {unreadMessages} new {unreadMessages === 1 ? "message" : "messages"}.</strong> <a href="#conversations">Read messages</a></div>}
 
