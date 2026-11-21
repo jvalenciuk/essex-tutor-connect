@@ -423,7 +423,7 @@ export default async function Dashboard() {
           {isTutor && tutorNeedsResponse.length > 0 && <p><strong>{tutorNeedsResponse.length} scheduling {tutorNeedsResponse.length === 1 ? 'request' : 'requests'}</strong> · <Link href="/dashboard/bookings">Respond in My Sessions</Link></p>}
           {isTutor && overdueTutorSessions.length > 0 && <p><strong>{overdueTutorSessions.length} {overdueTutorSessions.length === 1 ? 'session' : 'sessions'} to complete</strong> · <Link href="/dashboard/bookings">Mark completed</Link></p>}
         </section>
-      )
+      )}
 
       {(isTutor || isParent) && (
         <nav className="dashboard-quick-nav" aria-label="Main dashboard actions">
@@ -825,12 +825,11 @@ export default async function Dashboard() {
       {isTutor && acceptedInquiryItems.length > 0 && (
         <section className="card" style={{ marginTop: 20 }}>
           <details>
-            <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Accepted inquiries — schedule another session ({acceptedInquiryItems.length})</summary>
+            <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '1.1rem' }}>Accepted parents — schedule again ({new Set(acceptedInquiryItems.map(inquiry => inquiry.parentId)).size})</summary>
             <p className="muted">Open a conversation to propose another session or message the parent. Existing sessions are listed under My Sessions.</p>
-            {acceptedInquiryItems.slice(0, 8).map(inquiry => (
+            {Array.from(new Map(acceptedInquiryItems.map(inquiry => [inquiry.parentId, inquiry])).values()).slice(0, 8).map(inquiry => (
               <p key={inquiry.id}><strong>{inquiry.parent.name}</strong> · {inquiry.subject} · {inquiry.grade} · <a href={`/dashboard?conversation=${encodeURIComponent(inquiry.parentId)}&panel=sessions`}>Open scheduling</a></p>
             ))}
-            <a href="#conversations">Open messages and scheduling</a>
           </details>
         </section>
       )}
@@ -850,7 +849,7 @@ export default async function Dashboard() {
         </section>
       )}
 
-      {isTutor && (
+      {isTutor && (overdueTutorSessions.length > 0 || tutorNeedsResponse.length > 0 || tutorWaitingForPayment.length > 0) && (
         <section className="card" style={{ marginTop: 24 }} id="needs-attention">
           <h2>Needs action</h2>
           {overdueTutorSessions.length > 0 && (
