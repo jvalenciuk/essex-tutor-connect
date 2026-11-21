@@ -7,6 +7,7 @@ import { db } from '../../lib/db';
 
 import InquiryActions from './inquiry-actions';
 import InquiryMessages from './inquiry-messages';
+import MessagePartnerButton from './message-partner-button';
 import BookingManager from './booking-manager';
 import SessionCalendar from './session-calendar';
 import BookingJump from './booking-jump';
@@ -943,6 +944,7 @@ export default async function Dashboard() {
                   <span className="conversation-summary-meta">{accepted.length} accepted {accepted.length === 1 ? 'inquiry' : 'inquiries'}</span>
                 </summary>
                 <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+                  {primaryId && <div><MessagePartnerButton name={partnerName} /></div>}
                   <details data-inquiry-panel="true">
                     <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
                       Inquiry history ({conversations.length})
