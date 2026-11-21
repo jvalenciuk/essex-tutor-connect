@@ -551,13 +551,21 @@ export default function MyBookingsPage() {
 
             <button
               disabled={isBusy}
-              onClick={() =>
-                void updateBooking(booking.id, 'DECLINE')
-              }
+              onClick={() => {
+                if (window.confirm('Decline this tutoring session proposal? This will close the proposal without payment.')) {
+                  void updateBooking(booking.id, 'DECLINE');
+                }
+              }}
             >
               Decline
             </button>
           </div>
+        )}
+
+        {booking.status === 'PROPOSED' && isTutor && start > now && (
+          <p className="muted" role="status">
+            Waiting for the parent to accept, decline, or request a different time.
+          </p>
         )}
 
         {booking.status === 'CHANGE_REQUESTED' &&
