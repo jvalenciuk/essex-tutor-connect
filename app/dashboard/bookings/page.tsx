@@ -269,7 +269,9 @@ export default function MyBookingsPage() {
 
   function beginTimeChange(booking: Booking) {
     setEditingId(booking.id);
-    setStartsAt('');
+    const existingDate = new Date(booking.requestedStartsAt || booking.startsAt);
+    const localDate = new Date(existingDate.getTime() - existingDate.getTimezoneOffset() * 60000);
+    setStartsAt(localDate.toISOString().slice(0, 16));
     setDuration(
       String(
         booking.requestedDurationMinutes ||
@@ -304,6 +306,13 @@ export default function MyBookingsPage() {
       minutes > 180
     ) {
       setError('Duration must be between 30 and 180 minutes.');
+      return;
+    }
+
+    const existingDate = new Date(booking.requestedStartsAt || booking.startsAt);
+    const existingDuration = booking.requestedDurationMinutes || booking.durationMinutes;
+    if (date.getTime() === existingDate.getTime() && minutes === existingDuration) {
+      setError('Choose a different date, time, or duration before sending a change request.');
       return;
     }
 
@@ -729,6 +738,7 @@ export default function MyBookingsPage() {
                 value={startsAt}
                 min={(() => { const now = new Date(); return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()}
                 step={900}
+                required
                 onChange={e => { setStartsAt(e.target.value); setError(''); }}
               />
             </label>
@@ -760,6 +770,10 @@ export default function MyBookingsPage() {
                 />
               </label>
             )}
+
+            <p className="muted" style={{ fontSize: 12, margin: '4px 0 12px' }}>
+              The current proposed time is prefilled. Choose a different date, time, or duration to request a change.
+            </p>
 
             {startsAt && !Number.isNaN(new Date(startsAt).getTime()) && (
               <p className="muted" style={{ margin: '12px 0' }}>
