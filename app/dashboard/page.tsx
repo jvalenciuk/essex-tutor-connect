@@ -413,7 +413,7 @@ export default async function Dashboard() {
       </h1>
 
       <MessageReadRefresh />
-      <p className="muted">Account type: {who.role}</p>
+      
       {unreadMessages > 0 && <div className="card" style={{ borderLeft: "5px solid #f4b400", marginBottom: 20, padding: 16 }} role="status"><strong>You have {unreadMessages} new {unreadMessages === 1 ? "message" : "messages"}.</strong> <a href="#conversations">Read messages</a></div>}
 
       {(isTutor || isParent) && (
@@ -485,13 +485,13 @@ export default async function Dashboard() {
 
 
       {(isTutor || isParent) && (
-        <section id="my-calendar" className="card" style={{ marginTop: 28 }}>
-          <h2>{isParent ? 'Schedule your next tutoring session' : 'Session calendar'}</h2>
+        <details id="my-calendar" className="card" style={{ marginTop: 20 }} open={isParent}>
+          <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>{isParent ? "Schedule a session" : "Calendar & availability"} <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>· {isTutor ? "Expand to view your calendar" : "Choose a time"}</span></summary>
           {isParent && <p className="muted">Choose an existing tutor connection and an available time below. Your tutor can confirm or propose an alternative.</p>}
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
           <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : isParent ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.tutorId, { id: inquiry.id, name: inquiry.tutor.user.name || 'Tutor', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
 
-        </section>
+        </details>
       )}
 
 
@@ -939,9 +939,8 @@ export default async function Dashboard() {
       {(isTutor || isParent) && (
         <section style={{ marginTop: 28 }} id="conversations">
           <h2>Messages &amp; Inquiries {unreadMessages > 0 && <span style={{ color: "#b45309", fontSize: "0.75em" }}>({unreadMessages} new)</span>}</h2>
-          <p><Link href="/dashboard/bookings">View all sessions and payments</Link></p>
           <p className="muted">
-            Choose a conversation to message a tutor or parent, review inquiries, or manage scheduling. For a quick view of all bookings, open My Sessions.
+            Select a person to read or send messages.
           </p>
 
           {inquiries.length === 0 && (
