@@ -896,7 +896,23 @@ export default function SessionCalendar({
                     {' · '}{bookingContacts.find(contact => contact.id === contactId)?.subject}
                   </p>
                 )}
-                <p><strong>Session date: {selectedDate}</strong></p>
+                <label htmlFor="calendar-session-date">Session date</label>
+                <input
+                  id="calendar-session-date"
+                  className="field"
+                  type="date"
+                  required
+                  min={localDateKey(new Date())}
+                  value={selectedDate}
+                  onChange={event => {
+                    const nextDate = event.target.value;
+                    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate)) return;
+                    const [year, monthNumber] = nextDate.split('-').map(Number);
+                    setSelectedDate(nextDate);
+                    setMonth({ year, monthNumber });
+                    setBookingError('');
+                  }}
+                />
                 <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
                 <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
                 <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
