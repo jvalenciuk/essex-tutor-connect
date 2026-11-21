@@ -906,7 +906,7 @@ export default function SessionCalendar({
                   value={selectedDate}
                   onChange={event => {
                     const nextDate = event.target.value;
-                    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(nextDate)) return;
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
                     const [year, monthNumber] = nextDate.split('-').map(Number);
                     setSelectedDate(nextDate);
                     setMonth({ year, monthNumber });
