@@ -200,13 +200,16 @@ export default function MyBookingsPage() {
       resetEditor();
       await load();
 
-      if (action === 'ACCEPT_REQUESTED_TIME') {
-        setNotice(
-          'Requested time accepted. The parent can now complete payment.'
-        );
-      } else {
-        setNotice('Booking updated successfully.');
-      }
+      const actionMessages: Record<string, string> = {
+        ACCEPT: 'Session accepted. You can now complete payment to confirm the booking.',
+        DECLINE: 'Session declined. No payment is required.',
+        ACCEPT_REQUESTED_TIME: 'Requested time accepted. The parent can now complete payment.',
+        REQUEST_CHANGE: 'Your requested time was sent. Waiting for the other person to respond.',
+        PROPOSE_CHANGE: 'Your alternative time was sent for review.',
+        COMPLETE: 'Session marked as completed.',
+        CANCEL: 'Session cancelled.',
+      };
+      setNotice(actionMessages[action] || 'Booking updated successfully.');
     } catch (err) {
       setError(
         err instanceof Error
