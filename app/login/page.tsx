@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -8,6 +11,9 @@ import { useState, type FormEvent } from 'react';
 
 function LoginForm() {
   const params = useSearchParams();
+  const router = useRouter();
+  const { status } = useSession();
+  useEffect(() => { if (status === 'authenticated') router.replace('/dashboard'); }, [status, router]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
@@ -40,6 +46,8 @@ function LoginForm() {
       setBusy(false);
     }
   }
+
+  if (status === 'loading' || status === 'authenticated') return <main className="signup-page"><p>Checking your account...</p></main>;
 
   return (
     <main className="signup-page">
