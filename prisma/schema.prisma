@@ -226,3 +226,11 @@ model PasswordResetThrottle {
   windowStart DateTime
   attempts    Int      @default(1)
 }
+
+model MessageReadState {
+  userId     String
+  inquiryId  String
+  lastReadAt DateTime @default(now())
+
+  @@id([userId, inquiryId])
+}
