@@ -345,6 +345,21 @@ export default async function Dashboard() {
     }, new Map<string, typeof inquiries>())
   );
 
+  const acceptedIds = inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => inquiry.id);
+  const [incomingMessages, messageReadStates] = acceptedIds.length
+    ? await Promise.all([
+        db.message.findMany({ where: { inquiryId: { in: acceptedIds }, senderId: { not: who.id } }, select: { inquiryId: true, createdAt: true } }),
+        db.messageReadState.findMany({ where: { userId: who.id, inquiryId: { in: acceptedIds } }, select: { inquiryId: true, lastReadAt: true } }),
+      ])
+    : [[], []];
+  const lastReadByInquiry = new Map(messageReadStates.map(state => [state.inquiryId, state.lastReadAt]));
+  const unreadByInquiry = new Map<string, number>();
+  for (const message of incomingMessages) {
+    const lastRead = lastReadByInquiry.get(message.inquiryId);
+    if (!lastRead || message.createdAt > lastRead) unreadByInquiry.set(message.inquiryId, (unreadByInquiry.get(message.inquiryId) || 0) + 1);
+  }
+  const unreadMessages = Array.from(unreadByInquiry.values()).reduce((sum, count) => sum + count, 0);
+
   // Keep action items separate from the full booking history.
   const tutorActionBookings =
     isTutor && profile
@@ -406,7 +421,7 @@ export default async function Dashboard() {
           {isParent && awaitingPayment.length > 0 && <a href="#payments">Payments ({awaitingPayment.length})</a>}
           {isTutor && <a href="#needs-attention">Needs attention</a>}
           <Link href="/dashboard/bookings">My Sessions</Link>
-          <a href="#conversations">Messages &amp; inquiries{isTutor && openInquiries > 0 ? ` (${openInquiries})` : ''} </a>
+          <a href="#conversations">Messages &amp; inquiries{unreadMessages > 0 ? ` (${unreadMessages} new)` : isTutor && openInquiries > 0 ? ` (${openInquiries} inquiries)` : ''} </a>
           {isParent && <Link href="/tutors">Find a tutor</Link>}
         </nav>
       )}
@@ -920,7 +935,7 @@ export default async function Dashboard() {
 
       {(isTutor || isParent) && (
         <section style={{ marginTop: 28 }} id="conversations">
-          <h2>Messages &amp; Inquiries</h2>
+          <h2>Messages &amp; Inquiries {unreadMessages > 0 && <span style={{ color: "#b45309", fontSize: "0.75em" }}>({unreadMessages} new)</span>}</h2>
           <p><Link href="/dashboard/bookings">View all sessions and payments</Link></p>
           <p className="muted">
             Choose a conversation to message a tutor or parent, review inquiries, or manage scheduling. For a quick view of all bookings, open My Sessions.
@@ -940,7 +955,7 @@ export default async function Dashboard() {
             return (
               <details className="card conversation-card" data-conversation-group="true" data-conversation-id={accountId} key={accountId} style={{ marginBottom: 16 }}>
                 <summary className="conversation-summary">
-                  <span>{partnerName}</span>
+                  <span>{partnerName}{conversations.reduce((sum, inquiry) => sum + (unreadByInquiry.get(inquiry.id) || 0), 0) > 0 && <strong style={{ marginLeft: 12, color: "#b45309" }}>● {conversations.reduce((sum, inquiry) => sum + (unreadByInquiry.get(inquiry.id) || 0), 0)} new</strong>}</span>
                   <span className="conversation-summary-meta">{accepted.length} accepted {accepted.length === 1 ? 'inquiry' : 'inquiries'}</span>
                 </summary>
                 <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
