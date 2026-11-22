@@ -121,15 +121,6 @@ export async function POST(req: Request) {
       );
       const platformFeeCents = Math.round(amountCents * 0.15);
 
-      const issue = await checkTutorSlot(
-        inquiry.tutorId,
-        startsAt,
-        data.durationMinutes,
-        undefined,
-        tx
-      );
-      if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
-
       const duplicate = await tx.booking.findFirst({
         where: {
           inquiryId: inquiry.id,
@@ -159,6 +150,15 @@ export async function POST(req: Request) {
         }
         return { ...duplicate, alreadyExists: true };
       }
+
+      const issue = await checkTutorSlot(
+        inquiry.tutorId,
+        startsAt,
+        data.durationMinutes,
+        undefined,
+        tx
+      );
+      if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
 
       const created = await tx.booking.create({
         data: {
