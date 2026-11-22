@@ -81,10 +81,13 @@ export async function POST(req: Request) {
       const duplicate = await tx.booking.findFirst({
         where: {
           inquiryId: inquiry.id,
-          startsAt,
           status: {
             in: ['PROPOSED', 'CHANGE_REQUESTED', 'PENDING_PAYMENT', 'PAID'],
           },
+          OR: [
+            { startsAt },
+            { status: 'CHANGE_REQUESTED', requestedStartsAt: startsAt },
+          ],
         },
         select: { id: true },
       });
