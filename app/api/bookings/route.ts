@@ -57,73 +57,75 @@ export async function POST(req: Request) {
 
   await expireUnpaidBookings(inquiry.tutorId);
 
-  const issue = await checkTutorSlot(
-    inquiry.tutorId,
-    startsAt,
-    data.durationMinutes
-  );
-
-  if (issue) {
-    return fail(issue, 409);
-  }
-
-  const duplicate = await db.booking.findFirst({
-    where: {
-      inquiryId: inquiry.id,
-      startsAt,
-      status: {
-        in: [
-          'PROPOSED',
-          'CHANGE_REQUESTED',
-          'PENDING_PAYMENT',
-          'PAID',
-        ],
-      },
-    },
-  });
-
-  if (duplicate) {
-    return fail(
-      'A booking already exists for this date and time',
-      409
-    );
-  }
-
   const amountCents = Math.round(
-    (inquiry.tutor.hourlyRateCents *
-      data.durationMinutes) /
-      60
+    (inquiry.tutor.hourlyRateCents * data.durationMinutes) / 60
   );
+  const platformFeeCents = Math.round(amountCents * 0.15);
 
-  const platformFeeCents = Math.round(
-    amountCents * 0.15
-  );
+  // Serialize creation with acceptance and rescheduling for this tutor.
+  // This also makes the duplicate check atomic across concurrent requests.
+  let booking;
+  try {
+    booking = await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${inquiry.tutorId}))`;
 
-  const booking = await db.booking.create({
-    data: {
-      inquiryId: inquiry.id,
-      parentId: inquiry.parentId,
-      tutorId: inquiry.tutorId,
-      startsAt,
-      durationMinutes: data.durationMinutes,
-      amountCents,
-      platformFeeCents,
-      status: who.role === 'PARENT' ? 'CHANGE_REQUESTED' : 'PROPOSED',
-      ...(who.role === 'PARENT' ? {
-        requestedStartsAt: startsAt,
-        requestedDurationMinutes: data.durationMinutes,
-      } : {}),
-    },
-    select: {
-      id: true,
-      inquiryId: true,
-      startsAt: true,
-      durationMinutes: true,
-      amountCents: true,
-      platformFeeCents: true,
-      status: true,
-    },
-  });
+      const issue = await checkTutorSlot(
+        inquiry.tutorId,
+        startsAt,
+        data.durationMinutes,
+        undefined,
+        tx
+      );
+      if (issue) throw new Error(`SLOT_CONFLICT:${issue}`);
+
+      const duplicate = await tx.booking.findFirst({
+        where: {
+          inquiryId: inquiry.id,
+          startsAt,
+          status: {
+            in: ['PROPOSED', 'CHANGE_REQUESTED', 'PENDING_PAYMENT', 'PAID'],
+          },
+        },
+        select: { id: true },
+      });
+      if (duplicate) throw new Error('DUPLICATE_BOOKING');
+
+      return tx.booking.create({
+        data: {
+          inquiryId: inquiry.id,
+          parentId: inquiry.parentId,
+          tutorId: inquiry.tutorId,
+          startsAt,
+          durationMinutes: data.durationMinutes,
+          amountCents,
+          platformFeeCents,
+          status: who.role === 'PARENT' ? 'CHANGE_REQUESTED' : 'PROPOSED',
+          ...(who.role === 'PARENT' ? {
+            requestedStartsAt: startsAt,
+            requestedDurationMinutes: data.durationMinutes,
+          } : {}),
+        },
+        select: {
+          id: true,
+          inquiryId: true,
+          startsAt: true,
+          durationMinutes: true,
+          amountCents: true,
+          platformFeeCents: true,
+          status: true,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
+      return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
+    }
+    if (error instanceof Error && error.message === 'DUPLICATE_BOOKING') {
+      return fail('A booking already exists for this date and time', 409);
+    }
+    console.error('Booking creation transaction failed', error);
+    return fail('Unable to create the booking. Please try again.', 503);
+  }
 
   return Response.json(booking, {
     status: 201,
