@@ -148,6 +148,7 @@ export async function POST(req: Request) {
         if (duplicate.durationMinutes !== data.durationMinutes) {
           throw new Error('DUPLICATE_BOOKING');
         }
+        // The existing booking is authoritative; never reprice or recreate it.
         return { ...duplicate, alreadyExists: true };
       }
 
@@ -192,7 +193,7 @@ export async function POST(req: Request) {
       return fail(error.message.slice('SLOT_CONFLICT:'.length), 409);
     }
     if (error instanceof Error && error.message === 'DUPLICATE_BOOKING') {
-      return fail('A booking already exists for this date and time', 409);
+      return fail('A session already exists at this time with a different duration. Open My Sessions to review it before requesting another.', 409);
     }
     if (error instanceof Error && error.message === 'INQUIRY_NO_LONGER_ACCEPTED') {
       return fail('This inquiry is no longer accepted or the tutor is no longer approved. Refresh and try again.', 409);
@@ -206,6 +207,7 @@ export async function POST(req: Request) {
 
   return Response.json(booking, {
     status: booking.alreadyExists ? 200 : 201,
+    headers: { 'Cache-Control': 'private, no-store' },
   });
 }
 
