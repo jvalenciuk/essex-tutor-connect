@@ -128,7 +128,7 @@ export async function POST(req: Request) {
             in: ['PROPOSED', 'CHANGE_REQUESTED', 'PENDING_PAYMENT', 'PAID'],
           },
           OR: [
-            { startsAt },
+            { status: { in: ['PROPOSED', 'PENDING_PAYMENT', 'PAID'] }, startsAt },
             { status: 'CHANGE_REQUESTED', requestedStartsAt: startsAt },
           ],
         },
@@ -137,6 +137,7 @@ export async function POST(req: Request) {
           inquiryId: true,
           startsAt: true,
           durationMinutes: true,
+          requestedDurationMinutes: true,
           amountCents: true,
           platformFeeCents: true,
           status: true,
@@ -145,7 +146,10 @@ export async function POST(req: Request) {
       if (duplicate) {
         // A retried request for the same active session is safe to reuse.
         // Do not silently treat a different duration as the same booking.
-        if (duplicate.durationMinutes !== data.durationMinutes) {
+        const matchingDuration = duplicate.status === 'CHANGE_REQUESTED'
+          ? duplicate.requestedDurationMinutes
+          : duplicate.durationMinutes;
+        if (matchingDuration !== data.durationMinutes) {
           throw new Error('DUPLICATE_BOOKING');
         }
         // The existing booking is authoritative; never reprice or recreate it.
