@@ -61,6 +61,10 @@ const statuses: Record<
     label: 'Completed',
     color: '#64748b',
   },
+  EXPIRED: {
+    label: 'Expired',
+    color: '#94a3b8',
+  },
   CANCELLED: {
     label: 'Cancelled',
     color: '#94a3b8',
@@ -213,7 +217,7 @@ export default function SessionCalendar({
         const now = Date.now();
         const nextSession = loadedBookings
           .filter(booking =>
-            !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED'].includes(booking.status) &&
+            !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED', 'EXPIRED'].includes(booking.status) &&
             new Date(booking.startsAt).getTime() >= now
           )
           .sort((a, b) =>
@@ -444,6 +448,7 @@ export default function SessionCalendar({
           'CANCELLED',
           'REFUNDED',
           'DECLINED',
+          'EXPIRED',
         ].includes(
           booking.status
         )

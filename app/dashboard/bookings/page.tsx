@@ -38,6 +38,7 @@ const labels: Record<string, string> = {
   CANCELLED: 'Cancelled',
   REFUNDED: 'Refunded',
   DECLINED: 'Declined',
+  EXPIRED: 'Expired',
 };
 
 function money(cents: number) {
@@ -60,7 +61,7 @@ function category(booking: Booking) {
   const end = start + booking.durationMinutes * 60000;
 
   if (
-    ['COMPLETED', 'CANCELLED', 'REFUNDED', 'DECLINED'].includes(
+    ['COMPLETED', 'CANCELLED', 'REFUNDED', 'DECLINED', 'EXPIRED'].includes(
       booking.status
     )
   ) {

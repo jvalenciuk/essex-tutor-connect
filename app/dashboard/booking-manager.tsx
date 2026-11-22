@@ -60,6 +60,10 @@ const statusInfo: Record<
     label: 'Declined',
     color: '#64748b',
   },
+  EXPIRED: {
+    label: 'Expired',
+    color: '#64748b',
+  },
   CANCELLED: {
     label: 'Cancelled',
     color: '#64748b',
@@ -112,6 +116,8 @@ function nextStep(
       return 'Your session is confirmed. Check the date and time below.';
     case 'COMPLETED':
       return 'This session has been marked completed.';
+    case 'EXPIRED':
+      return 'This reservation expired. You can request another session.';
     case 'CANCELLED':
       return 'This session was cancelled before payment.';
     case 'REFUNDED':
@@ -552,7 +558,7 @@ export default function BookingManager({
   );
 
   const activeBookings = sortedBookings.filter(booking =>
-    !['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
+    !['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED', 'EXPIRED'].includes(booking.status)
   ).sort((a, b) => {
     const priority = (status: string) => {
       if (status === 'CHANGE_REQUESTED') return 0;
@@ -573,7 +579,7 @@ export default function BookingManager({
     !overduePaidBookings.some(overdue => overdue.id === booking.id)
   );
   const pastBookings = sortedBookings.filter(booking =>
-    ['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED'].includes(booking.status)
+    ['REFUNDED', 'CANCELLED', 'DECLINED', 'COMPLETED', 'EXPIRED'].includes(booking.status)
   );
 
   return (
