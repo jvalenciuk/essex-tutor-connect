@@ -57,11 +57,6 @@ export async function POST(req: Request) {
 
   await expireUnpaidBookings(inquiry.tutorId);
 
-  const amountCents = Math.round(
-    (inquiry.tutor.hourlyRateCents * data.durationMinutes) / 60
-  );
-  const platformFeeCents = Math.round(amountCents * 0.15);
-
   // Serialize creation with acceptance and rescheduling for this tutor.
   // This also makes the duplicate check atomic across concurrent requests.
   let booking;
@@ -83,9 +78,19 @@ export async function POST(req: Request) {
           },
           ...(who.role === 'PARENT' ? { parentId: who.id } : {}),
         },
-        select: { id: true },
+        select: {
+          id: true,
+          tutor: { select: { hourlyRateCents: true } },
+        },
       });
       if (!activeInquiry) throw new Error('INQUIRY_NO_LONGER_ACCEPTED');
+
+      // Price the session using the tutor's rate read in this transaction,
+      // rather than a rate fetched before waiting for the booking lock.
+      const amountCents = Math.round(
+        (activeInquiry.tutor.hourlyRateCents * data.durationMinutes) / 60
+      );
+      const platformFeeCents = Math.round(amountCents * 0.15);
 
       const issue = await checkTutorSlot(
         inquiry.tutorId,
