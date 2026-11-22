@@ -334,6 +334,10 @@ export default function SessionCalendar({
       setBookingError('This local time does not exist because of the daylight-saving change. Choose another time.');
       return;
     }
+    if (candidates.length > 1) {
+      setBookingError('This time occurs twice during the autumn daylight-saving change. Choose a different time (such as 2:00 a.m. or later) to avoid an ambiguous booking.');
+      return;
+    }
     const localStart = candidates[0];
     if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
       setBookingError('That start time has already passed. Choose a later time today or select another date.'); return;
