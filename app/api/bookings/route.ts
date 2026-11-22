@@ -141,11 +141,26 @@ export async function POST(req: Request) {
             { status: 'CHANGE_REQUESTED', requestedStartsAt: startsAt },
           ],
         },
-        select: { id: true },
+        select: {
+          id: true,
+          inquiryId: true,
+          startsAt: true,
+          durationMinutes: true,
+          amountCents: true,
+          platformFeeCents: true,
+          status: true,
+        },
       });
-      if (duplicate) throw new Error('DUPLICATE_BOOKING');
+      if (duplicate) {
+        // A retried request for the same active session is safe to reuse.
+        // Do not silently treat a different duration as the same booking.
+        if (duplicate.durationMinutes !== data.durationMinutes) {
+          throw new Error('DUPLICATE_BOOKING');
+        }
+        return { ...duplicate, alreadyExists: true };
+      }
 
-      return tx.booking.create({
+      const created = await tx.booking.create({
         data: {
           inquiryId: inquiry.id,
           parentId: inquiry.parentId,
@@ -170,6 +185,7 @@ export async function POST(req: Request) {
           status: true,
         },
       });
+      return { ...created, alreadyExists: false };
     });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('SLOT_CONFLICT:')) {
@@ -189,7 +205,7 @@ export async function POST(req: Request) {
   }
 
   return Response.json(booking, {
-    status: 201,
+    status: booking.alreadyExists ? 200 : 201,
   });
 }
 
