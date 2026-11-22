@@ -1,5 +1,6 @@
 
 import { db } from './db';
+import type { Prisma } from '@prisma/client';
 
 type NotificationType =
   | 'CONFIRMED'
@@ -89,6 +90,29 @@ async function sendEmail(
     : null;
 }
 
+function notificationKey(type: string, bookingId: string, role: RecipientRole) {
+  return `${type.toLowerCase()}-${bookingId}-${role}`;
+}
+
+export function queueExpirationNotifications(
+  tx: Pick<Prisma.TransactionClient, 'notificationDelivery'>,
+  bookingId: string,
+  recipients: Record<RecipientRole, string>,
+) {
+  const type = 'PAYMENT_EXPIRED';
+  const roles: RecipientRole[] = ['parent', 'tutor'];
+  return tx.notificationDelivery.createMany({
+    data: roles.map(role => ({
+      bookingId,
+      type,
+      recipientRole: role,
+      recipientEmail: recipients[role],
+      idempotencyKey: notificationKey(type, bookingId, role),
+    })),
+    skipDuplicates: true,
+  });
+}
+
 async function sendTrackedNotification(
   bookingId: string,
   role: RecipientRole,
@@ -97,7 +121,7 @@ async function sendTrackedNotification(
   body: string,
   type: 'REMINDER' | 'PAYMENT_EXPIRED'
 ): Promise<void> {
-  const idempotencyKey = `${type.toLowerCase()}-${bookingId}-${role}`;
+  const idempotencyKey = notificationKey(type, bookingId, role);
 
   const existing = await db.notificationDelivery.upsert({
     where: {
@@ -211,6 +235,32 @@ async function sendTrackedNotification(
 
     throw error;
   }
+}
+
+export async function retryExpirationNotifications() {
+  const retryBefore = new Date(Date.now() - LOCK_TIMEOUT_MS);
+  const pending = await db.notificationDelivery.findMany({
+    where: {
+      type: 'PAYMENT_EXPIRED',
+      booking: { status: { in: ['EXPIRED', 'CANCELLED'] } },
+      OR: [
+        { status: 'PENDING' },
+        { status: 'FAILED', updatedAt: { lt: retryBefore } },
+        { status: 'PROCESSING', updatedAt: { lt: retryBefore } },
+      ],
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: 50,
+    select: { bookingId: true },
+  });
+  const bookingIds = [...new Set(pending.map(delivery => delivery.bookingId))];
+  const outcomes = await Promise.allSettled(
+    bookingIds.map(id => notifyBooking(id, 'PAYMENT_EXPIRED'))
+  );
+  return {
+    bookings: bookingIds.length,
+    failed: outcomes.filter(outcome => outcome.status === 'rejected').length,
+  };
 }
 
 export async function notifyBooking(

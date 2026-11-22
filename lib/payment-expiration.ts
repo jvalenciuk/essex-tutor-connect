@@ -1,5 +1,5 @@
 import { db } from './db';
-import { notifyBooking } from './email';
+import { notifyBooking, queueExpirationNotifications } from './email';
 import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from './stripe-config';
 
 const STRIPE = 'https://api.stripe.com/v1';
@@ -17,7 +17,10 @@ export async function expireUnpaidBookings(tutorId?: string) {
       ],
       ...(tutorId ? { tutorId } : {}),
     },
-    include: { tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true } } },
+    include: {
+      parent: { select: { email: true } },
+      tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true, user: { select: { email: true } } } },
+    },
     take: 100,
   });
   let expired = 0;
@@ -95,19 +98,28 @@ export async function expireUnpaidBookings(tutorId?: string) {
         continue;
       }
     }
-    const result = await db.booking.updateMany({
-      where: {
-        id: booking.id,
-        status: 'PENDING_PAYMENT',
-        // A new checkout session may have been attached while we checked Stripe.
-        // Never cancel that newer attempt based on an older session's state.
-        stripeSessionId: booking.stripeSessionId,
-        OR: [
-          { paymentDueAt: { lte: now } },
-          { startsAt: { lte: now } },
-        ],
-      },
-      data: { status: 'EXPIRED' },
+    const result = await db.$transaction(async tx => {
+      const updated = await tx.booking.updateMany({
+        where: {
+          id: booking.id,
+          status: 'PENDING_PAYMENT',
+          // A new checkout session may have been attached while we checked Stripe.
+          // Never cancel that newer attempt based on an older session's state.
+          stripeSessionId: booking.stripeSessionId,
+          OR: [
+            { paymentDueAt: { lte: now } },
+            { startsAt: { lte: now } },
+          ],
+        },
+        data: { status: 'EXPIRED' },
+      });
+      if (updated.count) {
+        await queueExpirationNotifications(tx, booking.id, {
+          parent: booking.parent.email,
+          tutor: booking.tutor.user.email,
+        });
+      }
+      return updated;
     });
     expired += result.count;
     if (result.count) {

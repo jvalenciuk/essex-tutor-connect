@@ -1,4 +1,5 @@
 import { expireUnpaidBookings } from '../../../../lib/payment-expiration';
+import { retryExpirationNotifications } from '../../../../lib/email';
 import { db } from '../../../../lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -41,12 +42,16 @@ export async function GET(req: Request) {
       });
     }
     const expiration = await expireUnpaidBookings();
+    const notificationRetries = await retryExpirationNotifications().catch(error => {
+      console.error('Expiration notification retry scan failed', error);
+      return null;
+    });
     const now = new Date();
     const proposals = await db.booking.updateMany({
       where: { status: 'PROPOSED', startsAt: { lte: now } },
       data: { status: 'EXPIRED' },
     });
-    return Response.json({ success: true, expiration, expiredProposals: proposals.count }, {
+    return Response.json({ success: true, expiration, expiredProposals: proposals.count, notificationRetries }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
