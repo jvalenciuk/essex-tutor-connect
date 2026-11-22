@@ -382,19 +382,24 @@ export default function SessionCalendar({
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
       setCreatedBookingId(typeof result.id === 'string' ? result.id : '');
       setReusedBooking(result.alreadyExists === true);
-      const submittedTime = (result.alreadyExists && typeof result.startsAt === 'string' ? new Date(result.startsAt) : localStart).toLocaleString('en-CA', {
-        timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
-      });
-      // On an idempotent retry, use the saved booking's authoritative time
-      // rather than assuming the request still describes its stored schedule.
-      const confirmedStart = result.alreadyExists && typeof result.startsAt === 'string'
-        ? new Date(result.startsAt)
-        : localStart;
-      const confirmedDuration = result.alreadyExists && typeof result.requestedDurationMinutes === 'number'
+      // For pending parent time changes, the requested time is the one
+      // the tutor must respond to, not the original proposal time.
+      const savedStart = result.alreadyExists && result.status === 'CHANGE_REQUESTED'
+        && typeof result.requestedStartsAt === 'string'
+        ? result.requestedStartsAt
+        : result.alreadyExists && typeof result.startsAt === 'string'
+          ? result.startsAt
+          : localStart.toISOString();
+      const confirmedStart = new Date(savedStart);
+      const confirmedDuration = result.alreadyExists && result.status === 'CHANGE_REQUESTED'
+        && typeof result.requestedDurationMinutes === 'number'
         ? result.requestedDurationMinutes
         : result.alreadyExists && typeof result.durationMinutes === 'number'
           ? result.durationMinutes
           : Number(bookingDuration);
+      const submittedTime = confirmedStart.toLocaleString('en-CA', {
+        timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
+      });
       const sessionEnd = new Date(confirmedStart.getTime() + confirmedDuration * 60000);
       const submittedEnd = sessionEnd.toLocaleString('en-CA', {
         timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
