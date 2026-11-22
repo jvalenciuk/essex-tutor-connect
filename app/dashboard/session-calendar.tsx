@@ -316,6 +316,20 @@ export default function SessionCalendar({
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
     const [hour, minute] = bookingTime.split(':').map(Number);
     const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
+    const checkedDate = new Date(wallClockUtc);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ||
+      !/^\d{2}:\d{2}$/.test(bookingTime) ||
+      ![year, monthNumber, day, hour, minute].every(Number.isInteger) ||
+      checkedDate.getUTCFullYear() !== year ||
+      checkedDate.getUTCMonth() + 1 !== monthNumber ||
+      checkedDate.getUTCDate() !== day ||
+      checkedDate.getUTCHours() !== hour ||
+      checkedDate.getUTCMinutes() !== minute
+    ) {
+      setBookingError('Enter a valid session date and time.');
+      return;
+    }
     // Test both Eastern offsets and round-trip through Toronto local time.
     // This remains correct on either side of a daylight-saving transition.
     const easternFormatter = new Intl.DateTimeFormat('en-CA', {
