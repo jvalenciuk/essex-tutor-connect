@@ -1063,10 +1063,12 @@ export default function SessionCalendar({
                         : 'The existing proposal is still awaiting a response. No duplicate was created.'
                   : 'This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.'}</p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <a className="button" href={`/dashboard/bookings?${createdBookingId ? `booking=${encodeURIComponent(createdBookingId)}` : 'tab=waiting'}`}>Track in My Sessions</a>
+                  <a className="button" href={`/dashboard/bookings?${createdBookingId ? `booking=${encodeURIComponent(createdBookingId)}` : 'tab=waiting'}`}>{reusedBooking && existingBookingStatus === 'PENDING_PAYMENT' && role === 'PARENT' ? 'Review payment in My Sessions' : reusedBooking && existingBookingStatus === 'PAID' ? 'View confirmed session' : reusedBooking && existingBookingStatus === 'CHANGE_REQUESTED' ? 'Review requested change' : 'Track in My Sessions'}</a>
                   <button type="button" onClick={() => {
                     setBookingNotice('');
                     setCreatedBookingId('');
+                    setReusedBooking(false);
+                    setExistingBookingStatus('');
                     setBookingError('');
                     // Default repeat sessions to the following week to avoid
                     // accidentally proposing the same date and time twice.
