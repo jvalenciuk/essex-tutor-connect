@@ -316,15 +316,25 @@ export default function SessionCalendar({
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
     const [hour, minute] = bookingTime.split(':').map(Number);
     const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
-    const offsetParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: ZONE, timeZoneName: 'shortOffset', hour: '2-digit',
-    }).formatToParts(new Date(wallClockUtc));
-    const offsetLabel = offsetParts.find(part => part.type === 'timeZoneName')?.value || 'GMT-5';
-    const offsetMatch = offsetLabel.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
-    const offsetMinutes = offsetMatch
-      ? (offsetMatch[1] === '+' ? 1 : -1) * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0))
-      : -300;
-    const localStart = new Date(wallClockUtc - offsetMinutes * 60000);
+    // Test both Eastern offsets and round-trip through Toronto local time.
+    // This remains correct on either side of a daylight-saving transition.
+    const easternFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+    const candidates = [4, 5].map(offsetHours => new Date(wallClockUtc + offsetHours * 60 * 60 * 1000))
+      .filter(candidate => {
+        const parts = easternFormatter.formatToParts(candidate);
+        const part = (type: string) => Number(parts.find(item => item.type === type)?.value);
+        return part('year') === year && part('month') === monthNumber &&
+          part('day') === day && part('hour') === hour && part('minute') === minute;
+      }).sort((a, b) => a.getTime() - b.getTime());
+    if (!candidates.length) {
+      setBookingError('This local time does not exist because of the daylight-saving change. Choose another time.');
+      return;
+    }
+    const localStart = candidates[0];
     if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
       setBookingError('That start time has already passed. Choose a later time today or select another date.'); return;
     }
