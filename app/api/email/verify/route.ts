@@ -11,6 +11,12 @@ export async function POST(req: Request) {
   const user = await db.user.findUnique({ where: { id: data.id }, select: { id: true, email: true, passwordHash: true, emailVerifiedAt: true } });
   if (!user || user.email !== data.email || !checkEmailVerificationToken(parsed.data.token, user.passwordHash)) return Response.json({ error: 'Invalid verification link.' }, { status: 400 });
   if (user.emailVerifiedAt) return Response.json({ message: 'Your email is already verified. You can sign in.' });
-  await db.user.updateMany({ where: { id: user.id, emailVerifiedAt: null }, data: { emailVerifiedAt: new Date() } });
+  const result = await db.user.updateMany({
+    where: { id: user.id, email: user.email, passwordHash: user.passwordHash, emailVerifiedAt: null },
+    data: { emailVerifiedAt: new Date() },
+  });
+  if (result.count !== 1) {
+    return Response.json({ error: 'The account changed while verifying. Please reopen the link or request a new one.' }, { status: 409 });
+  }
   return Response.json({ message: 'Email verified. You can now sign in.' });
 }
