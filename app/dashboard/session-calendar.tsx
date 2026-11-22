@@ -388,7 +388,7 @@ export default function SessionCalendar({
       });
       const contactName = bookingContacts.find(contact => contact.id === contactId)?.name || 'the recipient';
       setBookingNotice(
-        `${role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${bookingDuration} minutes (Windsor / Eastern Time). ${role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
+        `${result.alreadyExists ? 'This session was already requested' : role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${bookingDuration} minutes (Windsor / Eastern Time). ${result.alreadyExists ? 'No duplicate was created. You can review the existing session in My Sessions.' : role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
       );
       setShowBookingForm(false);
       // Booking creation has succeeded. A calendar refresh is secondary and
