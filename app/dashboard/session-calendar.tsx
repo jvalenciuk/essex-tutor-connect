@@ -382,16 +382,26 @@ export default function SessionCalendar({
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
       setCreatedBookingId(typeof result.id === 'string' ? result.id : '');
       setReusedBooking(result.alreadyExists === true);
-      const submittedTime = localStart.toLocaleString('en-CA', {
+      const submittedTime = (result.alreadyExists && typeof result.startsAt === 'string' ? new Date(result.startsAt) : localStart).toLocaleString('en-CA', {
         timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
       });
-      const sessionEnd = new Date(localStart.getTime() + Number(bookingDuration) * 60000);
+      // On an idempotent retry, use the saved booking's authoritative time
+      // rather than assuming the request still describes its stored schedule.
+      const confirmedStart = result.alreadyExists && typeof result.startsAt === 'string'
+        ? new Date(result.startsAt)
+        : localStart;
+      const confirmedDuration = result.alreadyExists && typeof result.requestedDurationMinutes === 'number'
+        ? result.requestedDurationMinutes
+        : result.alreadyExists && typeof result.durationMinutes === 'number'
+          ? result.durationMinutes
+          : Number(bookingDuration);
+      const sessionEnd = new Date(confirmedStart.getTime() + confirmedDuration * 60000);
       const submittedEnd = sessionEnd.toLocaleString('en-CA', {
         timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
       });
       const contactName = bookingContacts.find(contact => contact.id === contactId)?.name || 'the recipient';
       setBookingNotice(
-        `${result.alreadyExists ? 'This session was already requested' : role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${bookingDuration} minutes (Windsor / Eastern Time). ${result.alreadyExists ? 'No duplicate was created. You can review the existing session in My Sessions.' : role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
+        `${result.alreadyExists ? 'This session was already requested' : role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${confirmedDuration} minutes (Windsor / Eastern Time). ${result.alreadyExists ? 'No duplicate was created. You can review the existing session in My Sessions.' : role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
       );
       setShowBookingForm(false);
       // Keep the user on the dashboard; the existing session is accessible
@@ -401,7 +411,9 @@ export default function SessionCalendar({
       try {
         await loadCalendar();
       } catch {
-        setError('Your session request was sent, but the calendar could not refresh. Reload the calendar to see it.');
+        setError(result.alreadyExists
+          ? 'The existing session was found, but the calendar could not refresh. Reload the calendar to see it.'
+          : 'Your session request was sent, but the calendar could not refresh. Reload the calendar to see it.');
       }
       window.dispatchEvent(new Event('essex:bookings-updated'));
     } catch (error) {
