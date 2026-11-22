@@ -391,6 +391,8 @@ export default function SessionCalendar({
         `${result.alreadyExists ? 'This session was already requested' : role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${bookingDuration} minutes (Windsor / Eastern Time). ${result.alreadyExists ? 'No duplicate was created. You can review the existing session in My Sessions.' : role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
       );
       setShowBookingForm(false);
+      // Keep the user on the dashboard; the existing session is accessible
+      // from My Sessions without another submission.
       // Booking creation has succeeded. A calendar refresh is secondary and
       // must not turn a successful submission into an apparent failed request.
       try {
