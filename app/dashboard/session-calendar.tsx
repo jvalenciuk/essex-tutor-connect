@@ -171,6 +171,7 @@ export default function SessionCalendar({
   const [bookingDuration, setBookingDuration] = useState('60');
   const [bookingBusy, setBookingBusy] = useState(false);
   const bookingSubmissionInFlight = useRef(false);
+  const calendarDateInitialized = useRef(false);
   const [bookingNotice, setBookingNotice] = useState('');
   const [createdBookingId, setCreatedBookingId] = useState('');
   const [reusedBooking, setReusedBooking] = useState(false);
@@ -216,7 +217,7 @@ export default function SessionCalendar({
     useState('');
 
   const loadCalendar =
-    useCallback(async () => {
+    useCallback(async (refreshError = 'Unable to load tutoring calendar.') => {
       setLoading(true);
       setError('');
 
@@ -243,21 +244,23 @@ export default function SessionCalendar({
           : bookingData.bookings || [];
         setBookings(loadedBookings);
 
-        // Start on the next relevant session instead of an empty today.
-        const now = Date.now();
-        const nextSession = loadedBookings
-          .filter(booking =>
-            !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED'].includes(booking.status) &&
-            new Date(booking.startsAt).getTime() >= now
-          )
-          .sort((a, b) =>
-            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
-          )[0];
-        if (nextSession) {
-          const dateKey = localDateKey(nextSession.startsAt);
-          const [year, monthNumber] = dateKey.split('-').map(Number);
-          setMonth({ year, monthNumber });
-          setSelectedDate(dateKey);
+        if (!calendarDateInitialized.current) {
+          calendarDateInitialized.current = true;
+          const now = Date.now();
+          const nextSession = loadedBookings
+            .filter(booking =>
+              !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED', 'EXPIRED'].includes(booking.status) &&
+              new Date(booking.startsAt).getTime() >= now
+            )
+            .sort((a, b) =>
+              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+            )[0];
+          if (nextSession) {
+            const dateKey = localDateKey(nextSession.startsAt);
+            const [year, monthNumber] = dateKey.split('-').map(Number);
+            setMonth({ year, monthNumber });
+            setSelectedDate(dateKey);
+          }
         }
 
         if (role === 'TUTOR') {
@@ -269,9 +272,7 @@ export default function SessionCalendar({
               }
             );
 
-          if (
-            availabilityResponse.ok
-          ) {
+          if (availabilityResponse.ok) {
             const availabilityData:
               AvailabilityResponse =
               await availabilityResponse.json();
@@ -281,7 +282,6 @@ export default function SessionCalendar({
                 []
             );
           } else {
-            setBlockedDates([]);
             setError(
               'Bookings loaded, but blocked dates could not be loaded.'
             );
@@ -290,9 +290,7 @@ export default function SessionCalendar({
           setBlockedDates([]);
         }
       } catch {
-        setError(
-          'Unable to load tutoring calendar.'
-        );
+        setError(refreshError);
       } finally {
         setLoading(false);
       }
@@ -300,7 +298,9 @@ export default function SessionCalendar({
 
   useEffect(() => {
     void loadCalendar();
-    const refreshAfterBookingChange = () => { void loadCalendar(); };
+    const refreshAfterBookingChange = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== 'calendar') void loadCalendar();
+    };
     window.addEventListener('essex:bookings-updated', refreshAfterBookingChange);
     return () => window.removeEventListener('essex:bookings-updated', refreshAfterBookingChange);
   }, [loadCalendar]);
@@ -412,18 +412,10 @@ export default function SessionCalendar({
         `${result.alreadyExists ? 'This session was already requested' : role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${confirmedDuration} minutes (Windsor / Eastern Time). ${result.alreadyExists ? 'No duplicate was created. You can review the existing session in My Sessions.' : role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
       );
       setShowBookingForm(false);
-      // Keep the user on the dashboard; the existing session is accessible
-      // from My Sessions without another submission.
-      // Booking creation has succeeded. A calendar refresh is secondary and
-      // must not turn a successful submission into an apparent failed request.
-      try {
-        await loadCalendar();
-      } catch {
-        setError(result.alreadyExists
-          ? 'The existing session was found, but the calendar could not refresh. Reload the calendar to see it.'
-          : 'Your session request was sent, but the calendar could not refresh. Reload the calendar to see it.');
-      }
-      window.dispatchEvent(new Event('essex:bookings-updated'));
+      await loadCalendar(result.alreadyExists
+        ? 'The existing session was found. Refresh the calendar to see it.'
+        : 'Your session request was sent. Refresh the calendar to see it.');
+      window.dispatchEvent(new CustomEvent('essex:bookings-updated', { detail: 'calendar' }));
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : 'Unable to propose session.');
     } finally {
@@ -435,6 +427,7 @@ export default function SessionCalendar({
   function changeMonth(
     amount: number
   ) {
+    calendarDateInitialized.current = true;
     const date = new Date(
       Date.UTC(
         month.year,
@@ -475,8 +468,8 @@ export default function SessionCalendar({
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Unable to accept the proposal.');
-      await loadCalendar();
-      window.dispatchEvent(new Event('essex:bookings-updated'));
+      await loadCalendar('Your session was accepted. Refresh the calendar to see its current status.');
+      window.dispatchEvent(new CustomEvent('essex:bookings-updated', { detail: 'calendar' }));
       setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'success', message: 'Session accepted. Complete payment within 24 hours to confirm your booking.' } }));
     } catch (error) {
       setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'error', message: error instanceof Error ? error.message : 'Unable to accept the proposal.' } }));
@@ -811,6 +804,7 @@ export default function SessionCalendar({
                 key={dateKey}
                 type="button"
                 onClick={() => {
+                  calendarDateInitialized.current = true;
                   setSelectedDate(dateKey);
                   window.requestAnimationFrame(() => {
                     document.getElementById('calendar-selected-day')?.scrollIntoView({
@@ -996,6 +990,7 @@ export default function SessionCalendar({
                     const nextDate = event.target.value;
                     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
                     const [year, monthNumber] = nextDate.split('-').map(Number);
+                    calendarDateInitialized.current = true;
                     setSelectedDate(nextDate);
                     setMonth({ year, monthNumber });
                     setBookingError('');
@@ -1075,6 +1070,7 @@ export default function SessionCalendar({
                     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
                     const nextWeek = new Date(Date.UTC(year, monthNumber - 1, day + 7));
                     const nextDate = nextWeek.toISOString().slice(0, 10);
+                    calendarDateInitialized.current = true;
                     setSelectedDate(nextDate);
                     setMonth({ year: nextWeek.getUTCFullYear(), monthNumber: nextWeek.getUTCMonth() + 1 });
                     setShowBookingForm(true);
