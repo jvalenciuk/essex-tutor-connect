@@ -4,6 +4,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import DirectPaymentButton from './direct-payment-button';
@@ -169,6 +170,7 @@ export default function SessionCalendar({
   const [bookingTime, setBookingTime] = useState('16:00');
   const [bookingDuration, setBookingDuration] = useState('60');
   const [bookingBusy, setBookingBusy] = useState(false);
+  const bookingSubmissionInFlight = useRef(false);
   const [bookingNotice, setBookingNotice] = useState('');
   const [createdBookingId, setCreatedBookingId] = useState('');
   const [bookingError, setBookingError] = useState('');
@@ -304,6 +306,7 @@ export default function SessionCalendar({
 
   async function proposeCalendarBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (bookingSubmissionInFlight.current) return;
     setBookingError('');
     setBookingNotice('');
     setCreatedBookingId('');
@@ -365,6 +368,7 @@ export default function SessionCalendar({
     if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
       setBookingError('That start time has already passed. Choose a later time today or select another date.'); return;
     }
+    bookingSubmissionInFlight.current = true;
     setBookingBusy(true);
     try {
       const response = await fetch('/api/bookings', {
@@ -392,6 +396,7 @@ export default function SessionCalendar({
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : 'Unable to propose session.');
     } finally {
+      bookingSubmissionInFlight.current = false;
       setBookingBusy(false);
     }
   }
