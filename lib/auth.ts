@@ -8,6 +8,24 @@ function fingerprint(hash: string) {
   return createHash('sha256').update(hash).digest('hex');
 }
 
+const accountSelect = {
+  role: true,
+  passwordHash: true,
+  emailVerifiedAt: true,
+  createdAt: true,
+} as const;
+
+function canSignIn(account: { emailVerifiedAt: Date | null; createdAt: Date }) {
+  if (account.emailVerifiedAt) return true;
+
+  const value = process.env.LEGACY_EMAIL_VERIFICATION_CUTOFF_UTC;
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value)) return false;
+  const cutoff = new Date(value);
+  return Number.isFinite(cutoff.getTime()) &&
+    cutoff.toISOString() === value.replace('Z', '.000Z') &&
+    cutoff.getTime() <= Date.now() && account.createdAt < cutoff;
+}
+
 export const authOptions: NextAuthOptions = {
   session: { strategy: 'jwt' },
   providers: [CredentialsProvider({
@@ -16,7 +34,7 @@ export const authOptions: NextAuthOptions = {
     async authorize(credentials) {
       if (!credentials?.email || !credentials.password) return null;
       const user = await db.user.findUnique({ where: { email: credentials.email.trim().toLowerCase() } });
-      if (!user || !user.emailVerifiedAt || !(await bcrypt.compare(credentials.password, user.passwordHash))) return null;
+      if (!user || !canSignIn(user) || !(await bcrypt.compare(credentials.password, user.passwordHash))) return null;
       return { id: user.id, name: user.name, email: user.email, role: user.role };
     },
   })],
@@ -24,8 +42,8 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.uid = user.id;
-        const current = await db.user.findUnique({ where: { id: user.id }, select: { role: true, passwordHash: true, emailVerifiedAt: true } });
-        if (!current?.emailVerifiedAt) { delete token.uid; delete token.role; delete token.passwordVersion; return token; }
+        const current = await db.user.findUnique({ where: { id: user.id }, select: accountSelect });
+        if (!current || !canSignIn(current)) { delete token.uid; delete token.role; delete token.passwordVersion; return token; }
         token.role = current.role;
         token.passwordVersion = fingerprint(current.passwordHash);
         return token;
@@ -36,8 +54,8 @@ export const authOptions: NextAuthOptions = {
         delete token.uid; delete token.role; delete token.passwordVersion;
         return token;
       }
-      const current = await db.user.findUnique({ where: { id: token.uid }, select: { role: true, passwordHash: true, emailVerifiedAt: true } });
-      if (!current?.emailVerifiedAt || fingerprint(current.passwordHash) !== token.passwordVersion) {
+      const current = await db.user.findUnique({ where: { id: token.uid }, select: accountSelect });
+      if (!current || !canSignIn(current) || fingerprint(current.passwordHash) !== token.passwordVersion) {
         delete token.uid; delete token.role; delete token.passwordVersion;
         return token;
       }
