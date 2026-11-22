@@ -158,44 +158,36 @@ export async function GET() {
 
   await expireUnpaidBookings();
 
-  const bookings = await db.booking.findMany({
-    where:
-      who.role === 'TUTOR'
-        ? {
-            tutor: {
-              userId: who.id,
-            },
-          }
-        : {
-            parentId: who.id,
-          },
-    include: {
-      parent: {
-        select: {
-          name: true,
-        },
-      },
-      tutor: {
-        include: {
-          user: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      },
-      inquiry: {
-        select: {
-          subject: true,
-          grade: true,
-        },
-      },
-    },
-    orderBy: {
-      startsAt: 'asc',
-    },
-    take: 100,
-  });
+  const where = who.role === 'TUTOR'
+    ? { tutor: { userId: who.id } }
+    : { parentId: who.id };
+
+  const include = {
+    parent: { select: { name: true } },
+    tutor: { include: { user: { select: { name: true } } } },
+    inquiry: { select: { subject: true, grade: true } },
+  };
+
+  // Keep upcoming sessions visible even after a user has accumulated
+  // more than 100 historical bookings.
+  const now = new Date();
+  const [upcoming, recentHistory] = await Promise.all([
+    db.booking.findMany({
+      where: { ...where, startsAt: { gte: now } },
+      include,
+      orderBy: { startsAt: 'asc' },
+      take: 100,
+    }),
+    db.booking.findMany({
+      where: { ...where, startsAt: { lt: now } },
+      include,
+      orderBy: { startsAt: 'desc' },
+      take: 50,
+    }),
+  ]);
+  const bookings = [...upcoming, ...recentHistory].sort(
+    (a, b) => a.startsAt.getTime() - b.startsAt.getTime()
+  );
 
   return Response.json(bookings, {
     headers: responseHeaders,
