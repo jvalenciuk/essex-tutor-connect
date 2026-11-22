@@ -107,7 +107,7 @@ export async function expireUnpaidBookings(tutorId?: string) {
           { startsAt: { lte: now } },
         ],
       },
-      data: { status: 'CANCELLED' },
+      data: { status: 'EXPIRED' },
     });
     expired += result.count;
     if (result.count) {
