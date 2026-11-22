@@ -17,16 +17,36 @@ export async function GET(req: Request) {
   try {
     const dryRun = new URL(req.url).searchParams.get('dryRun') === 'true';
     if (dryRun) {
-      const [eligible, legacy] = await Promise.all([
-        db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: new Date() } } }),
-        db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: null } }),
+      const now = new Date();
+      const [eligible, legacyFuture] = await Promise.all([
+        db.booking.count({
+          where: {
+            status: 'PENDING_PAYMENT',
+            OR: [
+              { paymentDueAt: { lte: now } },
+              { startsAt: { lte: now } },
+            ],
+          },
+        }),
+        db.booking.count({
+          where: {
+            status: 'PENDING_PAYMENT',
+            paymentDueAt: null,
+            startsAt: { gt: now },
+          },
+        }),
       ]);
-      return Response.json({ success: true, dryRun: true, eligible, legacyUnchanged: legacy }, {
+      return Response.json({ success: true, dryRun: true, eligible, legacyFutureUnchanged: legacyFuture }, {
         headers: { 'Cache-Control': 'no-store' },
       });
     }
     const expiration = await expireUnpaidBookings();
-    return Response.json({ success: true, expiration }, {
+    const now = new Date();
+    const proposals = await db.booking.updateMany({
+      where: { status: 'PROPOSED', startsAt: { lte: now } },
+      data: { status: 'EXPIRED' },
+    });
+    return Response.json({ success: true, expiration, expiredProposals: proposals.count }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {

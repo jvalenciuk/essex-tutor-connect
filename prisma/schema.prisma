@@ -34,6 +34,7 @@ enum BookingStatus {
   PAID
   COMPLETED
   CANCELLED
+  EXPIRED
   REFUNDED
 }
 

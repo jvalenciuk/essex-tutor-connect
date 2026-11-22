@@ -165,7 +165,7 @@ async function sendTrackedNotification(
     if (
       !booking ||
       (type === 'REMINDER' && (booking.status !== 'PAID' || booking.startsAt <= new Date())) ||
-      (type === 'PAYMENT_EXPIRED' && booking.status !== 'CANCELLED')
+      (type === 'PAYMENT_EXPIRED' && booking.status !== 'EXPIRED' && booking.status !== 'CANCELLED')
     ) {
       await db.notificationDelivery.update({
         where: { id: existing.id },
