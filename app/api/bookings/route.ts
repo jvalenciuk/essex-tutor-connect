@@ -112,6 +112,7 @@ export async function POST(req: Request) {
         },
       });
       if (!activeInquiry) throw new Error('INQUIRY_NO_LONGER_ACCEPTED');
+      if (startsAt.getTime() <= Date.now()) throw new Error('BOOKING_TIME_PASSED');
 
       // Price the session using the tutor's rate read in this transaction,
       // rather than a rate fetched before waiting for the booking lock.
@@ -179,6 +180,9 @@ export async function POST(req: Request) {
     }
     if (error instanceof Error && error.message === 'INQUIRY_NO_LONGER_ACCEPTED') {
       return fail('This inquiry is no longer accepted or the tutor is no longer approved. Refresh and try again.', 409);
+    }
+    if (error instanceof Error && error.message === 'BOOKING_TIME_PASSED') {
+      return fail('This session start time has passed. Choose a later time.', 409);
     }
     console.error('Booking creation transaction failed', error);
     return fail('Unable to create the booking. Please try again.', 503);
