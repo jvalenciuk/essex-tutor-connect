@@ -213,6 +213,32 @@ async function sendTrackedNotification(
   }
 }
 
+export async function retryExpirationNotifications() {
+  const retryBefore = new Date(Date.now() - LOCK_TIMEOUT_MS);
+  const pending = await db.notificationDelivery.findMany({
+    where: {
+      type: 'PAYMENT_EXPIRED',
+      booking: { status: { in: ['EXPIRED', 'CANCELLED'] } },
+      OR: [
+        { status: 'PENDING' },
+        { status: 'FAILED', updatedAt: { lt: retryBefore } },
+        { status: 'PROCESSING', updatedAt: { lt: retryBefore } },
+      ],
+    },
+    orderBy: { updatedAt: 'asc' },
+    take: 50,
+    select: { bookingId: true },
+  });
+  const bookingIds = [...new Set(pending.map(delivery => delivery.bookingId))];
+  const outcomes = await Promise.allSettled(
+    bookingIds.map(id => notifyBooking(id, 'PAYMENT_EXPIRED'))
+  );
+  return {
+    bookings: bookingIds.length,
+    failed: outcomes.filter(outcome => outcome.status === 'rejected').length,
+  };
+}
+
 export async function notifyBooking(
   bookingId: string,
   type: NotificationType
