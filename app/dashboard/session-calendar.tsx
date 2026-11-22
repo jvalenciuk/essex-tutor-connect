@@ -348,7 +348,12 @@ export default function SessionCalendar({
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
       setCreatedBookingId(typeof result.id === 'string' ? result.id : '');
-      setBookingNotice(role === 'PARENT' ? 'Session requested. Your tutor can review and respond.' : 'Session proposed. The parent can now review and accept it.');
+      const submittedTime = localStart.toLocaleString('en-CA', {
+        timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
+      });
+      setBookingNotice(
+        `${role === 'PARENT' ? 'Session requested' : 'Session proposed'} for ${submittedTime} (Windsor / Eastern Time), ${bookingDuration} minutes. ${role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
+      );
       setShowBookingForm(false);
       await loadCalendar();
       window.dispatchEvent(new Event('essex:bookings-updated'));
