@@ -940,7 +940,7 @@ export default function SessionCalendar({
 
         {(role === 'TUTOR' || role === 'PARENT') && (
           <div style={{ marginBottom: 16 }}>
-            <button type="button" onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
+            <button type="button" disabled={bookingBusy} onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
               {showBookingForm ? 'Close booking form' : role === 'PARENT' ? '+ Request a session on this date' : '+ Propose a session on this date'}
             </button>
             {showBookingForm && (
@@ -955,6 +955,7 @@ export default function SessionCalendar({
                 <label htmlFor="calendar-session-date">Session date</label>
                 <input
                   id="calendar-session-date"
+                  disabled={bookingBusy}
                   className="field"
                   type="date"
                   required
@@ -971,13 +972,13 @@ export default function SessionCalendar({
                 />
                 <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
                 <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
-                <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
+                <select id="calendar-parent" disabled={bookingBusy} className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
                   <option value="">{role === 'PARENT' ? 'Select a tutor' : 'Select a parent'}</option>
                   {bookingContacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name} — {contact.subject} ({contact.grade})</option>)}
                 </select>
                 {bookingContacts.length === 0 && <p className="muted">{role === 'PARENT' ? 'No accepted tutor inquiries yet. Contact a tutor and wait for their acceptance first.' : 'No accepted parent inquiries yet. Accept an inquiry first.'}</p>}
                 <label htmlFor="calendar-start">Start time (Eastern Time)</label>
-                <select id="calendar-start" className="field" value={bookingTime} onChange={event => { setBookingTime(event.target.value); setBookingError(''); }} required>
+                <select id="calendar-start" disabled={bookingBusy} className="field" value={bookingTime} onChange={event => { setBookingTime(event.target.value); setBookingError(''); }} required>
                   {Array.from({ length: 61 }, (_, index) => {
                     const totalMinutes = 7 * 60 + index * 15;
                     const hour = Math.floor(totalMinutes / 60);
@@ -995,7 +996,7 @@ export default function SessionCalendar({
                 </select>
                 <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
                 <label htmlFor="calendar-duration">Duration</label>
-                <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => { setBookingDuration(event.target.value); setBookingError(''); }}>
+                <select id="calendar-duration" disabled={bookingBusy} className="field" value={bookingDuration} onChange={event => { setBookingDuration(event.target.value); setBookingError(''); }}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
                 </select>
                 <div aria-label="Review session details" style={{ margin: '16px 0', padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
