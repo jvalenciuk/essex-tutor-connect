@@ -12,7 +12,13 @@ const bookingSchema = z.object({
   startsAt: z.string().datetime({
     offset: true,
   }),
-  durationMinutes: z.number().int().min(30).max(180),
+  durationMinutes: z.union([
+    z.literal(30),
+    z.literal(60),
+    z.literal(90),
+    z.literal(120),
+    z.literal(180),
+  ]),
 });
 
 export async function POST(req: Request) {
@@ -34,6 +40,28 @@ export async function POST(req: Request) {
 
   if (startsAt.getTime() <= Date.now()) {
     return fail('Choose a future date and time', 400);
+  }
+
+  // Match the 15-minute start-time increments and 7 a.m.–10 p.m.
+  // Eastern Time choices offered by the calendar booking form.
+  const easternParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Toronto',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(startsAt);
+  const localHour = Number(easternParts.find(part => part.type === 'hour')?.value);
+  const localMinute = Number(easternParts.find(part => part.type === 'minute')?.value);
+  if (
+    !Number.isInteger(localHour) ||
+    !Number.isInteger(localMinute) ||
+    localHour < 7 ||
+    localHour > 22 ||
+    localMinute % 15 !== 0 ||
+    startsAt.getUTCSeconds() !== 0 ||
+    startsAt.getUTCMilliseconds() !== 0
+  ) {
+    return fail('Choose a start time between 7:00 a.m. and 10:45 p.m. Eastern, in 15-minute increments.', 400);
   }
 
   const inquiry = await db.inquiry.findFirst({
