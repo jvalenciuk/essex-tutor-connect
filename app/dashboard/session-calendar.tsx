@@ -173,6 +173,7 @@ export default function SessionCalendar({
   const bookingSubmissionInFlight = useRef(false);
   const [bookingNotice, setBookingNotice] = useState('');
   const [createdBookingId, setCreatedBookingId] = useState('');
+  const [reusedBooking, setReusedBooking] = useState(false);
   const [bookingError, setBookingError] = useState('');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [calendarFeedback, setCalendarFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
@@ -310,6 +311,7 @@ export default function SessionCalendar({
     setBookingError('');
     setBookingNotice('');
     setCreatedBookingId('');
+    setReusedBooking(false);
     if (!contactId || !bookingContacts.some(contact => contact.id === contactId)) {
       setBookingError(role === 'PARENT' ? 'Choose an accepted tutor inquiry.' : 'Choose an accepted parent inquiry.');
       return;
@@ -379,6 +381,7 @@ export default function SessionCalendar({
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
       setCreatedBookingId(typeof result.id === 'string' ? result.id : '');
+      setReusedBooking(result.alreadyExists === true);
       const submittedTime = localStart.toLocaleString('en-CA', {
         timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
       });
@@ -1028,9 +1031,9 @@ export default function SessionCalendar({
             )}
             {bookingNotice && (
               <div role="status" style={{ marginTop: 12, padding: 16, border: '1px solid #86b89b', borderRadius: 8 }}>
-                <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>Session {role === 'PARENT' ? 'request' : 'proposal'} sent successfully</p>
+                <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>{reusedBooking ? 'Existing session found — no duplicate created' : `Session ${role === 'PARENT' ? 'request' : 'proposal'} sent successfully`}</p>
                 <p>{bookingNotice}</p>
-                <p className="muted">This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.</p>
+                <p className="muted">{reusedBooking ? 'The original session and its current status are unchanged. Review it in My Sessions.' : 'This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.'}</p>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
                   <a className="button" href={`/dashboard/bookings?tab=${'waiting'}${createdBookingId ? `&booking=${encodeURIComponent(createdBookingId)}` : ''}`}>Track in My Sessions</a>
                   <button type="button" onClick={() => {
