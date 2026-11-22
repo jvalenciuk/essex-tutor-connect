@@ -391,7 +391,13 @@ export default function SessionCalendar({
         `${role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${bookingDuration} minutes (Windsor / Eastern Time). ${role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
       );
       setShowBookingForm(false);
-      await loadCalendar();
+      // Booking creation has succeeded. A calendar refresh is secondary and
+      // must not turn a successful submission into an apparent failed request.
+      try {
+        await loadCalendar();
+      } catch {
+        setError('Your session request was sent, but the calendar could not refresh. Reload the calendar to see it.');
+      }
       window.dispatchEvent(new Event('essex:bookings-updated'));
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : 'Unable to propose session.');
