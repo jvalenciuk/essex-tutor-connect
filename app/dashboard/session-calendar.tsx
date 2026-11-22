@@ -307,7 +307,14 @@ export default function SessionCalendar({
     setBookingError('');
     setBookingNotice('');
     setCreatedBookingId('');
-    if (!contactId) { setBookingError(role === 'PARENT' ? 'Choose a tutor.' : 'Choose a parent.'); return; }
+    if (!contactId || !bookingContacts.some(contact => contact.id === contactId)) {
+      setBookingError(role === 'PARENT' ? 'Choose an accepted tutor inquiry.' : 'Choose an accepted parent inquiry.');
+      return;
+    }
+    if (![30, 60, 90, 120, 180].includes(Number(bookingDuration))) {
+      setBookingError('Choose a supported session duration.');
+      return;
+    }
     if (selectedDate < localDateKey(new Date())) {
       setBookingError('This date has already passed. Please choose a future session date.');
       return;
@@ -325,7 +332,9 @@ export default function SessionCalendar({
       checkedDate.getUTCMonth() + 1 !== monthNumber ||
       checkedDate.getUTCDate() !== day ||
       checkedDate.getUTCHours() !== hour ||
-      checkedDate.getUTCMinutes() !== minute
+      checkedDate.getUTCMinutes() !== minute ||
+      minute % 15 !== 0 ||
+      hour < 7 || hour > 22
     ) {
       setBookingError('Enter a valid session date and time.');
       return;
