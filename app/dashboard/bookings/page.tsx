@@ -443,8 +443,18 @@ export default function MyBookingsPage() {
   );
 
   const waiting = sorted.filter(b => category(b, role) === 'waiting')
-    .sort((a, b) => new Date(a.requestedStartsAt || a.startsAt).getTime() -
-      new Date(b.requestedStartsAt || b.startsAt).getTime());
+    .sort((a, b) => {
+      const aPayment = a.status === 'PENDING_PAYMENT';
+      const bPayment = b.status === 'PENDING_PAYMENT';
+      if (aPayment !== bPayment) return aPayment ? -1 : 1;
+      if (aPayment && bPayment) {
+        const aDeadline = a.paymentDueAt ? new Date(a.paymentDueAt).getTime() : Infinity;
+        const bDeadline = b.paymentDueAt ? new Date(b.paymentDueAt).getTime() : Infinity;
+        if (aDeadline !== bDeadline) return aDeadline - bDeadline;
+      }
+      return new Date(a.requestedStartsAt || a.startsAt).getTime() -
+        new Date(b.requestedStartsAt || b.startsAt).getTime();
+    });
 
   const history = sorted
     .filter(b => category(b, role) === 'history')
