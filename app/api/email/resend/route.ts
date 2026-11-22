@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 const schema = z.object({ email: z.string().trim().email().max(200) });
-const generic = { message: 'If the account requires verification, a new link will be sent to the test inbox.' };
+const generic = { message: 'If the account requires verification, a new link will be sent.' };
 export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Enter a valid email address.' }, { status: 400 });

@@ -1,4 +1,5 @@
 
+import { accountEmailConfig } from '../../../lib/account-email';
 import { db } from '../../../lib/db';
 import { fail } from '../../../lib/security';
 import { z } from 'zod';
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
       return fail('Email already registered', 409);
     }
 
-    if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM || !process.env.EMAIL_TEST_TO || !process.env.NEXTAUTH_SECRET) {
+    if (!accountEmailConfig()) {
       return fail('New account registration is temporarily unavailable while email verification is being configured.', 503);
     }
 

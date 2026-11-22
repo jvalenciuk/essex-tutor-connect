@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { accountEmailConfig, sendAccountEmail } from './account-email';
 
 const DURATION = 24 * 60 * 60 * 1000;
 function sign(payload: string, passwordHash: string) {
@@ -27,18 +28,10 @@ export function checkEmailVerificationToken(token: string, passwordHash: string)
   return timingSafeEqual(Buffer.from(provided, 'hex'), Buffer.from(sign(payload, passwordHash), 'hex'));
 }
 export async function sendVerificationEmail(user: { id: string; email: string; passwordHash: string }) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-  const testTo = process.env.EMAIL_TEST_TO;
-  const base = process.env.VERCEL_ENV === 'preview' ? 'https://we-learn-stripe-preview.vercel.app' : (process.env.APP_URL || process.env.NEXTAUTH_URL);
-  if (!key || !from || !testTo || !base) throw new Error('Verification email testing is not configured');
-  const url = new URL('/verify-email', base);
+  const config = accountEmailConfig();
+  if (!config) throw new Error('Verification email is not configured');
+  const url = new URL('/verify-email', config.origin);
   url.searchParams.set('token', makeEmailVerificationToken(user.id, user.email, user.passwordHash));
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [testTo], subject: 'WE Learn: verify your email (Preview test)', text: 'Intended recipient: ' + user.email + '\nPreview testing only. Verify your email within 24 hours:\n' + url.toString() }),
-    cache: 'no-store',
-  });
-  if (!response.ok) throw new Error('Verification email delivery failed: ' + response.status);
+  await sendAccountEmail(config, user.email, 'WE Learn: verify your email',
+    'Verify your email within 24 hours:\n' + url.toString());
 }
