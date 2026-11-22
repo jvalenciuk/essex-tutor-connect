@@ -398,13 +398,14 @@ export default async function Dashboard({
 
   const pendingInquiryItems = inquiries.filter(inquiry => inquiry.status === 'OPEN');
   const acceptedInquiryItems = inquiries.filter(inquiry => inquiry.status === 'ACCEPTED');
-  const bookingContactsByPerson = new Map<string, { id: string; name: string; subject: string; grade: string }>();
+  const bookingContactsByPerson = new Map<string, { id: string; name: string; subject: string; grade: string; tutorId: string }>();
   if (isParent || isTutor) {
     for (const inquiry of acceptedInquiryItems) {
       const personId = isTutor ? inquiry.parentId : inquiry.tutorId;
       if (bookWith && bookingContactsByPerson.get(personId)?.id === bookWith) continue;
       bookingContactsByPerson.set(personId, {
         id: inquiry.id,
+        tutorId: inquiry.tutorId,
         name: isTutor ? inquiry.parent.name || 'Parent' : inquiry.tutor.user.name || 'Tutor',
         subject: inquiry.subject,
         grade: inquiry.grade,

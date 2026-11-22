@@ -524,6 +524,9 @@ export default function MyBookingsPage() {
       booking.status === 'PAID' &&
       end <= now;
 
+    const newRequest = booking.status === 'CHANGE_REQUESTED' &&
+      booking.requestedStartsAt === booking.startsAt &&
+      booking.requestedDurationMinutes === booking.durationMinutes && !booking.requestNote;
     const section = category(booking, role);
     const nextStep =
       section === 'history' ? null :
@@ -565,10 +568,10 @@ export default function MyBookingsPage() {
               {booking.inquiry?.subject || 'Tutoring session'}
             </h3>
             <strong>{dateText(booking.startsAt)}</strong>
-            {booking.status === 'CHANGE_REQUESTED' && (
+            {booking.status === 'CHANGE_REQUESTED' && !newRequest && (
               <span className="muted" style={{ fontSize: 12, display: 'block' }}>Original proposed time</span>
             )}
-            {booking.status === 'CHANGE_REQUESTED' && booking.requestedStartsAt && (
+            {booking.status === 'CHANGE_REQUESTED' && !newRequest && booking.requestedStartsAt && (
               <p style={{ margin: '6px 0 0', fontSize: 13 }}>
                 Requested replacement: {dateText(booking.requestedStartsAt)}
                 {' · '}{booking.requestedDurationMinutes || booking.durationMinutes} min
@@ -579,14 +582,14 @@ export default function MyBookingsPage() {
           <strong style={{ color: accent }}>
             {['PROPOSED', 'CHANGE_REQUESTED'].includes(booking.status) &&
               new Date(booking.status === 'CHANGE_REQUESTED' ? booking.requestedStartsAt || booking.startsAt : booking.startsAt).getTime() <= now
-              ? 'Proposed time passed (not confirmed)' : labels[booking.status] || booking.status}
+              ? 'Proposed time passed (not confirmed)' : newRequest ? 'Session requested' : labels[booking.status] || booking.status}
           </strong>
         </div>
 
         <p style={{ margin: '10px 0' }}>
           <strong>{isTutor ? booking.parent?.name || 'Parent' : booking.tutor?.user?.name || 'Tutor'}</strong>
           {booking.inquiry?.grade && <span> · {booking.inquiry.grade}</span>}
-          <span> · {booking.durationMinutes} min{booking.status === 'CHANGE_REQUESTED' ? ' (original)' : ''}</span>
+          <span> · {booking.durationMinutes} min{booking.status === 'CHANGE_REQUESTED' && !newRequest ? ' (original)' : ''}</span>
           <span> · <strong>{money(booking.amountCents)}</strong></span>
         </p>
 
@@ -612,7 +615,7 @@ export default function MyBookingsPage() {
           </div>
         </details>
 
-        {booking.status === 'CHANGE_REQUESTED' && (
+        {booking.status === 'CHANGE_REQUESTED' && !newRequest && (
           <div
             style={{
               padding: '14px 16px',
@@ -713,7 +716,7 @@ export default function MyBookingsPage() {
                   acceptRequestedTime(booking)
                 }
               >
-                Accept Requested Time
+                {newRequest ? 'Accept request' : 'Accept Requested Time'}
               </button>
 
               <button

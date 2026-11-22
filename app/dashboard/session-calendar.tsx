@@ -26,10 +26,16 @@ type CalendarBooking = {
   } | null;
 };
 
-type BookingContact = { id: string; name: string; subject: string; grade: string };
+type BookingContact = { id: string; tutorId: string; name: string; subject: string; grade: string };
 
 type AvailabilityResponse = {
   blockedDates: string[];
+};
+
+type TutorAvailability = {
+  weekly: { dayOfWeek: number; startMinute: number; endMinute: number }[];
+  blockedDates: string[];
+  busy: { startsAt: string; durationMinutes: number }[];
 };
 
 const ZONE = 'America/Toronto';
@@ -208,6 +214,61 @@ export default function SessionCalendar({
     localDateKey(new Date())
   );
 
+  const tutorId = role === 'PARENT' ? bookingContacts.find(contact => contact.id === contactId)?.tutorId : undefined;
+  const availabilityKey = tutorId ? tutorId + ':' + selectedDate : '';
+  const [availability, setAvailability] = useState<{ key: string; data: TutorAvailability | null }>();
+  useEffect(() => {
+    if (!showBookingForm || !tutorId) return;
+    const controller = new AbortController();
+    fetch('/api/tutors/' + encodeURIComponent(tutorId) + '/availability?date=' + encodeURIComponent(selectedDate), {
+      cache: 'no-store', signal: controller.signal,
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Unable to load availability');
+        return response.json() as Promise<TutorAvailability>;
+      })
+      .then(data => {
+        if (!controller.signal.aborted) setAvailability({ key: availabilityKey, data });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAvailability({ key: availabilityKey, data: null });
+      });
+    return () => controller.abort();
+  }, [showBookingForm, tutorId, selectedDate, availabilityKey]);
+
+  const availabilityLoading = Boolean(tutorId && availability?.key !== availabilityKey);
+  const tutorAvailability = availability?.key === availabilityKey ? availability?.data : null;
+  const bookingToday = localDateKey(new Date());
+  const timeParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const currentMinute = Number(timeParts.find(part => part.type === 'hour')?.value) * 60 +
+    Number(timeParts.find(part => part.type === 'minute')?.value);
+  const weekday = new Date(selectedDate + 'T12:00:00Z').getUTCDay();
+  const dateOffset = new Date(selectedDate + 'T12:00:00Z').toLocaleTimeString('en-US', {
+    timeZone: ZONE, timeZoneName: 'longOffset',
+  }).match(/GMT([+-]\d{2}:\d{2})/)?.[1] || '-05:00';
+  const timeOptions = Array.from({ length: 61 }, (_, index) => {
+    const start = 7 * 60 + index * 15;
+    const end = start + Number(bookingDuration);
+    const hour = Math.floor(start / 60);
+    const minute = start % 60;
+    const value = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+    const label = (hour % 12 || 12) + ':' + String(minute).padStart(2, '0') + (hour < 12 ? ' AM' : ' PM');
+    const startsAt = Date.parse(selectedDate + 'T' + value + ':00' + dateOffset);
+    const endsAt = startsAt + Number(bookingDuration) * 60_000;
+    const overlaps = tutorAvailability?.busy.some(booking => {
+      const busyStart = Date.parse(booking.startsAt);
+      return busyStart < endsAt && startsAt < busyStart + booking.durationMinutes * 60_000;
+    });
+    const withinHours = !tutorAvailability?.weekly.length || tutorAvailability.weekly.some(hours =>
+      hours.dayOfWeek === weekday && start >= hours.startMinute && end <= hours.endMinute && end < 1440);
+    const available = selectedDate >= bookingToday && (selectedDate !== bookingToday || start > currentMinute) &&
+      end <= 1440 && !tutorAvailability?.blockedDates.includes(selectedDate) && withinHours && !overlaps;
+    return { value, label, available };
+  }).filter(option => option.available);
+  const selectedBookingTime = timeOptions.some(option => option.value === bookingTime) ? bookingTime : '';
+
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   const [loading, setLoading] =
@@ -328,7 +389,11 @@ export default function SessionCalendar({
     }
     // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
-    const [hour, minute] = bookingTime.split(':').map(Number);
+    if (availabilityLoading || !selectedBookingTime) {
+      setBookingError('Choose an available start time.');
+      return;
+    }
+    const [hour, minute] = selectedBookingTime.split(':').map(Number);
     const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
     const checkedDate = new Date(wallClockUtc);
     if (
@@ -1004,23 +1069,13 @@ export default function SessionCalendar({
                 </select>
                 {bookingContacts.length === 0 && <p className="muted">{role === 'PARENT' ? 'No accepted tutor inquiries yet. Contact a tutor and wait for their acceptance first.' : 'No accepted parent inquiries yet. Accept an inquiry first.'}</p>}
                 <label htmlFor="calendar-start">Start time (Eastern Time)</label>
-                <select id="calendar-start" disabled={bookingBusy} className="field" value={bookingTime} onChange={event => { setBookingTime(event.target.value); setBookingError(''); }} required>
-                  {Array.from({ length: 61 }, (_, index) => {
-                    const totalMinutes = 7 * 60 + index * 15;
-                    const hour = Math.floor(totalMinutes / 60);
-                    const minute = totalMinutes % 60;
-                    const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                    const label = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
-                    const nowInWindsor = new Intl.DateTimeFormat('en-CA', {
-                      timeZone: ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-                    }).formatToParts(new Date());
-                    const currentHour = Number(nowInWindsor.find(part => part.type === 'hour')?.value || 0);
-                    const currentMinute = Number(nowInWindsor.find(part => part.type === 'minute')?.value || 0);
-                    const isPastToday = selectedDate === localDateKey(new Date()) && totalMinutes <= currentHour * 60 + currentMinute;
-                    return <option key={value} value={value} disabled={isPastToday}>{label}{isPastToday ? ' (passed)' : ''}</option>;
-                  })}
+                <select id="calendar-start" disabled={bookingBusy || availabilityLoading} className="field" value={selectedBookingTime} onChange={event => { setBookingTime(event.target.value); setBookingError(''); }} required>
+                  <option value="">Choose a start time</option>
+                  {timeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
-                <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
+                {availabilityLoading && <p role="status">Checking tutor availability…</p>}
+                {!availabilityLoading && timeOptions.length === 0 && <p role="status">No start times for this date and duration. Try a different date or duration.</p>}
+                {tutorId && !availabilityLoading && !tutorAvailability && <p role="status">Tutor availability could not be loaded. We’ll check the selected time when you submit.</p>}
                 <label htmlFor="calendar-duration">Duration</label>
                 <select id="calendar-duration" disabled={bookingBusy} className="field" value={bookingDuration} onChange={event => { setBookingDuration(event.target.value); setBookingError(''); }}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
@@ -1029,10 +1084,11 @@ export default function SessionCalendar({
                   <strong>Review before sending</strong>
                   <p style={{ margin: '8px 0 4px' }}><strong>{role === 'PARENT' ? 'Tutor' : 'Parent'}:</strong> {bookingContacts.find(contact => contact.id === contactId)?.name || 'Not selected'}</p>
                   <p style={{ margin: '4px 0' }}><strong>Date:</strong> {selectedDate}</p>
-                  <p style={{ margin: '4px 0' }}><strong>Start:</strong> {bookingTime} Eastern Time</p>
+                  <p style={{ margin: '4px 0' }}><strong>Start:</strong> {selectedBookingTime ? selectedBookingTime + ' Eastern Time' : 'Choose a start time'}</p>
                   <p style={{ margin: '4px 0' }}><strong>Duration:</strong> {bookingDuration} minutes</p>
                   <p style={{ margin: '4px 0' }}><strong>Ends:</strong> {(() => {
-                    const [hours, minutes] = bookingTime.split(':').map(Number);
+                    if (!selectedBookingTime) return '—';
+                    const [hours, minutes] = selectedBookingTime.split(':').map(Number);
                     const total = hours * 60 + minutes + Number(bookingDuration);
                     const endHour = Math.floor(total / 60) % 24;
                     const endMinute = total % 60;
@@ -1040,7 +1096,7 @@ export default function SessionCalendar({
                   })()} Eastern Time</p>
                   <p className="muted" style={{ margin: '8px 0 0' }}>The other person must respond before the session is confirmed.</p>
                 </div>
-                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Submitting...' : role === 'PARENT' ? 'Send session request' : 'Send proposal to parent'}</button>
+                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0 || availabilityLoading || !selectedBookingTime}>{bookingBusy ? 'Submitting...' : role === 'PARENT' ? 'Send session request' : 'Send proposal to parent'}</button>
                 {bookingError && <p role="alert" className="error">{bookingError}</p>}
               </form>
             )}
