@@ -1,4 +1,5 @@
-import { getActiveTutorStripeAccountId, getConfiguredStripeOnboardingSecret } from '../../lib/stripe-config';
+import { getActiveTutorStripeAccountId } from '../../lib/stripe-config';
+import { getStripeStatus } from '../../lib/stripe-capabilities';
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -16,16 +17,6 @@ import ConversationDeepLink from './conversation-deep-link';
 
 export const dynamic = 'force-dynamic';
 
-type StripeStatus = {
-  connected: boolean;
-  paymentsEnabled: boolean;
-  payoutsEnabled: boolean;
-  payoutsRestricted: boolean;
-  transfersStatus: string;
-  transfersDetail?: string;
-  error?: string;
-};
-
 function money(cents: number): string {
   return new Intl.NumberFormat('en-CA', {
     style: 'currency',
@@ -39,79 +30,6 @@ function sessionDate(date: Date): string {
     timeStyle: 'short',
     timeZone: 'America/Toronto',
   }).format(date);
-}
-
-async function getStripeStatus(
-  accountId: string | null | undefined
-): Promise<StripeStatus> {
-  const empty: StripeStatus = {
-    connected: false,
-    paymentsEnabled: false,
-    payoutsEnabled: false,
-    payoutsRestricted: false,
-    transfersStatus: 'Unavailable',
-  };
-
-  if (!accountId) return empty;
-
-  const key = getConfiguredStripeOnboardingSecret();
-  if (!key) {
-    return { ...empty, connected: true, error: 'Stripe configuration unavailable.' };
-  }
-
-  try {
-    const url = new URL(
-      `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
-    );
-    url.searchParams.append('include[0]', 'configuration.merchant');
-    url.searchParams.append('include[1]', 'configuration.recipient');
-
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Stripe-Version': '2026-10-28.endive',
-      },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => null);
-      console.error('Stripe account status lookup failed', response.status, errorBody?.error?.message ?? errorBody?.error?.code ?? 'No Stripe error details');
-      return { ...empty, connected: true, error: 'Unable to verify Stripe status.' };
-    }
-
-    const account = await response.json();
-    const capabilities = account.configuration?.merchant?.capabilities;
-    if (!capabilities) {
-      return { ...empty, connected: true, error: 'Stripe capabilities unavailable.' };
-    }
-
-    const paymentStatus = capabilities.card_payments?.status;
-    const payoutStatus = capabilities.stripe_balance?.payouts?.status;
-    const transferCapability = account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers;
-    const transferStatus = transferCapability?.status;
-    const transferRequested = transferCapability?.requested;
-    const recipient = account.configuration?.recipient;
-    const transferDetails = !recipient
-      ? 'Stripe did not return a recipient configuration. The account cannot yet receive destination transfers.'
-      : !transferCapability
-      ? 'Recipient configuration exists, but Stripe did not return the stripe_transfers capability.'
-      : transferCapability.status_details?.code
-      ? `Stripe reason: ${transferCapability.status_details.code}`
-      : undefined;
-
-    return {
-      connected: true,
-      paymentsEnabled: paymentStatus === 'active',
-      payoutsEnabled: payoutStatus === 'active',
-      payoutsRestricted: payoutStatus === 'restricted',
-      transfersDetail: transferDetails,
-      transfersStatus: transferStatus === 'active' ? 'Active — destination transfers allowed' : transferStatus === 'restricted' ? 'Restricted — Stripe requirements outstanding' : transferStatus === 'pending' ? 'Pending Stripe review' : transferRequested ? `Requested — ${transferStatus || 'awaiting activation'}` : transferStatus ? `Not active (${transferStatus})` : 'Not requested or not returned by Stripe',
-    };
-  } catch (error) {
-    console.error('Stripe account status check failed', error);
-    return { ...empty, connected: true, error: 'Stripe status check failed.' };
-  }
 }
 
 function StatCard({
@@ -212,7 +130,7 @@ export default async function Dashboard({
     (profile?._count.availability ?? 0) > 0;
 
   const stripeReady = Boolean(
-    stripe?.paymentsEnabled && stripe?.payoutsEnabled
+    stripe?.transfersEnabled && stripe?.payoutsEnabled
   );
 
   const setupSteps = [
