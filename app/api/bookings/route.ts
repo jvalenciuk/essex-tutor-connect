@@ -69,6 +69,24 @@ export async function POST(req: Request) {
     booking = await db.$transaction(async tx => {
       await tx.$queryRaw`SELECT 1 AS lock_acquired FROM pg_advisory_xact_lock(hashtext(${inquiry.tutorId}))`;
 
+      // Revalidate authorization and approval after acquiring the tutor lock.
+      // An inquiry may have been closed or a tutor unapproved since the
+      // initial lookup, while the request was waiting to enter the transaction.
+      const activeInquiry = await tx.inquiry.findFirst({
+        where: {
+          id: inquiry.id,
+          status: 'ACCEPTED',
+          tutorId: inquiry.tutorId,
+          tutor: {
+            ...(who.role === 'TUTOR' ? { userId: who.id } : {}),
+            verification: 'APPROVED',
+          },
+          ...(who.role === 'PARENT' ? { parentId: who.id } : {}),
+        },
+        select: { id: true },
+      });
+      if (!activeInquiry) throw new Error('INQUIRY_NO_LONGER_ACCEPTED');
+
       const issue = await checkTutorSlot(
         inquiry.tutorId,
         startsAt,
@@ -125,6 +143,9 @@ export async function POST(req: Request) {
     }
     if (error instanceof Error && error.message === 'DUPLICATE_BOOKING') {
       return fail('A booking already exists for this date and time', 409);
+    }
+    if (error instanceof Error && error.message === 'INQUIRY_NO_LONGER_ACCEPTED') {
+      return fail('This inquiry is no longer accepted or the tutor is no longer approved. Refresh and try again.', 409);
     }
     console.error('Booking creation transaction failed', error);
     return fail('Unable to create the booking. Please try again.', 503);
