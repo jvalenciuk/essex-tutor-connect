@@ -516,10 +516,7 @@ export default async function Dashboard({
                 </p>
                 {stripe.payoutsRestricted && !stripe.error && (
                   <p className="muted">
-                    Stripe has restricted payouts. Complete any outstanding
-                    identity or account verification requirements in Stripe
-                    before expecting bank payouts. Payments received are not
-                    the same as funds available to withdraw.
+                    {stripe.payoutRestrictionDetail || 'Stripe has restricted payouts. Open Stripe to review the outstanding requirements.'}
                   </p>
                 )}
               </>

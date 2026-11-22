@@ -125,7 +125,7 @@ export default async function TutorOnboarding() {
         ? stripe.error
         : stripe.connected
         ? stripe.payoutsRestricted
-        ? 'Bank payouts require Stripe verification.'
+        ? stripe.payoutRestrictionDetail || 'Open Stripe to review its payout requirements.'
         : 'Continue Stripe onboarding or verification'
         : 'Connect your Stripe account below.',
     },
@@ -311,9 +311,9 @@ export default async function TutorOnboarding() {
               Bank payouts:
             </strong>
             {' '}
-            {stripe.payoutsEnabled
+            {stripe.error ? 'Status unavailable' : stripe.payoutsEnabled
               ? 'Enabled'
-              : 'Not yet enabled'}
+              : stripe.payoutsRestricted ? 'Restricted' : 'Not yet enabled'}
           </p>
 
           {stripe.error && (

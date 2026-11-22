@@ -47,20 +47,32 @@ type StripeStatus = {
   transfersEnabled: boolean;
   payoutsEnabled: boolean;
   payoutsRestricted: boolean;
+  payoutRestrictionDetail?: string;
   transfersStatus: string;
   transfersDetail?: string;
   error?: string;
 };
 
+type CapabilityDetail = { code?: string };
+type Capability = {
+  status?: string;
+  requested?: boolean;
+  status_details?: CapabilityDetail | CapabilityDetail[];
+};
 type StripeAccount = {
   configuration?: {
-    merchant?: { capabilities?: { card_payments?: { status?: string }; stripe_balance?: { payouts?: { status?: string } } } };
-    recipient?: { capabilities?: { stripe_balance?: { stripe_transfers?: { status?: string; requested?: boolean; status_details?: { code?: string } } } } };
+    merchant?: { capabilities?: { card_payments?: Capability; stripe_balance?: { payouts?: Capability } } };
+    recipient?: { capabilities?: { stripe_balance?: { stripe_transfers?: Capability; payouts?: Capability } } };
   };
 };
 
 function recipientTransfers(account: StripeAccount | null | undefined) {
   return account?.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers;
+}
+
+function capabilityReason(capability: Capability | undefined) {
+  const details = capability?.status_details;
+  return Array.isArray(details) ? details.find(detail => detail.code)?.code : details?.code;
 }
 
 export async function getStripeStatus(
@@ -106,17 +118,23 @@ export async function getStripeStatus(
     const account: StripeAccount = await response.json();
     const capabilities = account?.configuration?.merchant?.capabilities;
     const paymentStatus = capabilities?.card_payments?.status;
-    const payoutStatus = capabilities?.stripe_balance?.payouts?.status;
+    const recipientPayouts = account?.configuration?.recipient?.capabilities?.stripe_balance?.payouts;
+    const payoutCapability = recipientPayouts?.status ? recipientPayouts : capabilities?.stripe_balance?.payouts;
+    const payoutStatus = payoutCapability?.status;
+    const payoutRestrictionDetail = payoutStatus === 'restricted' && capabilityReason(payoutCapability) === 'requirements_past_due'
+      ? 'A Stripe requirement is past due. Open Stripe to review and complete the outstanding requirement.'
+      : undefined;
     const transferCapability = recipientTransfers(account);
     const transferStatus = transferCapability?.status;
     const transferRequested = transferCapability?.requested;
+    const transferReason = capabilityReason(transferCapability);
     const recipient = account?.configuration?.recipient;
     const transferDetails = !recipient
       ? 'Stripe did not return a recipient configuration. The account cannot yet receive destination transfers.'
       : !transferCapability
       ? 'Recipient configuration exists, but Stripe did not return the stripe_transfers capability.'
-      : transferCapability.status_details?.code
-      ? `Stripe reason: ${transferCapability.status_details.code}`
+      : transferReason
+      ? `Stripe reason: ${transferReason}`
       : undefined;
 
     return {
@@ -125,6 +143,7 @@ export async function getStripeStatus(
       transfersEnabled: transferStatus === 'active',
       payoutsEnabled: payoutStatus === 'active',
       payoutsRestricted: payoutStatus === 'restricted',
+      payoutRestrictionDetail,
       transfersDetail: transferDetails,
       transfersStatus: transferStatus === 'active' ? 'Active — destination transfers allowed' : transferStatus === 'restricted' ? 'Restricted — Stripe requirements outstanding' : transferStatus === 'pending' ? 'Pending Stripe review' : transferRequested ? `Requested — ${transferStatus || 'awaiting activation'}` : transferStatus ? `Not active (${transferStatus})` : 'Not requested or not returned by Stripe',
     };
