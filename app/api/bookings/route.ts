@@ -138,6 +138,7 @@ export async function POST(req: Request) {
           startsAt: true,
           durationMinutes: true,
           requestedDurationMinutes: true,
+          requestedStartsAt: true,
           amountCents: true,
           platformFeeCents: true,
           status: true,
