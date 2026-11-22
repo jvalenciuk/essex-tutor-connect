@@ -398,6 +398,22 @@ export default async function Dashboard({
 
   const pendingInquiryItems = inquiries.filter(inquiry => inquiry.status === 'OPEN');
   const acceptedInquiryItems = inquiries.filter(inquiry => inquiry.status === 'ACCEPTED');
+  const bookingContactsByPerson = new Map<string, { id: string; name: string; subject: string; grade: string }>();
+  if (isParent || isTutor) {
+    for (const inquiry of acceptedInquiryItems) {
+      const personId = isTutor ? inquiry.parentId : inquiry.tutorId;
+      if (bookWith && bookingContactsByPerson.get(personId)?.id === bookWith) continue;
+      bookingContactsByPerson.set(personId, {
+        id: inquiry.id,
+        name: isTutor ? inquiry.parent.name || 'Parent' : inquiry.tutor.user.name || 'Tutor',
+        subject: inquiry.subject,
+        grade: inquiry.grade,
+      });
+    }
+  }
+  const bookingContacts = Array.from(bookingContactsByPerson.values());
+  const selectedBookingContact = bookingContacts.find(contact => contact.id === bookWith);
+
 
   const activeParentInquiries = inquiries.filter(
     inquiry =>
@@ -905,7 +921,7 @@ export default async function Dashboard({
           <summary style={{ cursor: "pointer", fontWeight: 700, fontSize: "1.1rem" }}>{isParent ? "Schedule a session" : "Calendar & availability"} <span className="muted" style={{ fontWeight: 400, fontSize: "0.9rem" }}>· {isTutor ? "Expand to view your calendar" : "Choose a time"}</span></summary>
           {isParent && <p className="muted">Choose an existing tutor connection and an available time below. Your tutor can confirm or propose an alternative.</p>}
           {isTutor && <p className="muted">Awaiting-payment sessions reserve their times. Proposed sessions are requests, not confirmed availability.</p>}
-          <SessionCalendar role={who.role} bookingContacts={isTutor ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.parentId, { id: inquiry.id, name: inquiry.parent.name || 'Parent', subject: inquiry.subject, grade: inquiry.grade }])).values()) : isParent ? Array.from(new Map(inquiries.filter(inquiry => inquiry.status === 'ACCEPTED').map(inquiry => [inquiry.tutorId, { id: inquiry.id, name: inquiry.tutor.user.name || 'Tutor', subject: inquiry.subject, grade: inquiry.grade }])).values()) : []} />
+          <SessionCalendar key={selectedBookingContact?.id} role={who.role} bookingContacts={bookingContacts} />
 
         </details>
       )}
