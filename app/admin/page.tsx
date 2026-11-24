@@ -196,7 +196,7 @@ export default async function Admin({ searchParams }: {
           <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
             <thead><tr>{['Session (Eastern time)', 'Parent', 'Tutor', 'Amount', 'Reason and follow-up'].map(h => <th key={h} scope="col" style={cellStyle}>{h}</th>)}</tr></thead>
             <tbody>{attention.map(b => <tr key={b.id}>
-              <td style={cellStyle}>{dateTime(b.startsAt)}<br /><Link href={`/admin/bookings/${encodeURIComponent(b.id)}${detailQuery ? `?${detailQuery}` : ''}`}>View booking</Link><br /><small className="muted">{b.id}</small></td>
+              <td style={cellStyle}>{dateTime(b.startsAt)}<br /><Link style={{ display: 'inline-block', textDecoration: 'underline' }} href={`/admin/bookings/${encodeURIComponent(b.id)}${detailQuery ? `?${detailQuery}` : ''}`}>View booking</Link><br /><small className="muted">{b.id}</small></td>
               <td style={cellStyle}>{b.parent.name}</td>
               <td style={cellStyle}>{b.tutor.user.name}</td>
               <td style={cellStyle}>{money(b.amountCents)}</td>
@@ -225,7 +225,7 @@ export default async function Admin({ searchParams }: {
       <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
         <thead><tr>{['Date & time', 'Parent', 'Tutor', 'Subject', 'Amount', 'Status'].map(h => <th key={h} style={cellStyle}>{h}</th>)}</tr></thead>
         <tbody>{upcoming.map(b => <tr key={b.id}>
-          <td style={cellStyle}><Link href={`/admin/bookings/${encodeURIComponent(b.id)}?from=upcoming`}>{dateTime(b.startsAt)}</Link></td>
+          <td style={cellStyle}><Link style={{ display: 'inline-block', textDecoration: 'underline' }} href={`/admin/bookings/${encodeURIComponent(b.id)}?from=upcoming`}>{dateTime(b.startsAt)}</Link></td>
           <td style={cellStyle}>{b.parent.name}</td>
           <td style={cellStyle}>{b.tutor.user.name}</td>
           <td style={cellStyle}>{b.inquiry?.subject || 'Tutoring'}</td>
