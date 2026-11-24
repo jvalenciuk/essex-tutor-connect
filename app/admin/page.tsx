@@ -41,13 +41,16 @@ export default async function Admin({ searchParams }: {
   ];
   const emailIssues: Prisma.BookingWhereInput = { notifications: { some: failedExpiration } };
   const attentionWhere: Prisma.BookingWhereInput = { OR: [...paymentIssues, emailIssues] };
-  function attentionHref(category: typeof filter, page = 1, query = search, newest = newestFirst) {
+  function attentionQuery(category: typeof filter, page: number, query: string, newest: boolean) {
     const params = new URLSearchParams();
     if (category !== 'all') params.set('attention', category);
     if (query) params.set('q', query);
     if (newest) params.set('sort', 'newest');
     if (page > 1) params.set('page', String(page));
-    const queryString = params.toString();
+    return params.toString();
+  }
+  function attentionHref(category: typeof filter, page = 1, query = search, newest = newestFirst) {
+    const queryString = attentionQuery(category, page, query, newest);
     return `/admin${queryString ? '?' + queryString : ''}#bookings-needing-attention`;
   }
   const categoryWhere = filter === 'payment' ? { OR: paymentIssues } : filter === 'email' ? emailIssues : attentionWhere;
@@ -100,6 +103,7 @@ export default async function Admin({ searchParams }: {
     attentionPage,
     attentionCountQuery,
   ]);
+  const detailQuery = attentionQuery(filter, currentPage, search, newestFirst);
   const counts = Object.fromEntries(grouped.map(g => [g.status, g._count._all]));
   const pendingTutors = tutors.filter(t => t.verification === 'PENDING');
   const upcoming = bookings.filter(b => b.startsAt > now &&
@@ -192,7 +196,7 @@ export default async function Admin({ searchParams }: {
           <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
             <thead><tr>{['Session (Eastern time)', 'Parent', 'Tutor', 'Amount', 'Reason and follow-up'].map(h => <th key={h} scope="col" style={cellStyle}>{h}</th>)}</tr></thead>
             <tbody>{attention.map(b => <tr key={b.id}>
-              <td style={cellStyle}>{dateTime(b.startsAt)}<br /><Link href={`/admin/bookings/${encodeURIComponent(b.id)}`}>View booking</Link><br /><small className="muted">{b.id}</small></td>
+              <td style={cellStyle}>{dateTime(b.startsAt)}<br /><Link href={`/admin/bookings/${encodeURIComponent(b.id)}${detailQuery ? `?${detailQuery}` : ''}`}>View booking</Link><br /><small className="muted">{b.id}</small></td>
               <td style={cellStyle}>{b.parent.name}</td>
               <td style={cellStyle}>{b.tutor.user.name}</td>
               <td style={cellStyle}>{money(b.amountCents)}</td>
@@ -216,12 +220,12 @@ export default async function Admin({ searchParams }: {
     </section>
 
     <section className="card" style={{ marginBottom: 20 }}>
-      <h2 style={{ marginTop: 0 }}>Upcoming sessions <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}>({upcoming.length})</span></h2>
+      <h2 id="upcoming-sessions" style={{ marginTop: 0 }}>Upcoming sessions <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}>({upcoming.length})</span></h2>
       {upcoming.length === 0 ? <p className="muted">No upcoming paid or awaiting-payment sessions.</p> :
       <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
         <thead><tr>{['Date & time', 'Parent', 'Tutor', 'Subject', 'Amount', 'Status'].map(h => <th key={h} style={cellStyle}>{h}</th>)}</tr></thead>
         <tbody>{upcoming.map(b => <tr key={b.id}>
-          <td style={cellStyle}><Link href={`/admin/bookings/${encodeURIComponent(b.id)}`}>{dateTime(b.startsAt)}</Link></td>
+          <td style={cellStyle}><Link href={`/admin/bookings/${encodeURIComponent(b.id)}?from=upcoming`}>{dateTime(b.startsAt)}</Link></td>
           <td style={cellStyle}>{b.parent.name}</td>
           <td style={cellStyle}>{b.tutor.user.name}</td>
           <td style={cellStyle}>{b.inquiry?.subject || 'Tutoring'}</td>

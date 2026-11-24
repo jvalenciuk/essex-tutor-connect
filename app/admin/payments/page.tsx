@@ -387,7 +387,7 @@ export default async function PaymentReconciliation() {
               </p>
 
               <p className="muted">
-                Booking ID: {item.id}
+                Booking ID: {item.id} · <Link href={`/admin/bookings/${encodeURIComponent(item.id)}?from=payments`}>View booking</Link>
               </p>
             </div>
           ))
@@ -435,7 +435,7 @@ export default async function PaymentReconciliation() {
               </p>
 
               <p className="muted">
-                Booking ID: {item.id}
+                Booking ID: {item.id} · <Link href={`/admin/bookings/${encodeURIComponent(item.id)}?from=payments`}>View booking</Link>
               </p>
             </div>
           ))

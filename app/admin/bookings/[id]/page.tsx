@@ -24,7 +24,29 @@ const bookingStatus = {
   REFUNDED: 'Refunded',
 };
 
-export default async function BookingDetail({ params }: { params: Promise<{ id: string }> }) {
+function bookingReturnLink(input: Record<string, string | string[] | undefined>) {
+  if (input.from === 'payments') return { href: '/admin/payments', label: 'Back to payment reconciliation' };
+  if (input.from === 'upcoming') return { href: '/admin#upcoming-sessions', label: 'Back to upcoming sessions' };
+
+  const query = new URLSearchParams();
+  if (input.attention === 'payment' || input.attention === 'email') query.set('attention', input.attention);
+  if (typeof input.q === 'string' && input.q.trim()) query.set('q', input.q.trim().slice(0, 120));
+  if (input.sort === 'newest') query.set('sort', 'newest');
+  if (typeof input.page === 'string' && /^\d+$/.test(input.page) &&
+      Number.isSafeInteger(Number(input.page)) && Number(input.page) > 1) {
+    query.set('page', String(Number(input.page)));
+  }
+  const suffix = query.toString();
+  return {
+    href: `/admin${suffix ? '?' + suffix : ''}#bookings-needing-attention`,
+    label: 'Back to bookings needing attention',
+  };
+}
+
+export default async function BookingDetail({ params, searchParams }: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const who = await identity();
   if (!who?.id) redirect('/login');
   const admin = await db.user.findUnique({ where: { id: who.id }, select: { role: true } });
@@ -49,10 +71,11 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   });
   if (!booking) notFound();
 
+  const returnLink = bookingReturnLink(await searchParams);
   const checkout = booking.stripeSessionId;
   const mode = checkout?.startsWith('cs_test_') ? 'Sandbox' : checkout?.startsWith('cs_live_') ? 'Live' : 'Unknown';
   return <main style={{ maxWidth: 1000, margin: '0 auto', paddingBottom: 48 }}>
-    <Link href="/admin#bookings-needing-attention">Back to bookings needing attention</Link>
+    <Link href={returnLink.href}>{returnLink.label}</Link>
     <h1>Booking details</h1>
     <p className="muted">Booking ID <code>{booking.id}</code></p>
     <section className="card" style={{ marginBottom: 20 }}>
