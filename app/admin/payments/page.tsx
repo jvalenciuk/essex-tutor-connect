@@ -37,13 +37,17 @@ function dateTime(value: Date) {
   });
 }
 
-export default async function PaymentReconciliation() {
+export default async function PaymentReconciliation({ searchParams }: {
+  searchParams: Promise<{ booking?: string | string[] }>;
+}) {
   const who = await identity();
 
   if (who?.role !== 'ADMIN') {
     redirect('/login');
   }
 
+  const { booking: requestedBooking } = await searchParams;
+  const bookingId = typeof requestedBooking === 'string' ? requestedBooking.trim() : '';
   const secretKey = process.env.STRIPE_SECRET_KEY;
 
   if (!secretKey) {
@@ -63,7 +67,7 @@ export default async function PaymentReconciliation() {
   // Read-only audit of the most recently
   // updated bookings. No database writes.
   const bookings = await db.booking.findMany({
-    where: {
+    where: bookingId ? { id: bookingId } : {
       status: {
         in: [
           'PENDING_PAYMENT',
@@ -80,6 +84,7 @@ export default async function PaymentReconciliation() {
       tutor: {
         select: {
           stripeAccountId: true,
+          stripeLiveAccountId: true,
           user: {
             select: { name: true },
           },
@@ -92,7 +97,7 @@ export default async function PaymentReconciliation() {
     orderBy: {
       updatedAt: 'desc',
     },
-    take: 20,
+    take: bookingId ? 1 : 20,
   });
 
   const results: Result[] = [];
@@ -103,38 +108,39 @@ export default async function PaymentReconciliation() {
     let assessment = 'Review required';
     let attention = true;
 
-    const accountId =
-      booking.tutor.stripeAccountId;
+    const liveKey = secretKey.startsWith('sk_live_') || secretKey.startsWith('rk_live_');
+    const accountId = liveKey ? booking.tutor.stripeLiveAccountId : booking.tutor.stripeAccountId;
 
     const sessionId =
       booking.stripeSessionId;
 
-    if (!accountId) {
-      assessment =
-        'Tutor has no linked Stripe account';
-    } else if (!sessionId) {
+    if (!sessionId) {
       stripeStatus = 'No Checkout Session';
 
       if (booking.status === 'PENDING_PAYMENT') {
         assessment =
           'Checkout has not been recorded';
         attention = false;
+      } else if (['PAID', 'COMPLETED', 'REFUNDED'].includes(booking.status)) {
+        assessment = 'Booking indicates payment but has no Stripe session';
       } else {
-        assessment =
-          'Booking indicates payment but has no Stripe session';
+        assessment = 'No checkout recorded for this booking';
+        attention = false;
       }
+    } else if (!sessionId.startsWith(liveKey ? 'cs_live_' : 'cs_test_')) {
+      assessment = 'Checkout mode does not match this environment’s Stripe key';
     } else {
       try {
-        const session =
-          await stripe.checkout.sessions.retrieve(
-            sessionId,
-            {
-              expand: ['payment_intent'],
-            },
-            {
-              stripeAccount: accountId,
-            }
-          );
+        const expand = { expand: ['payment_intent'] };
+        let stripeOptions: Stripe.RequestOptions | undefined;
+        let session: Stripe.Checkout.Session;
+        try {
+          session = await stripe.checkout.sessions.retrieve(sessionId, expand);
+        } catch (error) {
+          if (!accountId || !(error instanceof Stripe.errors.StripeInvalidRequestError) || error.code !== 'resource_missing') throw error;
+          stripeOptions = { stripeAccount: accountId };
+          session = await stripe.checkout.sessions.retrieve(sessionId, expand, stripeOptions);
+        }
 
         const matches =
           session.id === sessionId &&
@@ -169,9 +175,7 @@ export default async function PaymentReconciliation() {
                 payment_intent: paymentIntent.id,
                 limit: 100,
               },
-              {
-                stripeAccount: accountId,
-              }
+              stripeOptions
             );
 
             for (const refund of refunds.data) {
@@ -336,11 +340,12 @@ export default async function PaymentReconciliation() {
         </div>
       </section>
 
-      <p className="muted">
-        Showing up to 20 recently updated
-        payment-related bookings. This is not
-        a complete financial audit.
-      </p>
+      {bookingId ? <p>
+        Booking <code>{bookingId}</code>{bookings.length === 0 && ' was not found.'}
+        {' · '}<Link href="/admin/payments">Review recent bookings</Link>
+      </p> : <p className="muted">
+        Showing up to 20 recently updated payment-related bookings.
+      </p>}
 
       <section style={{ marginTop: 28 }}>
         <h2>Bookings requiring attention</h2>

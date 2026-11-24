@@ -97,7 +97,7 @@ export default async function BookingDetail({ params, searchParams }: {
         <dt>Payment deadline (Eastern time)</dt><dd>{booking.paymentDueAt ? dateTime(booking.paymentDueAt) : 'No deadline recorded'}</dd>
         <dt>Stripe checkout reference</dt><dd>{checkout ? <><code style={{ overflowWrap: 'anywhere' }}>{checkout}</code> · {mode}</> : 'No checkout reference recorded'}</dd>
       </dl>
-      <p className="muted">Use <Link href="/admin/payments">Payment reconciliation</Link> to compare booking records with Stripe.</p>
+      <p className="muted">Use <Link href={`/admin/payments?booking=${encodeURIComponent(booking.id)}`}>Reconcile this booking</Link> to compare its payment records with Stripe.</p>
     </section>
     <section className="card">
       <h2>Notification history</h2>
