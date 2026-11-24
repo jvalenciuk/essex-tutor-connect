@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { identity } from '../../lib/security';
 import { db } from '../../lib/db';
 import { redirect } from 'next/navigation';
@@ -16,7 +17,15 @@ export default async function Admin() {
   if (admin?.role !== 'ADMIN') return <main><h1>Access denied</h1><p>Administrator access is required.</p></main>;
 
   const now = new Date();
-  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions] = await Promise.all([
+  const failedExpiration = { type: 'PAYMENT_EXPIRED', status: 'FAILED' } satisfies Prisma.NotificationDeliveryWhereInput;
+  const attentionWhere: Prisma.BookingWhereInput = {
+    OR: [
+      { status: 'PENDING_PAYMENT', OR: [{ startsAt: { lte: now } }, { paymentDueAt: { lte: now } }] },
+      { status: 'PAID', stripeSessionId: null },
+      { notifications: { some: failedExpiration } },
+    ],
+  };
+  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions, attention, attentionCount] = await Promise.all([
     db.tutorProfile.findMany({
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
@@ -32,15 +41,25 @@ export default async function Admin() {
     }),
     db.booking.groupBy({ by: ['status'], _count: { _all: true } }),
     db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: { lte: now } } }),
-    db.notificationDelivery.count({ where: { type: 'PAYMENT_EXPIRED', status: 'FAILED' } }),
+    db.notificationDelivery.count({ where: failedExpiration }),
     db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: null } }),
     db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_test_' } } }),
     db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_live_' } } }),
+    db.booking.findMany({
+      where: attentionWhere,
+      select: {
+        id: true, status: true, startsAt: true, paymentDueAt: true, amountCents: true, stripeSessionId: true,
+        parent: { select: { name: true } },
+        tutor: { select: { user: { select: { name: true } } } },
+        _count: { select: { notifications: { where: failedExpiration } } },
+      },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      take: 50,
+    }),
+    db.booking.count({ where: attentionWhere }),
   ]);
   const counts = Object.fromEntries(grouped.map(g => [g.status, g._count._all]));
   const pendingTutors = tutors.filter(t => t.verification === 'PENDING');
-  const attention = bookings.filter(b => b.status === 'PENDING_PAYMENT' &&
-    (b.startsAt <= now || (b.paymentDueAt !== null && b.paymentDueAt <= now)));
   const upcoming = bookings.filter(b => b.startsAt > now &&
     (b.status === 'PAID' || b.status === 'PENDING_PAYMENT'))
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()).slice(0, 20);
@@ -50,7 +69,7 @@ export default async function Admin() {
     { label: 'Paid sessions', value: counts.PAID || 0 },
     { label: 'Completed', value: counts.COMPLETED || 0 },
     { label: 'Refunded', value: counts.REFUNDED || 0 },
-    { label: 'Payment alerts', value: overdue + failedEmails },
+    { label: 'Bookings needing attention', value: attentionCount },
   ];
   // Show only the mode of the configured key, never its value or any credential.
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -101,12 +120,31 @@ export default async function Admin() {
       </div>)}
     </section>
 
-    {(overdue > 0 || failedEmails > 0 || attention.length > 0) && <section className="card" style={{ marginBottom: 20 }}>
-      <h2 style={{ marginTop: 0 }}>Needs attention</h2>
-      <p>{overdue} overdue payment deadlines · {failedEmails} failed expiration emails</p>
-      {attention.map(b => <p key={b.id}><strong>{b.parent.name}</strong> with {b.tutor.user.name} · {dateTime(b.startsAt)} · {money(b.amountCents)} <span className="muted">({b.id})</span></p>)}
-      <p className="muted">Verify Stripe payment status before changing any reservation.</p>
-    </section>}
+    <section className="card" id="bookings-needing-attention" style={{ marginBottom: 20 }}>
+      <h2 style={{ marginTop: 0 }}>Bookings needing attention ({attentionCount})</h2>
+      {attention.length === 0 ? <p className="muted">No bookings currently need follow-up.</p> :
+        <>
+          {attentionCount > attention.length && <p>Showing the first {attention.length} bookings by session date.</p>}
+          <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
+            <thead><tr>{['Session (Eastern time)', 'Parent', 'Tutor', 'Amount', 'Reason and follow-up'].map(h => <th key={h} scope="col" style={cellStyle}>{h}</th>)}</tr></thead>
+            <tbody>{attention.map(b => <tr key={b.id}>
+              <td style={cellStyle}>{dateTime(b.startsAt)}<br /><small className="muted">{b.id}</small></td>
+              <td style={cellStyle}>{b.parent.name}</td>
+              <td style={cellStyle}>{b.tutor.user.name}</td>
+              <td style={cellStyle}>{money(b.amountCents)}</td>
+              <td style={cellStyle}>
+                {b.status === 'PENDING_PAYMENT' && (b.startsAt <= now || (b.paymentDueAt && b.paymentDueAt <= now)) && <p>
+                  <strong>{b.paymentDueAt && b.paymentDueAt <= now ? 'Payment deadline passed' : 'Session started with payment pending'}</strong>
+                  {b.paymentDueAt && <> · Due {dateTime(b.paymentDueAt)}</>}
+                  <br />Check the Stripe payment and expiration job.
+                </p>}
+                {b.status === 'PAID' && !b.stripeSessionId && <p><strong>Paid booking missing checkout reference</strong><br />Review the payment in Stripe.</p>}
+                {b._count.notifications > 0 && <p><strong>Failed expiration notifications ({b._count.notifications})</strong><br />Check the email delivery and retry logs.</p>}
+              </td>
+            </tr>)}</tbody>
+          </table></div>
+        </>}
+    </section>
 
     <section className="card" style={{ marginBottom: 20 }}>
       <h2 style={{ marginTop: 0 }}>Upcoming sessions <span className="muted" style={{ fontSize: 15, fontWeight: 400 }}>({upcoming.length})</span></h2>
