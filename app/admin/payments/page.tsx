@@ -14,6 +14,7 @@ type Result = {
   tutor: string;
   subject: string;
   startsAt: Date;
+  paymentDueAt: Date | null;
   amountCents: number;
   bookingStatus: string;
   stripeStatus: string;
@@ -101,12 +102,18 @@ export default async function PaymentReconciliation({ searchParams }: {
   });
 
   const results: Result[] = [];
+  const now = new Date();
 
   for (const booking of bookings) {
     let stripeStatus = 'Not checked';
     let refundStatus = 'Not checked';
     let assessment = 'Review required';
     let attention = true;
+    const unpaidFollowUp = booking.status === 'PENDING_PAYMENT'
+      ? booking.paymentDueAt && booking.paymentDueAt <= now
+        ? 'Payment deadline passed'
+        : booking.startsAt <= now ? 'Session started with payment pending' : null
+      : null;
 
     const liveKey = secretKey.startsWith('sk_live_') || secretKey.startsWith('rk_live_');
     const accountId = liveKey ? booking.tutor.stripeLiveAccountId : booking.tutor.stripeAccountId;
@@ -118,9 +125,8 @@ export default async function PaymentReconciliation({ searchParams }: {
       stripeStatus = 'No Checkout Session';
 
       if (booking.status === 'PENDING_PAYMENT') {
-        assessment =
-          'Checkout has not been recorded';
-        attention = false;
+        assessment = unpaidFollowUp ? unpaidFollowUp + ' · no checkout recorded' : 'Checkout has not been recorded';
+        attention = Boolean(unpaidFollowUp);
       } else if (['PAID', 'COMPLETED', 'REFUNDED'].includes(booking.status)) {
         assessment = 'Booking indicates payment but has no Stripe session';
       } else {
@@ -258,10 +264,8 @@ export default async function PaymentReconciliation({ searchParams }: {
                 'PENDING_PAYMENT' &&
               session.payment_status !== 'paid'
             ) {
-              assessment =
-                'Payment not yet confirmed';
-              attention =
-                booking.startsAt <= new Date();
+              assessment = unpaidFollowUp ? unpaidFollowUp + ' · Stripe payment not confirmed' : 'Payment not yet confirmed';
+              attention = Boolean(unpaidFollowUp);
             } else {
               assessment =
                 'Review payment status manually';
@@ -290,6 +294,7 @@ export default async function PaymentReconciliation({ searchParams }: {
       subject:
         booking.inquiry?.subject || 'Tutoring',
       startsAt: booking.startsAt,
+      paymentDueAt: booking.paymentDueAt,
       amountCents: booking.amountCents,
       bookingStatus: booking.status,
       stripeStatus,
@@ -374,6 +379,9 @@ export default async function PaymentReconciliation({ searchParams }: {
               <p>
                 Session: {dateTime(item.startsAt)}
               </p>
+              {item.bookingStatus === 'PENDING_PAYMENT' && <p>
+                Payment deadline: {item.paymentDueAt ? dateTime(item.paymentDueAt) : 'No deadline recorded'}
+              </p>}
 
               <p>
                 Amount: {money(item.amountCents)}
