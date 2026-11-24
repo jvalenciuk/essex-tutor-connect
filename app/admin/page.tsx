@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { identity } from '../../lib/security';
 import { db } from '../../lib/db';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import Verify from './verify';
 import RefundReconcile from './refund-reconcile';
@@ -10,7 +11,13 @@ export const dynamic = 'force-dynamic';
 const money = (cents: number) => new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(cents / 100);
 const dateTime = (date: Date) => date.toLocaleString('en-CA', { timeZone: 'America/Toronto', dateStyle: 'medium', timeStyle: 'short' });
 
-export default async function Admin() {
+const attentionFilters = [
+  { value: 'all', label: 'All alerts' },
+  { value: 'payment', label: 'Payment issues' },
+  { value: 'email', label: 'Failed expiration emails' },
+] as const;
+
+export default async function Admin({ searchParams }: { searchParams: Promise<{ attention?: string | string[] }> }) {
   const who = await identity();
   if (!who?.id) redirect('/login');
   const admin = await db.user.findUnique({ where: { id: who.id }, select: { role: true } });
@@ -18,14 +25,16 @@ export default async function Admin() {
 
   const now = new Date();
   const failedExpiration = { type: 'PAYMENT_EXPIRED', status: 'FAILED' } satisfies Prisma.NotificationDeliveryWhereInput;
-  const attentionWhere: Prisma.BookingWhereInput = {
-    OR: [
-      { status: 'PENDING_PAYMENT', OR: [{ startsAt: { lte: now } }, { paymentDueAt: { lte: now } }] },
-      { status: 'PAID', stripeSessionId: null },
-      { notifications: { some: failedExpiration } },
-    ],
-  };
-  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions, attention, attentionCount] = await Promise.all([
+  const { attention: requestedFilter } = await searchParams;
+  const filter = attentionFilters.find(option => option.value === requestedFilter)?.value ?? 'all';
+  const paymentIssues: Prisma.BookingWhereInput[] = [
+    { status: 'PENDING_PAYMENT', OR: [{ startsAt: { lte: now } }, { paymentDueAt: { lte: now } }] },
+    { status: 'PAID', stripeSessionId: null },
+  ];
+  const emailIssues: Prisma.BookingWhereInput = { notifications: { some: failedExpiration } };
+  const attentionWhere: Prisma.BookingWhereInput = { OR: [...paymentIssues, emailIssues] };
+  const selectedWhere = filter === 'payment' ? { OR: paymentIssues } : filter === 'email' ? emailIssues : attentionWhere;
+  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions, attention, attentionCount, filteredAttentionCount] = await Promise.all([
     db.tutorProfile.findMany({
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
@@ -46,7 +55,7 @@ export default async function Admin() {
     db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_test_' } } }),
     db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_live_' } } }),
     db.booking.findMany({
-      where: attentionWhere,
+      where: selectedWhere,
       select: {
         id: true, status: true, startsAt: true, paymentDueAt: true, amountCents: true, stripeSessionId: true,
         parent: { select: { name: true } },
@@ -57,7 +66,9 @@ export default async function Admin() {
       take: 50,
     }),
     db.booking.count({ where: attentionWhere }),
+    filter === 'all' ? undefined : db.booking.count({ where: selectedWhere }),
   ]);
+  const matchingCount = filteredAttentionCount ?? attentionCount;
   const counts = Object.fromEntries(grouped.map(g => [g.status, g._count._all]));
   const pendingTutors = tutors.filter(t => t.verification === 'PENDING');
   const upcoming = bookings.filter(b => b.startsAt > now &&
@@ -69,7 +80,7 @@ export default async function Admin() {
     { label: 'Paid sessions', value: counts.PAID || 0 },
     { label: 'Completed', value: counts.COMPLETED || 0 },
     { label: 'Refunded', value: counts.REFUNDED || 0 },
-    { label: 'Bookings needing attention', value: attentionCount },
+    { label: 'Bookings needing attention', value: attentionCount, href: '/admin#bookings-needing-attention' },
   ];
   // Show only the mode of the configured key, never its value or any credential.
   const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -116,15 +127,25 @@ export default async function Admin() {
     <section className="cards" style={{ marginBottom: 22 }}>
       {metrics.map(m => <div className="card" key={m.label} style={{ padding: 16 }}>
         <p className="muted" style={{ margin: '0 0 6px', fontSize: 13 }}>{m.label}</p>
-        <strong style={{ fontSize: 27 }}>{m.value}</strong>
+        {m.href
+          ? <Link href={m.href} aria-label={`${m.value} bookings needing attention`}><strong style={{ fontSize: 27 }}>{m.value}</strong></Link>
+          : <strong style={{ fontSize: 27 }}>{m.value}</strong>}
       </div>)}
     </section>
 
     <section className="card" id="bookings-needing-attention" style={{ marginBottom: 20 }}>
-      <h2 style={{ marginTop: 0 }}>Bookings needing attention ({attentionCount})</h2>
-      {attention.length === 0 ? <p className="muted">No bookings currently need follow-up.</p> :
+      <h2 style={{ marginTop: 0 }}>Bookings needing attention ({matchingCount})</h2>
+      <nav aria-label="Filter bookings needing attention" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+        {attentionFilters.map(option => <Link
+          key={option.value}
+          href={`/admin${option.value === 'all' ? '' : `?attention=${option.value}`}#bookings-needing-attention`}
+          aria-current={filter === option.value ? 'page' : undefined}
+          style={{ fontWeight: filter === option.value ? 700 : 400 }}
+        >{option.label}</Link>)}
+      </nav>
+      {attention.length === 0 ? <p className="muted">{filter === 'all' ? 'No bookings currently need follow-up.' : 'No bookings match this filter.'}</p> :
         <>
-          {attentionCount > attention.length && <p>Showing the first {attention.length} bookings by session date.</p>}
+          {matchingCount > attention.length && <p>Showing the first {attention.length} bookings by session date.</p>}
           <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
             <thead><tr>{['Session (Eastern time)', 'Parent', 'Tutor', 'Amount', 'Reason and follow-up'].map(h => <th key={h} scope="col" style={cellStyle}>{h}</th>)}</tr></thead>
             <tbody>{attention.map(b => <tr key={b.id}>
