@@ -17,7 +17,11 @@ const attentionFilters = [
   { value: 'email', label: 'Failed expiration emails' },
 ] as const;
 
-export default async function Admin({ searchParams }: { searchParams: Promise<{ attention?: string | string[] }> }) {
+const attentionPageSize = 50;
+
+export default async function Admin({ searchParams }: {
+  searchParams: Promise<{ attention?: string | string[]; q?: string | string[]; page?: string | string[] }>;
+}) {
   const who = await identity();
   if (!who?.id) redirect('/login');
   const admin = await db.user.findUnique({ where: { id: who.id }, select: { role: true } });
@@ -25,7 +29,10 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
 
   const now = new Date();
   const failedExpiration = { type: 'PAYMENT_EXPIRED', status: 'FAILED' } satisfies Prisma.NotificationDeliveryWhereInput;
-  const { attention: requestedFilter } = await searchParams;
+  const { attention: requestedFilter, q, page } = await searchParams;
+  const search = typeof q === 'string' ? q.trim().slice(0, 120) : '';
+  const pageNumber = typeof page === 'string' && /^\d+$/.test(page) ? Number(page) : 1;
+  const requestedPage = Number.isSafeInteger(pageNumber) && pageNumber > 0 ? pageNumber : 1;
   const filter = attentionFilters.find(option => option.value === requestedFilter)?.value ?? 'all';
   const paymentIssues: Prisma.BookingWhereInput[] = [
     { status: 'PENDING_PAYMENT', OR: [{ startsAt: { lte: now } }, { paymentDueAt: { lte: now } }] },
@@ -33,8 +40,42 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   ];
   const emailIssues: Prisma.BookingWhereInput = { notifications: { some: failedExpiration } };
   const attentionWhere: Prisma.BookingWhereInput = { OR: [...paymentIssues, emailIssues] };
-  const selectedWhere = filter === 'payment' ? { OR: paymentIssues } : filter === 'email' ? emailIssues : attentionWhere;
-  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions, attention, attentionCount, filteredAttentionCount] = await Promise.all([
+  function attentionHref(category: typeof filter, page = 1, query = search) {
+    const params = new URLSearchParams();
+    if (category !== 'all') params.set('attention', category);
+    if (query) params.set('q', query);
+    if (page > 1) params.set('page', String(page));
+    const queryString = params.toString();
+    return `/admin${queryString ? '?' + queryString : ''}#bookings-needing-attention`;
+  }
+  const categoryWhere = filter === 'payment' ? { OR: paymentIssues } : filter === 'email' ? emailIssues : attentionWhere;
+  const nameSearch = { contains: search.replace(/[\\%_]/g, '\\$&'), mode: 'insensitive' } satisfies Prisma.StringFilter;
+  const selectedWhere: Prisma.BookingWhereInput = search ? {
+    AND: [categoryWhere, {
+      OR: [{ id: { equals: search } }, { parent: { name: nameSearch } }, { tutor: { user: { name: nameSearch } } }],
+    }],
+  } : categoryWhere;
+  const attentionCountQuery = db.booking.count({ where: attentionWhere });
+  const matchingCountQuery = filter === 'all' && !search ? attentionCountQuery : db.booking.count({ where: selectedWhere });
+  const attentionPage = matchingCountQuery.then(async matchingCount => {
+    const lastPage = Math.max(1, Math.ceil(matchingCount / attentionPageSize));
+    const currentPage = Math.min(requestedPage, lastPage);
+    const offset = (currentPage - 1) * attentionPageSize;
+    const rows = matchingCount === 0 ? [] : await db.booking.findMany({
+      where: selectedWhere,
+      select: {
+        id: true, status: true, startsAt: true, paymentDueAt: true, amountCents: true, stripeSessionId: true,
+        parent: { select: { name: true } },
+        tutor: { select: { user: { select: { name: true } } } },
+        _count: { select: { notifications: { where: failedExpiration } } },
+      },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+      skip: offset,
+      take: attentionPageSize,
+    });
+    return { rows, matchingCount, currentPage, lastPage, offset };
+  });
+  const [tutors, bookings, grouped, overdue, failedEmails, legacyPending, sandboxSessions, liveSessions, { rows: attention, matchingCount, currentPage, lastPage, offset }, attentionCount] = await Promise.all([
     db.tutorProfile.findMany({
       include: { user: { select: { name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
@@ -54,21 +95,9 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
     db.booking.count({ where: { status: 'PENDING_PAYMENT', paymentDueAt: null } }),
     db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_test_' } } }),
     db.booking.count({ where: { stripeSessionId: { startsWith: 'cs_live_' } } }),
-    db.booking.findMany({
-      where: selectedWhere,
-      select: {
-        id: true, status: true, startsAt: true, paymentDueAt: true, amountCents: true, stripeSessionId: true,
-        parent: { select: { name: true } },
-        tutor: { select: { user: { select: { name: true } } } },
-        _count: { select: { notifications: { where: failedExpiration } } },
-      },
-      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
-      take: 50,
-    }),
-    db.booking.count({ where: attentionWhere }),
-    filter === 'all' ? undefined : db.booking.count({ where: selectedWhere }),
+    attentionPage,
+    attentionCountQuery,
   ]);
-  const matchingCount = filteredAttentionCount ?? attentionCount;
   const counts = Object.fromEntries(grouped.map(g => [g.status, g._count._all]));
   const pendingTutors = tutors.filter(t => t.verification === 'PENDING');
   const upcoming = bookings.filter(b => b.startsAt > now &&
@@ -138,14 +167,21 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
       <nav aria-label="Filter bookings needing attention" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
         {attentionFilters.map(option => <Link
           key={option.value}
-          href={`/admin${option.value === 'all' ? '' : `?attention=${option.value}`}#bookings-needing-attention`}
+          href={attentionHref(option.value)}
           aria-current={filter === option.value ? 'page' : undefined}
           style={{ fontWeight: filter === option.value ? 700 : 400 }}
         >{option.label}</Link>)}
       </nav>
-      {attention.length === 0 ? <p className="muted">{filter === 'all' ? 'No bookings currently need follow-up.' : 'No bookings match this filter.'}</p> :
+      <form action="/admin#bookings-needing-attention" method="get" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        {filter !== 'all' && <input type="hidden" name="attention" value={filter} />}
+        <label htmlFor="attention-search">Booking ID, parent, or tutor</label>
+        <input key={search} id="attention-search" name="q" type="search" maxLength={120} defaultValue={search} />
+        <button type="submit">Search</button>
+        {search && <Link href={attentionHref(filter, 1, '')}>Clear search</Link>}
+      </form>
+      {attention.length === 0 ? <p className="muted">{filter === 'all' && !search ? 'No bookings currently need follow-up.' : 'No bookings match this filter.'}</p> :
         <>
-          {matchingCount > attention.length && <p>Showing the first {attention.length} bookings by session date.</p>}
+          {matchingCount > attention.length && <p>Showing {offset + 1}–{offset + attention.length} of {matchingCount} bookings by session date.</p>}
           <div style={{ overflowX: 'auto' }}><table style={tableStyle}>
             <thead><tr>{['Session (Eastern time)', 'Parent', 'Tutor', 'Amount', 'Reason and follow-up'].map(h => <th key={h} scope="col" style={cellStyle}>{h}</th>)}</tr></thead>
             <tbody>{attention.map(b => <tr key={b.id}>
@@ -164,6 +200,11 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
               </td>
             </tr>)}</tbody>
           </table></div>
+          {lastPage > 1 && <nav aria-label="Booking attention pages" style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+            {currentPage > 1 && <Link href={attentionHref(filter, currentPage - 1)}>Previous</Link>}
+            <span>Page {currentPage} of {lastPage}</span>
+            {currentPage < lastPage && <Link href={attentionHref(filter, currentPage + 1)}>Next</Link>}
+          </nav>}
         </>}
     </section>
 
