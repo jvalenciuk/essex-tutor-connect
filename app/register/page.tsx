@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { useState, type FormEvent } from 'react';
@@ -9,6 +12,9 @@ type AccountRole = 'PARENT' | 'TUTOR';
 
 function RegisterForm() {
   const params = useSearchParams();
+  const router = useRouter();
+  const { status } = useSession();
+  useEffect(() => { if (status === 'authenticated') router.replace('/dashboard'); }, [status, router]);
   const [role, setRole] = useState<AccountRole>(params.get('role')?.toUpperCase() === 'TUTOR' ? 'TUTOR' : 'PARENT');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -39,19 +45,25 @@ function RegisterForm() {
       });
       if (!response.ok) {
         const result = await response.json().catch(() => null);
+        if (result?.accountCreated) {
+          window.location.assign('/login?verification=required&delivery=failed');
+          return;
+        }
         throw new Error(result?.error || 'Could not create your account. Please try again.');
       }
-      window.location.assign('/login?registered=1&role=' + role.toLowerCase());
+      window.location.assign('/login?verification=required');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
       setBusy(false);
     }
   }
 
+  if (status === 'loading' || status === 'authenticated') return <main className="signup-page"><p>Checking your account...</p></main>;
+
   return (
     <main className="signup-page">
       <div className="signup-heading">
-        <p className="home-section-kicker">JOIN ESSEX TUTOR CONNECT</p>
+        <p className="home-section-kicker">JOIN WE LEARN</p>
         <h1>Create your account</h1>
         <p className="muted">Choose how you will use the platform. You can create an account for free.</p>
       </div>

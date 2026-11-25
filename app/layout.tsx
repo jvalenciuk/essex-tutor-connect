@@ -6,8 +6,8 @@ import Providers from './providers';
 import AuthNavigation from './auth-navigation';
 
 export const metadata = {
-  title: 'WE Learn',
-  description: 'Find local tutors in Windsor and Essex County',
+  title: { default: 'WE Learn | Windsor–Essex Tutoring', template: '%s | WE Learn' },
+  description: 'WE Learn connects families with local tutors across Windsor and Essex County. Find, book and learn with confidence.',
 };
 
 export default function Layout({
@@ -21,7 +21,7 @@ export default function Layout({
         <Providers>
           <header>
             <a href="/" className="brand">
-              <Image src="/we-learn-logo.webp" alt="" width={74} height={74} className="brand-logo" priority />
+              <Image src="/WE%20Learn%20Logo-%20Version%202.png" alt="WE Learn" width={74} height={74} className="brand-logo" priority />
               <span>WE Learn</span>
             </a>
 

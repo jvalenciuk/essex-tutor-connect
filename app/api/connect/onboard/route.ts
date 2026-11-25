@@ -113,6 +113,13 @@ export async function POST() {
             },
           },
           configuration: {
+            recipient: {
+              capabilities: {
+                stripe_balance: {
+                  stripe_transfers: { requested: true },
+                },
+              },
+            },
             merchant: {
               capabilities: {
                 card_payments: {
@@ -146,8 +153,25 @@ export async function POST() {
       });
     }
 
-    // Reuse the existing Stripe account.
-    // The API now determines onboarding configurations.
+    // Existing tutor accounts were created for direct charges. Request
+    // recipient transfers so destination charges can pay the tutor.
+    await stripeRequest(
+      `/v2/core/accounts/${encodeURIComponent(accountId)}`,
+      secretKey,
+      {
+        configuration: {
+          recipient: {
+            capabilities: {
+              stripe_balance: {
+                stripe_transfers: { requested: true },
+              },
+            },
+          },
+        },
+      }
+    );
+
+    // Reuse the existing Stripe account and collect any newly due details.
     const accountLink = await stripeRequest(
       '/v2/core/account_links',
       secretKey,

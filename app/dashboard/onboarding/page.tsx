@@ -1,4 +1,5 @@
-import { getActiveTutorStripeAccountId, getConfiguredStripeOnboardingSecret } from '../../../lib/stripe-config';
+import { getActiveTutorStripeAccountId } from '../../../lib/stripe-config';
+import { getStripeStatus } from '../../../lib/stripe-capabilities';
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -8,6 +9,7 @@ import { db } from '../../../lib/db';
 import DashboardForm from '../profile-form';
 import AvailabilityManager from '../availability-manager';
 import ConnectButton from '../connect-button';
+import EnableTransfersButton from '../enable-transfers-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,61 +19,6 @@ type Step = {
   complete: boolean;
   detail: string;
 };
-
-async function getStripeStatus(
-  accountId: string | null | undefined
-) {
-  const result = {
-    connected: Boolean(accountId),
-    paymentsEnabled: false,
-    payoutsEnabled: false,
-    payoutsRestricted: false,
-    error: '',
-  };
-
-  if (!accountId) return result;
-
-  const key = getConfiguredStripeOnboardingSecret();
-  if (!key) return { ...result, error: 'Stripe configuration unavailable.' };
-
-  try {
-    const url = new URL(
-      `https://api.stripe.com/v2/core/accounts/${encodeURIComponent(accountId)}`
-    );
-    url.searchParams.set('include[0]', 'configuration.merchant');
-
-    const response = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Stripe-Version': '2026-10-28.endive',
-      },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.error('Stripe onboarding status lookup failed', response.status);
-      return { ...result, error: 'Unable to verify Stripe status.' };
-    }
-
-    const account = await response.json();
-    const capabilities = account?.configuration?.merchant?.capabilities;
-    if (!capabilities) {
-      return { ...result, error: 'Stripe capabilities unavailable.' };
-    }
-
-    const payoutStatus = capabilities.stripe_balance?.payouts?.status;
-    return {
-      ...result,
-      paymentsEnabled: capabilities.card_payments?.status === 'active',
-      payoutsEnabled: payoutStatus === 'active',
-      payoutsRestricted: payoutStatus === 'restricted',
-      error: '',
-    };
-  } catch (error) {
-    console.error('Stripe onboarding status check failed', error);
-    return { ...result, error: 'Stripe status check failed.' };
-  }
-}
 
 export default async function TutorOnboarding() {
   const who = await identity();
@@ -119,17 +66,9 @@ export default async function TutorOnboarding() {
     ? await getStripeStatus(
         getActiveTutorStripeAccountId(profile)
       )
-    : {
-        connected: false,
-        paymentsEnabled: false,
-        payoutsEnabled: false,
-        payoutsRestricted: false,
-        error: '',
-      };
+    : await getStripeStatus(null);
 
-  const stripeReady =
-    stripe.paymentsEnabled &&
-    stripe.payoutsEnabled;
+  const stripeReady = stripe.transfersEnabled && stripe.payoutsEnabled;
 
   const steps: Step[] = [
     {
@@ -176,17 +115,17 @@ export default async function TutorOnboarding() {
     {
       title: 'Set up Stripe payments',
       description:
-        'Complete payment onboarding so you can accept payments and receive payouts.',
+        'Complete payment onboarding so you can receive transfers and bank payouts.',
       complete: stripeReady,
       detail: stripeReady
-        ? 'Payments and payouts enabled'
+        ? 'Transfers and payouts enabled'
         : !approved
         ? 'Available after administrator approval'
         : stripe.error
         ? stripe.error
         : stripe.connected
         ? stripe.payoutsRestricted
-        ? 'Card payments may be active, but bank payouts require Stripe verification.'
+        ? stripe.payoutRestrictionDetail || 'Open Stripe to review its payout requirements.'
         : 'Continue Stripe onboarding or verification'
         : 'Connect your Stripe account below.',
     },
@@ -361,12 +300,10 @@ export default async function TutorOnboarding() {
 
           <p>
             <strong>
-              Accepting payments:
+              Destination transfers:
             </strong>
             {' '}
-            {stripe.paymentsEnabled
-              ? 'Enabled'
-              : 'Not yet enabled'}
+            {stripe.error ? 'Status unavailable' : stripe.transfersStatus}
           </p>
 
           <p>
@@ -374,9 +311,9 @@ export default async function TutorOnboarding() {
               Bank payouts:
             </strong>
             {' '}
-            {stripe.payoutsEnabled
+            {stripe.error ? 'Status unavailable' : stripe.payoutsEnabled
               ? 'Enabled'
-              : 'Not yet enabled'}
+              : stripe.payoutsRestricted ? 'Restricted' : 'Not yet enabled'}
           </p>
 
           {stripe.error && (
@@ -384,6 +321,8 @@ export default async function TutorOnboarding() {
               {stripe.error}
             </p>
           )}
+
+          {stripe.connected && <EnableTransfersButton />}
 
           <ConnectButton
             connected={stripe.connected}

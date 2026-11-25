@@ -4,8 +4,10 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
+import DirectPaymentButton from './direct-payment-button';
 
 type CalendarBooking = {
   id: string;
@@ -24,10 +26,16 @@ type CalendarBooking = {
   } | null;
 };
 
-type BookingContact = { id: string; name: string; subject: string; grade: string };
+type BookingContact = { id: string; tutorId: string; name: string; subject: string; grade: string };
 
 type AvailabilityResponse = {
   blockedDates: string[];
+};
+
+type TutorAvailability = {
+  weekly: { dayOfWeek: number; startMinute: number; endMinute: number }[];
+  blockedDates: string[];
+  busy: { startsAt: string; durationMinutes: number }[];
 };
 
 const ZONE = 'America/Toronto';
@@ -71,6 +79,10 @@ const statuses: Record<
   },
   DECLINED: {
     label: 'Declined',
+    color: '#94a3b8',
+  },
+  EXPIRED: {
+    label: 'Expired',
     color: '#94a3b8',
   },
 };
@@ -137,10 +149,39 @@ export default function SessionCalendar({
 }) {
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [contactId, setContactId] = useState('');
+  // A repeat-booking shortcut may select an existing accepted inquiry.
+  // Only IDs in bookingContacts are accepted; the API still checks authorization.
+  useEffect(() => {
+    if (!['PARENT', 'TUTOR'].includes(role) || bookingContacts.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('bookWith');
+    if (!requested || !bookingContacts.some(contact => contact.id === requested)) return;
+    setContactId(requested);
+    setShowBookingForm(true);
+    const calendarSection = document.getElementById('my-calendar');
+    if (calendarSection instanceof HTMLDetailsElement) calendarSection.open = true;
+  }, [role, bookingContacts.map(contact => contact.id).join('|')]);
+
+  // Scroll only after React has rendered the expanded booking form.
+  useEffect(() => {
+    if (!showBookingForm || !new URLSearchParams(window.location.search).get('bookWith')) return;
+    const calendarSection = document.getElementById('my-calendar');
+    if (calendarSection instanceof HTMLDetailsElement) calendarSection.open = true;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [showBookingForm]);
+
   const [bookingTime, setBookingTime] = useState('16:00');
   const [bookingDuration, setBookingDuration] = useState('60');
   const [bookingBusy, setBookingBusy] = useState(false);
+  const bookingSubmissionInFlight = useRef(false);
+  const calendarDateInitialized = useRef(false);
   const [bookingNotice, setBookingNotice] = useState('');
+  const [createdBookingId, setCreatedBookingId] = useState('');
+  const [reusedBooking, setReusedBooking] = useState(false);
+  const [existingBookingStatus, setExistingBookingStatus] = useState('');
   const [bookingError, setBookingError] = useState('');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [calendarFeedback, setCalendarFeedback] = useState<Record<string, { kind: 'error' | 'success'; message: string }>>({});
@@ -173,6 +214,61 @@ export default function SessionCalendar({
     localDateKey(new Date())
   );
 
+  const tutorId = role === 'PARENT' ? bookingContacts.find(contact => contact.id === contactId)?.tutorId : undefined;
+  const availabilityKey = tutorId ? tutorId + ':' + selectedDate : '';
+  const [availability, setAvailability] = useState<{ key: string; data: TutorAvailability | null }>();
+  useEffect(() => {
+    if (!showBookingForm || !tutorId) return;
+    const controller = new AbortController();
+    fetch('/api/tutors/' + encodeURIComponent(tutorId) + '/availability?date=' + encodeURIComponent(selectedDate), {
+      cache: 'no-store', signal: controller.signal,
+    })
+      .then(response => {
+        if (!response.ok) throw new Error('Unable to load availability');
+        return response.json() as Promise<TutorAvailability>;
+      })
+      .then(data => {
+        if (!controller.signal.aborted) setAvailability({ key: availabilityKey, data });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAvailability({ key: availabilityKey, data: null });
+      });
+    return () => controller.abort();
+  }, [showBookingForm, tutorId, selectedDate, availabilityKey]);
+
+  const availabilityLoading = Boolean(tutorId && availability?.key !== availabilityKey);
+  const tutorAvailability = availability?.key === availabilityKey ? availability?.data : null;
+  const bookingToday = localDateKey(new Date());
+  const timeParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const currentMinute = Number(timeParts.find(part => part.type === 'hour')?.value) * 60 +
+    Number(timeParts.find(part => part.type === 'minute')?.value);
+  const weekday = new Date(selectedDate + 'T12:00:00Z').getUTCDay();
+  const dateOffset = new Date(selectedDate + 'T12:00:00Z').toLocaleTimeString('en-US', {
+    timeZone: ZONE, timeZoneName: 'longOffset',
+  }).match(/GMT([+-]\d{2}:\d{2})/)?.[1] || '-05:00';
+  const timeOptions = Array.from({ length: 61 }, (_, index) => {
+    const start = 7 * 60 + index * 15;
+    const end = start + Number(bookingDuration);
+    const hour = Math.floor(start / 60);
+    const minute = start % 60;
+    const value = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+    const label = (hour % 12 || 12) + ':' + String(minute).padStart(2, '0') + (hour < 12 ? ' AM' : ' PM');
+    const startsAt = Date.parse(selectedDate + 'T' + value + ':00' + dateOffset);
+    const endsAt = startsAt + Number(bookingDuration) * 60_000;
+    const overlaps = tutorAvailability?.busy.some(booking => {
+      const busyStart = Date.parse(booking.startsAt);
+      return busyStart < endsAt && startsAt < busyStart + booking.durationMinutes * 60_000;
+    });
+    const withinHours = !tutorAvailability?.weekly.length || tutorAvailability.weekly.some(hours =>
+      hours.dayOfWeek === weekday && start >= hours.startMinute && end <= hours.endMinute && end < 1440);
+    const available = selectedDate >= bookingToday && (selectedDate !== bookingToday || start > currentMinute) &&
+      end <= 1440 && !tutorAvailability?.blockedDates.includes(selectedDate) && withinHours && !overlaps;
+    return { value, label, available };
+  }).filter(option => option.available);
+  const selectedBookingTime = timeOptions.some(option => option.value === bookingTime) ? bookingTime : '';
+
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   const [loading, setLoading] =
@@ -182,7 +278,7 @@ export default function SessionCalendar({
     useState('');
 
   const loadCalendar =
-    useCallback(async () => {
+    useCallback(async (refreshError = 'Unable to load tutoring calendar.') => {
       setLoading(true);
       setError('');
 
@@ -209,21 +305,23 @@ export default function SessionCalendar({
           : bookingData.bookings || [];
         setBookings(loadedBookings);
 
-        // Start on the next relevant session instead of an empty today.
-        const now = Date.now();
-        const nextSession = loadedBookings
-          .filter(booking =>
-            !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED'].includes(booking.status) &&
-            new Date(booking.startsAt).getTime() >= now
-          )
-          .sort((a, b) =>
-            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
-          )[0];
-        if (nextSession) {
-          const dateKey = localDateKey(nextSession.startsAt);
-          const [year, monthNumber] = dateKey.split('-').map(Number);
-          setMonth({ year, monthNumber });
-          setSelectedDate(dateKey);
+        if (!calendarDateInitialized.current) {
+          calendarDateInitialized.current = true;
+          const now = Date.now();
+          const nextSession = loadedBookings
+            .filter(booking =>
+              !['CANCELLED', 'REFUNDED', 'DECLINED', 'COMPLETED', 'EXPIRED'].includes(booking.status) &&
+              new Date(booking.startsAt).getTime() >= now
+            )
+            .sort((a, b) =>
+              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+            )[0];
+          if (nextSession) {
+            const dateKey = localDateKey(nextSession.startsAt);
+            const [year, monthNumber] = dateKey.split('-').map(Number);
+            setMonth({ year, monthNumber });
+            setSelectedDate(dateKey);
+          }
         }
 
         if (role === 'TUTOR') {
@@ -235,9 +333,7 @@ export default function SessionCalendar({
               }
             );
 
-          if (
-            availabilityResponse.ok
-          ) {
+          if (availabilityResponse.ok) {
             const availabilityData:
               AvailabilityResponse =
               await availabilityResponse.json();
@@ -247,7 +343,6 @@ export default function SessionCalendar({
                 []
             );
           } else {
-            setBlockedDates([]);
             setError(
               'Bookings loaded, but blocked dates could not be loaded.'
             );
@@ -256,9 +351,7 @@ export default function SessionCalendar({
           setBlockedDates([]);
         }
       } catch {
-        setError(
-          'Unable to load tutoring calendar.'
-        );
+        setError(refreshError);
       } finally {
         setLoading(false);
       }
@@ -266,7 +359,9 @@ export default function SessionCalendar({
 
   useEffect(() => {
     void loadCalendar();
-    const refreshAfterBookingChange = () => { void loadCalendar(); };
+    const refreshAfterBookingChange = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== 'calendar') void loadCalendar();
+    };
     window.addEventListener('essex:bookings-updated', refreshAfterBookingChange);
     return () => window.removeEventListener('essex:bookings-updated', refreshAfterBookingChange);
   }, [loadCalendar]);
@@ -274,25 +369,75 @@ export default function SessionCalendar({
 
   async function proposeCalendarBooking(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (bookingSubmissionInFlight.current) return;
     setBookingError('');
     setBookingNotice('');
-    if (!contactId) { setBookingError(role === 'PARENT' ? 'Choose a tutor.' : 'Choose a parent.'); return; }
+    setCreatedBookingId('');
+    setReusedBooking(false);
+    setExistingBookingStatus('');
+    if (!contactId || !bookingContacts.some(contact => contact.id === contactId)) {
+      setBookingError(role === 'PARENT' ? 'Choose an accepted tutor inquiry.' : 'Choose an accepted parent inquiry.');
+      return;
+    }
+    if (![30, 60, 90, 120, 180].includes(Number(bookingDuration))) {
+      setBookingError('Choose a supported session duration.');
+      return;
+    }
+    if (selectedDate < localDateKey(new Date())) {
+      setBookingError('This date has already passed. Please choose a future session date.');
+      return;
+    }
     // Interpret the selected clock time in Windsor/Toronto, regardless of device timezone.
     const [year, monthNumber, day] = selectedDate.split('-').map(Number);
-    const [hour, minute] = bookingTime.split(':').map(Number);
-    const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
-    const offsetParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: ZONE, timeZoneName: 'shortOffset', hour: '2-digit',
-    }).formatToParts(new Date(wallClockUtc));
-    const offsetLabel = offsetParts.find(part => part.type === 'timeZoneName')?.value || 'GMT-5';
-    const offsetMatch = offsetLabel.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
-    const offsetMinutes = offsetMatch
-      ? (offsetMatch[1] === '+' ? 1 : -1) * (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0))
-      : -300;
-    const localStart = new Date(wallClockUtc - offsetMinutes * 60000);
-    if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
-      setBookingError('Choose a future date and time.'); return;
+    if (availabilityLoading || !selectedBookingTime) {
+      setBookingError('Choose an available start time.');
+      return;
     }
+    const [hour, minute] = selectedBookingTime.split(':').map(Number);
+    const wallClockUtc = Date.UTC(year, monthNumber - 1, day, hour, minute);
+    const checkedDate = new Date(wallClockUtc);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(selectedDate) ||
+      !/^\d{2}:\d{2}$/.test(bookingTime) ||
+      ![year, monthNumber, day, hour, minute].every(Number.isInteger) ||
+      checkedDate.getUTCFullYear() !== year ||
+      checkedDate.getUTCMonth() + 1 !== monthNumber ||
+      checkedDate.getUTCDate() !== day ||
+      checkedDate.getUTCHours() !== hour ||
+      checkedDate.getUTCMinutes() !== minute ||
+      minute % 15 !== 0 ||
+      hour < 7 || hour > 22
+    ) {
+      setBookingError('Enter a valid session date and time.');
+      return;
+    }
+    // Test both Eastern offsets and round-trip through Toronto local time.
+    // This remains correct on either side of a daylight-saving transition.
+    const easternFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    });
+    const candidates = [4, 5].map(offsetHours => new Date(wallClockUtc + offsetHours * 60 * 60 * 1000))
+      .filter(candidate => {
+        const parts = easternFormatter.formatToParts(candidate);
+        const part = (type: string) => Number(parts.find(item => item.type === type)?.value);
+        return part('year') === year && part('month') === monthNumber &&
+          part('day') === day && part('hour') === hour && part('minute') === minute;
+      }).sort((a, b) => a.getTime() - b.getTime());
+    if (!candidates.length) {
+      setBookingError('This local time does not exist because of the daylight-saving change. Choose another time.');
+      return;
+    }
+    if (candidates.length > 1) {
+      setBookingError('This time occurs twice during the autumn daylight-saving change. Choose a different time (such as 2:00 a.m. or later) to avoid an ambiguous booking.');
+      return;
+    }
+    const localStart = candidates[0];
+    if (!Number.isFinite(localStart.getTime()) || localStart.getTime() <= Date.now()) {
+      setBookingError('That start time has already passed. Choose a later time today or select another date.'); return;
+    }
+    bookingSubmissionInFlight.current = true;
     setBookingBusy(true);
     try {
       const response = await fetch('/api/bookings', {
@@ -302,13 +447,44 @@ export default function SessionCalendar({
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || result.message || 'Unable to propose session.');
-      setBookingNotice(role === 'PARENT' ? 'Session requested. Your tutor can review and respond.' : 'Session proposed. The parent can now review and accept it.');
+      setCreatedBookingId(typeof result.id === 'string' ? result.id : '');
+      setReusedBooking(result.alreadyExists === true);
+      setExistingBookingStatus(result.alreadyExists && typeof result.status === 'string' ? result.status : '');
+      // For pending parent time changes, the requested time is the one
+      // the tutor must respond to, not the original proposal time.
+      const savedStart = result.alreadyExists && result.status === 'CHANGE_REQUESTED'
+        && typeof result.requestedStartsAt === 'string'
+        ? result.requestedStartsAt
+        : result.alreadyExists && typeof result.startsAt === 'string'
+          ? result.startsAt
+          : localStart.toISOString();
+      const confirmedStart = new Date(savedStart);
+      const confirmedDuration = result.alreadyExists && result.status === 'CHANGE_REQUESTED'
+        && typeof result.requestedDurationMinutes === 'number'
+        ? result.requestedDurationMinutes
+        : result.alreadyExists && typeof result.durationMinutes === 'number'
+          ? result.durationMinutes
+          : Number(bookingDuration);
+      const submittedTime = confirmedStart.toLocaleString('en-CA', {
+        timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
+      });
+      const sessionEnd = new Date(confirmedStart.getTime() + confirmedDuration * 60000);
+      const submittedEnd = sessionEnd.toLocaleString('en-CA', {
+        timeZone: ZONE, dateStyle: 'full', timeStyle: 'short',
+      });
+      const contactName = bookingContacts.find(contact => contact.id === contactId)?.name || 'the recipient';
+      setBookingNotice(
+        `${result.alreadyExists ? 'This session was already requested' : role === 'PARENT' ? 'Session requested' : 'Session proposed'} with ${contactName}. Starts: ${submittedTime}. Ends: ${submittedEnd}. Duration: ${confirmedDuration} minutes (Windsor / Eastern Time). ${result.alreadyExists ? 'No duplicate was created. You can review the existing session in My Sessions.' : role === 'PARENT' ? 'Your tutor can review and respond.' : 'The parent can now review and accept it.'}`
+      );
       setShowBookingForm(false);
-      await loadCalendar();
-      window.dispatchEvent(new Event('essex:bookings-updated'));
+      await loadCalendar(result.alreadyExists
+        ? 'The existing session was found. Refresh the calendar to see it.'
+        : 'Your session request was sent. Refresh the calendar to see it.');
+      window.dispatchEvent(new CustomEvent('essex:bookings-updated', { detail: 'calendar' }));
     } catch (error) {
       setBookingError(error instanceof Error ? error.message : 'Unable to propose session.');
     } finally {
+      bookingSubmissionInFlight.current = false;
       setBookingBusy(false);
     }
   }
@@ -316,6 +492,7 @@ export default function SessionCalendar({
   function changeMonth(
     amount: number
   ) {
+    calendarDateInitialized.current = true;
     const date = new Date(
       Date.UTC(
         month.year,
@@ -356,8 +533,8 @@ export default function SessionCalendar({
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || 'Unable to accept the proposal.');
-      await loadCalendar();
-      window.dispatchEvent(new Event('essex:bookings-updated'));
+      await loadCalendar('Your session was accepted. Refresh the calendar to see its current status.');
+      window.dispatchEvent(new CustomEvent('essex:bookings-updated', { detail: 'calendar' }));
       setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'success', message: 'Session accepted. Complete payment within 24 hours to confirm your booking.' } }));
     } catch (error) {
       setCalendarFeedback(current => ({ ...current, [booking.id]: { kind: 'error', message: error instanceof Error ? error.message : 'Unable to accept the proposal.' } }));
@@ -437,17 +614,11 @@ export default function SessionCalendar({
       }
     );
 
-  const activeBookings =
-    bookings.filter(
-      booking =>
-        ![
-          'CANCELLED',
-          'REFUNDED',
-          'DECLINED',
-        ].includes(
-          booking.status
-        )
-    );
+  // Keep cancelled and refunded sessions in the calendar for booking history.
+  // Availability/conflict checks continue to consider only reserving statuses.
+  const visibleBookings = bookings.filter(
+    booking => booking.status !== 'DECLINED'
+  );
 
   const sessionsByDay =
     new Map<
@@ -456,7 +627,7 @@ export default function SessionCalendar({
     >();
 
   for (
-    const booking of activeBookings
+    const booking of visibleBookings
   ) {
     const key = localDateKey(
       booking.startsAt
@@ -579,6 +750,8 @@ export default function SessionCalendar({
           'PROPOSED',
           'CHANGE_REQUESTED',
           'COMPLETED',
+          'CANCELLED',
+          'REFUNDED',
         ].map(status => (
           <span key={status}>
             <span
@@ -696,6 +869,7 @@ export default function SessionCalendar({
                 key={dateKey}
                 type="button"
                 onClick={() => {
+                  calendarDateInitialized.current = true;
                   setSelectedDate(dateKey);
                   window.requestAnimationFrame(() => {
                     document.getElementById('calendar-selected-day')?.scrollIntoView({
@@ -856,40 +1030,111 @@ export default function SessionCalendar({
 
         {(role === 'TUTOR' || role === 'PARENT') && (
           <div style={{ marginBottom: 16 }}>
-            <button type="button" onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
+            <button type="button" disabled={bookingBusy} onClick={() => { setShowBookingForm(value => !value); setBookingError(''); setBookingNotice(''); }}>
               {showBookingForm ? 'Close booking form' : role === 'PARENT' ? '+ Request a session on this date' : '+ Propose a session on this date'}
             </button>
             {showBookingForm && (
-              <form onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
-                <p><strong>New session · {selectedDate}</strong></p>
+              <form id="calendar-booking-form" onSubmit={proposeCalendarBooking} style={{ marginTop: 12, padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                <h3 style={{ marginTop: 0 }}>{role === 'PARENT' ? 'Request a tutoring session' : 'Propose a tutoring session'}</h3>
+                {contactId && bookingContacts.some(contact => contact.id === contactId) && (
+                  <p role="status" style={{ padding: '10px 12px', background: '#eef5ff', borderRadius: 8 }}>
+                    <strong>{role === 'PARENT' ? 'Tutor' : 'Parent'}:</strong> {bookingContacts.find(contact => contact.id === contactId)?.name}
+                    {' · '}{bookingContacts.find(contact => contact.id === contactId)?.subject}
+                  </p>
+                )}
+                <label htmlFor="calendar-session-date">Session date</label>
+                <input
+                  id="calendar-session-date"
+                  disabled={bookingBusy}
+                  className="field"
+                  type="date"
+                  required
+                  min={localDateKey(new Date())}
+                  value={selectedDate}
+                  onChange={event => {
+                    const nextDate = event.target.value;
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) return;
+                    const [year, monthNumber] = nextDate.split('-').map(Number);
+                    calendarDateInitialized.current = true;
+                    setSelectedDate(nextDate);
+                    setMonth({ year, monthNumber });
+                    setBookingError('');
+                  }}
+                />
                 <p className="muted">{role === 'PARENT' ? 'Choose a tutor from your accepted inquiries. The tutor must accept your request before payment is required.' : 'Choose an existing parent inquiry. The parent must accept the proposal before payment is requested.'}</p>
                 <label htmlFor="calendar-parent">{role === 'PARENT' ? 'Tutor and subject' : 'Parent and subject'}</label>
-                <select id="calendar-parent" className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
+                <select id="calendar-parent" disabled={bookingBusy} className="field" value={contactId} onChange={event => setContactId(event.target.value)} required>
                   <option value="">{role === 'PARENT' ? 'Select a tutor' : 'Select a parent'}</option>
                   {bookingContacts.map(contact => <option key={contact.id} value={contact.id}>{contact.name} — {contact.subject} ({contact.grade})</option>)}
                 </select>
                 {bookingContacts.length === 0 && <p className="muted">{role === 'PARENT' ? 'No accepted tutor inquiries yet. Contact a tutor and wait for their acceptance first.' : 'No accepted parent inquiries yet. Accept an inquiry first.'}</p>}
                 <label htmlFor="calendar-start">Start time (Eastern Time)</label>
-                <select id="calendar-start" className="field" value={bookingTime} onChange={event => setBookingTime(event.target.value)} required>
-                  {Array.from({ length: 61 }, (_, index) => {
-                    const totalMinutes = 7 * 60 + index * 15;
-                    const hour = Math.floor(totalMinutes / 60);
-                    const minute = totalMinutes % 60;
-                    const value = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-                    const label = `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`;
-                    return <option key={value} value={value}>{label}</option>;
-                  })}
+                <select id="calendar-start" disabled={bookingBusy || availabilityLoading} className="field" value={selectedBookingTime} onChange={event => { setBookingTime(event.target.value); setBookingError(''); }} required>
+                  <option value="">Choose a start time</option>
+                  {timeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
-                <p className="muted" style={{ fontSize: 12, marginTop: -8 }}>Choose a time in 15-minute increments.</p>
+                {availabilityLoading && <p role="status">Checking tutor availability…</p>}
+                {!availabilityLoading && timeOptions.length === 0 && <p role="status">No start times for this date and duration. Try a different date or duration.</p>}
+                {tutorId && !availabilityLoading && !tutorAvailability && <p role="status">Tutor availability could not be loaded. We’ll check the selected time when you submit.</p>}
                 <label htmlFor="calendar-duration">Duration</label>
-                <select id="calendar-duration" className="field" value={bookingDuration} onChange={event => setBookingDuration(event.target.value)}>
+                <select id="calendar-duration" disabled={bookingBusy} className="field" value={bookingDuration} onChange={event => { setBookingDuration(event.target.value); setBookingError(''); }}>
                   {[30, 60, 90, 120, 180].map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
                 </select>
-                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0}>{bookingBusy ? 'Creating...' : role === 'PARENT' ? 'Request session' : 'Propose session'}</button>
+                <div aria-label="Review session details" style={{ margin: '16px 0', padding: 14, border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                  <strong>Review before sending</strong>
+                  <p style={{ margin: '8px 0 4px' }}><strong>{role === 'PARENT' ? 'Tutor' : 'Parent'}:</strong> {bookingContacts.find(contact => contact.id === contactId)?.name || 'Not selected'}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Date:</strong> {selectedDate}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Start:</strong> {selectedBookingTime ? selectedBookingTime + ' Eastern Time' : 'Choose a start time'}</p>
+                  <p style={{ margin: '4px 0' }}><strong>Duration:</strong> {bookingDuration} minutes</p>
+                  <p style={{ margin: '4px 0' }}><strong>Ends:</strong> {(() => {
+                    if (!selectedBookingTime) return '—';
+                    const [hours, minutes] = selectedBookingTime.split(':').map(Number);
+                    const total = hours * 60 + minutes + Number(bookingDuration);
+                    const endHour = Math.floor(total / 60) % 24;
+                    const endMinute = total % 60;
+                    return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}${total >= 1440 ? ' (next day)' : ''}`;
+                  })()} Eastern Time</p>
+                  <p className="muted" style={{ margin: '8px 0 0' }}>The other person must respond before the session is confirmed.</p>
+                </div>
+                <button type="submit" disabled={bookingBusy || bookingContacts.length === 0 || availabilityLoading || !selectedBookingTime}>{bookingBusy ? 'Submitting...' : role === 'PARENT' ? 'Send session request' : 'Send proposal to parent'}</button>
                 {bookingError && <p role="alert" className="error">{bookingError}</p>}
               </form>
             )}
-            {bookingNotice && <p role="status" style={{ color: '#15803d' }}>{bookingNotice}</p>}
+            {bookingNotice && (
+              <div role="status" style={{ marginTop: 12, padding: 16, border: '1px solid #86b89b', borderRadius: 8 }}>
+                <p style={{ marginTop: 0, fontWeight: 700, color: '#166534' }}>{reusedBooking ? 'Existing session found — no duplicate created' : `Session ${role === 'PARENT' ? 'request' : 'proposal'} sent successfully`}</p>
+                <p>{bookingNotice}</p>
+                <p className="muted">{reusedBooking
+                  ? existingBookingStatus === 'PAID'
+                    ? 'This session is already paid and confirmed. No new payment or booking was created.'
+                    : existingBookingStatus === 'PENDING_PAYMENT'
+                      ? 'This session is awaiting payment. No new payment or booking was created.'
+                      : existingBookingStatus === 'CHANGE_REQUESTED'
+                        ? 'The requested time change is still awaiting the tutor’s response. No duplicate was created.'
+                        : 'The existing proposal is still awaiting a response. No duplicate was created.'
+                  : 'This is not yet a confirmed paid session. The recipient needs to respond before the booking can move forward.'}</p>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <a className="button" href={`/dashboard/bookings?${createdBookingId ? `booking=${encodeURIComponent(createdBookingId)}` : 'tab=waiting'}`}>{reusedBooking && existingBookingStatus === 'PENDING_PAYMENT' && role === 'PARENT' ? 'Review payment in My Sessions' : reusedBooking && existingBookingStatus === 'PAID' ? 'View confirmed session' : reusedBooking && existingBookingStatus === 'CHANGE_REQUESTED' ? 'Review requested change' : 'Track in My Sessions'}</a>
+                  <button type="button" onClick={() => {
+                    setBookingNotice('');
+                    setCreatedBookingId('');
+                    setReusedBooking(false);
+                    setExistingBookingStatus('');
+                    setBookingError('');
+                    // Default repeat sessions to the following week to avoid
+                    // accidentally proposing the same date and time twice.
+                    const [year, monthNumber, day] = selectedDate.split('-').map(Number);
+                    const nextWeek = new Date(Date.UTC(year, monthNumber - 1, day + 7));
+                    const nextDate = nextWeek.toISOString().slice(0, 10);
+                    calendarDateInitialized.current = true;
+                    setSelectedDate(nextDate);
+                    setMonth({ year: nextWeek.getUTCFullYear(), monthNumber: nextWeek.getUTCMonth() + 1 });
+                    setShowBookingForm(true);
+                    window.requestAnimationFrame(() => document.getElementById('calendar-booking-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+                  }}>Schedule another session</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1030,12 +1275,15 @@ export default function SessionCalendar({
                     >
                       {expandedBookingId === booking.id ? 'Hide details' : 'View details'}
                     </button>
-                    {booking.inquiryId && (
+                    {booking.inquiryId && !['CANCELLED', 'REFUNDED'].includes(booking.status) && (
                       <button type="button" onClick={() => openBooking(booking)}>
                         {role === 'TUTOR' ? 'Manage session / message parent' : 'Manage session / message tutor'}
                       </button>
                     )}
                   </div>
+                  {role === 'PARENT' && booking.status === 'PENDING_PAYMENT' && (
+                    <DirectPaymentButton bookingId={booking.id} amount={money(booking.amountCents)} />
+                  )}
                   {calendarFeedback[booking.id] && (
                     <p role={calendarFeedback[booking.id].kind === 'error' ? 'alert' : 'status'} style={{ marginTop: 10, padding: '10px 12px', borderRadius: 6, background: calendarFeedback[booking.id].kind === 'error' ? '#fef2f2' : '#f0fdf4', color: calendarFeedback[booking.id].kind === 'error' ? '#b42318' : '#166534' }}>
                       {calendarFeedback[booking.id].message}

@@ -215,7 +215,6 @@ export default function InquiryForm({
             <textarea
               className="field"
               required
-              minLength={20}
               maxLength={1800}
               rows={4}
               value={message}
@@ -238,7 +237,7 @@ export default function InquiryForm({
           <button disabled={busy}>
             {busy
               ? 'Sending…'
-              : 'Send free inquiry'}
+              : 'Send inquiry'}
           </button>
         </form>
       )}

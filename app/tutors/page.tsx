@@ -417,7 +417,7 @@ export default async function Tutors({
             </details>
 
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #ddd' }}>
-              <p className="muted">Send a free inquiry to discuss tutoring and scheduling. No payment required.</p>
+              <p className="muted">Send an inquiry to discuss tutoring and scheduling. No payment required.</p>
 
               <InquiryForm
                 tutorId={tutor.id}

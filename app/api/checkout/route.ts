@@ -19,6 +19,7 @@ type StripeCheckoutSession = {
   currency?: string;
   metadata?: {
     bookingId?: string;
+    chargeModel?: string;
   };
   error?: {
     code?: string;
@@ -38,7 +39,6 @@ async function retrieveSession(
         method: 'GET',
         headers: {
           Authorization: `Bearer ${secretKey}`,
-          'Stripe-Account': accountId,
         },
         cache: 'no-store',
       }
@@ -138,6 +138,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // Approval can be revoked after a booking was proposed. Never allow a
+  // new checkout for a tutor whose verification is no longer approved.
+  if (booking.tutor.verification !== 'APPROVED') {
+    return fail(
+      'This tutor is not currently approved to accept bookings. Please contact support.',
+      409
+    );
+  }
+
   if (!getActiveTutorStripeAccountId(booking.tutor)) {
     return fail(
       'This tutor has not completed payment setup. Please try again after the tutor connects Stripe.',
@@ -169,8 +178,8 @@ export async function POST(req: Request) {
 
   const accountId = getActiveTutorStripeAccountId(booking.tutor)!;
 
-  // Do not start Checkout unless Stripe confirms card payments are active.
-  // Payout restrictions alone do not prevent card payments.
+  // Destination charges require an eligible connected account to receive transfers.
+  // Verify this independently during Stripe sandbox testing.
   if (!(await tutorCanAcceptCardPayments(accountId, secretKey))) {
     return fail(
       'This tutor cannot accept card payments right now. Please try another tutor or contact support.',
@@ -204,6 +213,7 @@ export async function POST(req: Request) {
 
     const matchesBooking =
       existing.metadata?.bookingId === booking.id &&
+      existing.metadata?.chargeModel === 'destination' &&
       existing.amount_total === booking.amountCents &&
       existing.currency?.toLowerCase() === 'cad';
 
@@ -215,7 +225,7 @@ export async function POST(req: Request) {
     }
 
     if (
-      existing.status === 'open' &&
+      matchesBooking && existing.status === 'open' &&
       typeof existing.url === 'string' &&
       existing.url.startsWith('https://checkout.stripe.com/') &&
       typeof existing.expires_at === 'number' &&
@@ -228,7 +238,7 @@ export async function POST(req: Request) {
     }
 
     if (
-      existing.status !== 'expired' &&
+      !matchesBooking || existing.status !== 'expired' &&
       !(
         existing.status === 'open' &&
         typeof existing.expires_at === 'number' &&
@@ -273,9 +283,13 @@ export async function POST(req: Request) {
     // Only allow our own preview domains as Stripe return destinations.
     // A checkout launched on a stable branch alias must return to that
     // same alias, otherwise the parent loses their session cookie.
+    const isLegacyPreviewHost =
+      parsedUrl.hostname.startsWith('essex-tutor-connect-') &&
+      parsedUrl.hostname.endsWith('-essex-tutors.vercel.app');
+    const isStablePreviewHost =
+      parsedUrl.hostname === 'we-learn-stripe-preview.vercel.app';
     if (process.env.VERCEL_ENV === 'preview' &&
-        !(parsedUrl.hostname.startsWith('essex-tutor-connect-') &&
-          parsedUrl.hostname.endsWith('-essex-tutors.vercel.app'))) {
+        !(isLegacyPreviewHost || isStablePreviewHost)) {
       throw new Error('Unexpected preview checkout origin');
     }
 
@@ -317,11 +331,16 @@ export async function POST(req: Request) {
   );
   form.set('line_items[0][quantity]', '1');
 
+  // Destination charge: WE Learn is the merchant of record for Stripe fees.
+  // The tutor receives 85% before any separate adjustments.
+  form.set('payment_intent_data[transfer_data][destination]', accountId);
   form.set(
     'payment_intent_data[application_fee_amount]',
     String(booking.platformFeeCents)
   );
   form.set('metadata[bookingId]', booking.id);
+  form.set('metadata[chargeModel]', 'destination');
+  form.set('payment_intent_data[metadata][chargeModel]', 'destination');
   form.set(
     'payment_intent_data[metadata][bookingId]',
     booking.id
@@ -338,10 +357,9 @@ export async function POST(req: Request) {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${secretKey}`,
-          'Stripe-Account': accountId,
           'Content-Type': 'application/x-www-form-urlencoded',
           'Idempotency-Key':
-            `checkout-${booking.id}-${windowNumber}`,
+            `destination-checkout-${booking.id}-${windowNumber}`,
         },
         body: form.toString(),
         cache: 'no-store',

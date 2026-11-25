@@ -1,20 +1,26 @@
 import { db } from './db';
-import { notifyBooking } from './email';
+import { notifyBooking, queueExpirationNotifications } from './email';
 import { getActiveTutorStripeAccountId, getConfiguredStripeSecret } from './stripe-config';
 
 const STRIPE = 'https://api.stripe.com/v1';
 export const PAYMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-// Existing reservations with no deadline are intentionally grandfathered.
+// Preserve legacy future bookings without deadlines, but clean up unpaid sessions once their start time has passed.
 export async function expireUnpaidBookings(tutorId?: string) {
   const now = new Date();
   const bookings = await db.booking.findMany({
     where: {
       status: 'PENDING_PAYMENT',
-      paymentDueAt: { lte: now },
+      OR: [
+        { paymentDueAt: { lte: now } },
+        { startsAt: { lte: now } },
+      ],
       ...(tutorId ? { tutorId } : {}),
     },
-    include: { tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true } } },
+    include: {
+      parent: { select: { email: true } },
+      tutor: { select: { stripeAccountId: true, stripeLiveAccountId: true, user: { select: { email: true } } } },
+    },
     take: 100,
   });
   let expired = 0;
@@ -24,18 +30,25 @@ export async function expireUnpaidBookings(tutorId?: string) {
     if (booking.stripeSessionId) {
       const secret = getConfiguredStripeSecret();
       const account = getActiveTutorStripeAccountId(booking.tutor);
-      if (!secret || !account) { deferred++; continue; }
+      if (!secret) { deferred++; continue; }
       try {
-        const headers = {
-          Authorization: `Bearer ${secret}`,
-          'Stripe-Account': account,
-        };
-        const response = await fetch(
+        // Destination charges live on the platform; legacy direct charges
+        // live on the connected tutor account.
+        const headers = { Authorization: `Bearer ${secret}` };
+        let sessionResponse = await fetch(
           `${STRIPE}/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
           { headers, cache: 'no-store' }
         );
-        if (!response.ok) { deferred++; continue; }
-        const session = await response.json();
+        let sessionAccount: string | null = null;
+        if (!sessionResponse.ok && account) {
+          sessionResponse = await fetch(
+            `${STRIPE}/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}`,
+            { headers: { ...headers, 'Stripe-Account': account }, cache: 'no-store' }
+          );
+          sessionAccount = account;
+        }
+        if (!sessionResponse.ok) { deferred++; continue; }
+        const session = await sessionResponse.json();
         // Do not cancel or expire a Stripe session that is not provably
         // associated with this booking, amount and connected account.
         if (
@@ -62,7 +75,7 @@ export async function expireUnpaidBookings(tutorId?: string) {
         if (session.status === 'open') {
           const expire = await fetch(
             `${STRIPE}/checkout/sessions/${encodeURIComponent(booking.stripeSessionId)}/expire`,
-            { method: 'POST', headers, cache: 'no-store' }
+            { method: 'POST', headers: sessionAccount ? { ...headers, 'Stripe-Account': sessionAccount } : headers, cache: 'no-store' }
           );
           if (!expire.ok) { deferred++; continue; }
           const expiredSession = await expire.json();
@@ -85,16 +98,28 @@ export async function expireUnpaidBookings(tutorId?: string) {
         continue;
       }
     }
-    const result = await db.booking.updateMany({
-      where: {
-        id: booking.id,
-        status: 'PENDING_PAYMENT',
-        // A new checkout session may have been attached while we checked Stripe.
-        // Never cancel that newer attempt based on an older session's state.
-        stripeSessionId: booking.stripeSessionId,
-        paymentDueAt: { lte: now },
-      },
-      data: { status: 'CANCELLED' },
+    const result = await db.$transaction(async tx => {
+      const updated = await tx.booking.updateMany({
+        where: {
+          id: booking.id,
+          status: 'PENDING_PAYMENT',
+          // A new checkout session may have been attached while we checked Stripe.
+          // Never cancel that newer attempt based on an older session's state.
+          stripeSessionId: booking.stripeSessionId,
+          OR: [
+            { paymentDueAt: { lte: now } },
+            { startsAt: { lte: now } },
+          ],
+        },
+        data: { status: 'EXPIRED' },
+      });
+      if (updated.count) {
+        await queueExpirationNotifications(tx, booking.id, {
+          parent: booking.parent.email,
+          tutor: booking.tutor.user.email,
+        });
+      }
+      return updated;
     });
     expired += result.count;
     if (result.count) {

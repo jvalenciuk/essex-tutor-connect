@@ -5,7 +5,7 @@ const steps = [
   { number: '01', title: 'Explore tutors', description: 'Filter approved profiles by subject, grade, location, price and online availability.' },
   { number: '02', title: 'Ask a question', description: 'Send a tutor an inquiry about your learning goals. There is no charge to inquire.' },
   { number: '03', title: 'Choose a time', description: 'Review a proposed session or request a different time before you commit.' },
-  { number: '04', title: 'Confirm and learn', description: 'Pay securely, manage your sessions, and rebook your tutor from your dashboard.' },
+  { number: '04', title: 'Confirm and learn', description: 'Pay securely after agreeing on a time. Book the same tutor again from your dashboard.' },
 ];
 
 export default function Home() {
@@ -14,16 +14,17 @@ export default function Home() {
       <section className="hero home-hero">
         <div className="home-hero-copy">
           <p className="home-eyebrow">LOCAL TUTORING · WINDSOR & ESSEX COUNTY</p>
-          <h1>Local tutors. Stronger futures.</h1>
-          <p className="home-lead">Find the right tutor. Build confidence. Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you.</p>
+          <h1>WE Learn. Local tutors. Stronger futures.</h1>
+          <p className="home-lead">Find the right tutor. Build confidence. Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you. Already have a tutor? Rebook directly from your dashboard.</p>
           <div className="home-hero-actions">
             <Link className="button" href="/tutors">Find a tutor</Link>
             <Link className="home-outline-button" href="/register?role=tutor">Become a tutor</Link>
+            <Link className="home-outline-button" href="/dashboard">Book again</Link>
           </div>
           <p className="home-small-note">Browsing tutor profiles and sending inquiries is free.</p>
         </div>
         <div className="home-hero-side" aria-label="How tutoring works">
-          <Image src="/we-learn-logo.webp" alt="WE Learn logo featuring Windsor–Essex, the Gordie Howe bridge and an open book" width={260} height={260} className="home-brand-logo" priority />
+          <Image src="/WE%20Learn%20Logo-%20Version%202.png" alt="WE Learn logo featuring Windsor–Essex, the Gordie Howe bridge and an open book" width={260} height={260} className="home-brand-logo" priority />
           <div className="home-highlight"><span>1</span><div><strong>Find your match</strong><small>Search by subject, grade and budget</small></div></div>
           <div className="home-highlight"><span>2</span><div><strong>Connect directly</strong><small>Discuss goals and scheduling</small></div></div>
           <div className="home-highlight"><span>3</span><div><strong>Book with confidence</strong><small>Pay securely after agreeing on a time</small></div></div>

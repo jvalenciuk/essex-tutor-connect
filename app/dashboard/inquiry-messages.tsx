@@ -53,6 +53,25 @@ export default function InquiryMessages({
     loadMessages();
   }, [loadMessages, refreshCount]);
 
+  useEffect(() => {
+    const panel = document.querySelector('[data-message-panel] [data-message-inquiry="' + inquiryId + '"]')?.closest('details');
+    if (!panel) return;
+    const markRead = async () => {
+      if (!(panel instanceof HTMLDetailsElement) || !panel.open) return;
+      try {
+        const response = await fetch('/api/messages/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ inquiryIds: ids.split(',') }),
+        });
+        if (response.ok) window.dispatchEvent(new Event('we-learn-messages-read'));
+      } catch { /* Reading messages still works if acknowledgement fails. */ }
+    };
+    panel.addEventListener('toggle', markRead);
+    if ((panel as HTMLDetailsElement).open) void markRead();
+    return () => panel.removeEventListener('toggle', markRead);
+  }, [ids, inquiryId]);
+
   async function sendMessage(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -88,6 +107,7 @@ export default function InquiryMessages({
 
   return (
     <section
+      data-message-inquiry={inquiryId}
       style={{
         marginTop: '20px',
         paddingTop: '16px',

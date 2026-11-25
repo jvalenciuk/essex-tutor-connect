@@ -1,6 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
@@ -8,9 +11,14 @@ import { useState, type FormEvent } from 'react';
 
 function LoginForm() {
   const params = useSearchParams();
+  const router = useRouter();
+  const { status } = useSession();
+  useEffect(() => { if (status === 'authenticated') router.replace('/dashboard'); }, [status, router]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const registered = params.get('registered') === '1';
+  const verificationRequired = params.get('verification') === 'required';
+  const deliveryFailed = params.get('delivery') === 'failed';
   const tutor = params.get('role') === 'tutor';
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -37,6 +45,8 @@ function LoginForm() {
     }
   }
 
+  if (status === 'loading' || status === 'authenticated') return <main className="signup-page"><p>Checking your account...</p></main>;
+
   return (
     <main className="signup-page">
       <div className="signup-heading">
@@ -44,6 +54,7 @@ function LoginForm() {
         <p className="muted">Sign in to manage your tutoring sessions and messages.</p>
       </div>
       <form className="card signup-form" onSubmit={submit}>
+        {verificationRequired && <p className={deliveryFailed ? 'error' : 'signup-success'} role="status">{deliveryFailed ? 'Your account was created, but the verification email could not be delivered. Use the verification link request page.' : 'Account created. Please verify your email before signing in.'}</p>}
         {registered && <p className="signup-success" role="status">Account created! Sign in with your new email and password.{tutor ? ' Next, you can complete your tutor profile.' : ''}</p>}
         <label htmlFor="login-email">Email address</label>
         <input id="login-email" className="field" type="email" name="email" autoComplete="email" required />
@@ -51,6 +62,8 @@ function LoginForm() {
         <input id="login-password" className="field" type="password" name="password" autoComplete="current-password" required />
         {error && <p className="error" role="alert">{error}</p>}
         <button disabled={busy} type="submit" className="signup-submit">{busy ? 'Signing in...' : 'Sign in'}</button>
+        <p className="signup-signin"><Link href="/resend-verification">Need another verification link?</Link></p>
+        <p className="signup-signin"><Link href="/forgot-password">Forgot your password?</Link></p>
         <p className="signup-signin">New to WE Learn? <Link href="/register">Create an account</Link></p>
       </form>
     </main>
