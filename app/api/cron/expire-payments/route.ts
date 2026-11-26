@@ -51,6 +51,13 @@ export async function GET(req: Request) {
       where: { status: 'PROPOSED', startsAt: { lte: now } },
       data: { status: 'EXPIRED' },
     });
+    console.info('Booking expiration run', {
+      scanned: expiration.scanned,
+      expired: expiration.expired,
+      deferred: expiration.deferred,
+      expiredProposals: proposals.count,
+      notificationRetryScanSucceeded: notificationRetries !== null,
+    });
     return Response.json({ success: true, expiration, expiredProposals: proposals.count, notificationRetries }, {
       headers: { 'Cache-Control': 'no-store' },
     });
