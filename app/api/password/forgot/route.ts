@@ -10,6 +10,9 @@ const generic = { message: 'If an account exists, password reset instructions wi
 export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Enter a valid email address.' }, { status: 400 });
+  const config = accountEmailConfig();
+  if (!config) return Response.json({ error: 'Password reset is temporarily unavailable while account email is being configured.' }, { status: 503 });
+
   const email = parsed.data.email.toLowerCase();
   // Atomic database-backed limit: at most 3 reset requests per email each hour.
   // The same generic response is used for unknown accounts and throttled requests.
@@ -29,9 +32,6 @@ export async function POST(req: Request) {
   if ((attempts[0]?.attempts ?? 4) > 3) return Response.json(generic);
   const user = await db.user.findUnique({ where: { email }, select: { id: true, passwordHash: true } });
   if (!user) return Response.json(generic);
-
-  const config = accountEmailConfig();
-  if (!config) return Response.json(generic);
 
   try {
     const link = new URL('/reset-password', config.origin);

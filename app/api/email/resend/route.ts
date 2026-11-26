@@ -1,3 +1,4 @@
+import { accountEmailConfig } from '../../../../lib/account-email';
 import { db } from '../../../../lib/db';
 import { sendVerificationEmail } from '../../../../lib/email-verification';
 import { createHash } from 'node:crypto';
@@ -8,6 +9,8 @@ const generic = { message: 'If the account requires verification, a new link wil
 export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Enter a valid email address.' }, { status: 400 });
+  if (!accountEmailConfig()) return Response.json({ error: 'Verification emails are temporarily unavailable while account email is being configured.' }, { status: 503 });
+
   const email = parsed.data.email.toLowerCase();
   const key = createHash('sha256').update('verify:' + email).digest('hex');
   const attempts = await db.$queryRaw<Array<{ attempts: number }>>`
