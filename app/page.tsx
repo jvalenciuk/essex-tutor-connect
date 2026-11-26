@@ -1,79 +1,105 @@
-import Link from 'next/link';
 import Image from 'next/image';
+import Link from 'next/link';
+import { accountEmailConfig } from '../lib/account-email';
+import { getPublishedTutors, tutorFilterOptions } from '../lib/public-tutors';
+import './tutor-discovery.css';
+
+export const dynamic = 'force-dynamic';
 
 const steps = [
-  { number: '01', title: 'Explore tutors', description: 'Filter approved profiles by subject, grade, location, price and online availability.' },
-  { number: '02', title: 'Ask a question', description: 'Send a tutor an inquiry about your learning goals. There is no charge to inquire.' },
-  { number: '03', title: 'Choose a time', description: 'Review a proposed session or request a different time before you commit.' },
-  { number: '04', title: 'Confirm and learn', description: 'Pay securely after agreeing on a time. Book the same tutor again from your dashboard.' },
+  { title: 'Find a tutor', description: 'Compare subjects, grades, hourly rates and availability.' },
+  { title: 'Ask a question', description: 'Message a tutor about your learning goals. It’s free to inquire.' },
+  { title: 'Agree on a time', description: 'Review the proposed time before you commit to a session.' },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const tutors = await getPublishedTutors();
+  const subjects = tutorFilterOptions(tutors.map(tutor => tutor.subjects));
+  const grades = tutorFilterOptions(tutors.map(tutor => tutor.grades));
+  const canRegister = Boolean(accountEmailConfig());
+
+  const shortcuts = [
+    { label: 'Grade 7 math', match: tutors.flatMap(tutor => tutor.subjects.flatMap(subject =>
+      /math/i.test(subject) ? tutor.grades.filter(grade => /^(grade\s*)?7$/i.test(grade.trim())).map(grade => ({ subject, grade })) : []))[0] },
+    { label: 'French immersion', match: subjects.find(subject => /french immersion/i.test(subject)) },
+    { label: 'High school science', match: tutors.flatMap(tutor => tutor.subjects.flatMap(subject =>
+      /science/i.test(subject) ? tutor.grades.filter(grade => /^(grade\s*)?(9|10|11|12)$/i.test(grade.trim())).map(grade => ({ subject, grade })) : []))[0] },
+  ];
+
   return (
-    <main className="home-page">
-      <section className="hero home-hero">
-        <div className="home-hero-copy">
-          <p className="home-eyebrow">LOCAL TUTORING · WINDSOR & ESSEX COUNTY</p>
-          <h1>WE Learn. Local tutors. Stronger futures.</h1>
-          <p className="home-lead">Find the right tutor. Build confidence. Discover tutoring in math, French, English, science and more. Compare local tutors, ask questions, and choose a session that works for you. Already have a tutor? Rebook directly from your dashboard.</p>
-          <div className="home-hero-actions">
-            <Link className="button" href="/tutors">Find a tutor</Link>
-            <Link className="home-outline-button" href="/register?role=tutor">Become a tutor</Link>
-            <Link className="home-outline-button" href="/dashboard">Book again</Link>
+    <main className="discovery-home">
+      <section className="discovery-hero" aria-labelledby="discovery-title">
+        <div className="discovery-hero-copy">
+          <p className="discovery-location">Tutoring in Windsor &amp; Essex County</p>
+          <h1 id="discovery-title">Local tutors.<br />Stronger futures.</h1>
+          <p className="discovery-lead">Find a tutor who teaches your child’s subject and grade, online or close to home.</p>
+          <form className="discovery-search" action="/tutors" method="get" aria-label="Find a tutor">
+            <label>Subject<select className="field" name="subject">
+              <option value="">Any subject</option>
+              {subjects.map(subject => <option key={subject}>{subject}</option>)}
+            </select></label>
+            <label>Grade<select className="field" name="grade">
+              <option value="">Any grade</option>
+              {grades.map(grade => <option key={grade} value={grade}>{/^\d+$/.test(grade) ? `Grade ${grade}` : grade}</option>)}
+            </select></label>
+            <button type="submit">Find tutors</button>
+          </form>
+          <p className="discovery-returning">Already have a tutor? <Link href="/dashboard">Book again</Link> <Link href="/dashboard/bookings">My Sessions</Link></p>
+        </div>
+        <div className="discovery-photo">
+          <Image src="/we-learn-tutoring.webp" alt="A tutor and a student working through a problem together" fill sizes="(max-width: 800px) 100vw, 45vw" priority />
+        </div>
+      </section>
+
+      {tutors.length > 0 && (
+        <section className="discovery-section" aria-labelledby="discover-tutors">
+          <div className="discovery-heading">
+            <h2 id="discover-tutors">Meet local tutors</h2>
+            <Link href="/tutors">View all tutors <span aria-hidden="true">→</span></Link>
           </div>
-          <p className="home-small-note">Browsing tutor profiles and sending inquiries is free.</p>
-        </div>
-        <div className="home-hero-side" aria-label="How tutoring works">
-          <Image src="/WE%20Learn%20Logo-%20Version%202.png" alt="WE Learn logo featuring Windsor–Essex, the Gordie Howe bridge and an open book" width={260} height={260} className="home-brand-logo" priority />
-          <div className="home-highlight"><span>1</span><div><strong>Find your match</strong><small>Search by subject, grade and budget</small></div></div>
-          <div className="home-highlight"><span>2</span><div><strong>Connect directly</strong><small>Discuss goals and scheduling</small></div></div>
-          <div className="home-highlight"><span>3</span><div><strong>Book with confidence</strong><small>Pay securely after agreeing on a time</small></div></div>
-        </div>
-      </section>
+          <div className="discovery-shortcuts" aria-label="Quick tutor searches">
+            {shortcuts.map(({ label, match }) => match && (
+              <Link key={label} href={{ pathname: '/tutors', query: typeof match === 'string' ? { subject: match } : match }}>{label}</Link>
+            ))}
+            {tutors.some(tutor => tutor.online) && <Link href="/tutors?online=yes">Online tutoring</Link>}
+            {subjects.slice(0, 4).map(subject => <Link key={subject} href={{ pathname: '/tutors', query: { subject } }}>{subject}</Link>)}
+          </div>
+          <div className="discovery-card-grid">
+            {tutors.slice(0, 3).map(tutor => (
+              <article className="discovery-card" key={tutor.id}>
+                <div className="discovery-card-top">
+                  <h3>{tutor.user.name}</h3>
+                  <p><strong>${(tutor.hourlyRateCents / 100).toFixed(2)}</strong> <small>CAD/hr</small></p>
+                </div>
+                <p>{tutor.subjects.slice(0, 4).join(' · ')}</p>
+                <p className="muted">{tutor.cities.slice(0, 3).join(', ')}{tutor.online ? ' · Online available' : ''}</p>
+                <Link className="discovery-profile-link" href={{ pathname: '/tutors', query: { profile: tutor.id }, hash: `tutor-${tutor.id}` }}>View profile<span className="sr-only"> for {tutor.user.name}</span> <span aria-hidden="true">→</span></Link>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section className="home-benefits" aria-label="Platform benefits">
-        <div><strong>Local focus</strong><p>Windsor, LaSalle, Tecumseh and Essex County</p></div>
-        <div><strong>Flexible learning</strong><p>Explore in-person and online options</p></div>
-        <div><strong>Clear pricing</strong><p>Compare hourly rates before contacting tutors</p></div>
-      </section>
-
-      <section className="home-section" id="how-it-works">
-        <div className="home-section-heading">
-          <div><p className="home-section-kicker">SIMPLE FROM START TO FINISH</p><h2>How it works</h2></div>
+      <section className="discovery-section" id="how-it-works" aria-labelledby="discovery-steps">
+        <div className="discovery-heading">
+          <h2 id="discovery-steps">How it works</h2>
           <Link href="/how-it-works">Booking and payment details</Link>
         </div>
-        <div className="home-step-grid">
-          {steps.map(step => <article className="card home-step" key={step.number}>
-            <span className="home-step-number">{step.number}</span>
-            <h3>{step.title}</h3>
-            <p>{step.description}</p>
-          </article>)}
-        </div>
+        <ol className="discovery-steps">
+          {steps.map(step => <li key={step.title}><h3>{step.title}</h3><p>{step.description}</p></li>)}
+        </ol>
       </section>
 
-      <section className="home-audience-grid">
-        <article className="card home-audience-card">
-          <p className="home-section-kicker">FOR FAMILIES</p>
-          <h2>Personalized support starts here</h2>
-          <p>Browse tutor qualifications, subjects, grades and published availability. Message a tutor before booking, then easily schedule more sessions with the same tutor from your dashboard.</p>
-          <Link className="button" href="/tutors">Explore tutors</Link>
-        </article>
-        <article className="card home-audience-card">
-          <p className="home-section-kicker">FOR TUTORS</p>
-          <h2>Share your expertise locally</h2>
-          <p>Create a profile, set your hourly rate and availability, and manage inquiries and sessions from your dashboard. Approval is required before your profile appears in search.</p>
-          <Link className="home-dark-button" href="/register?role=tutor">Create a tutor account</Link>
-        </article>
-      </section>
-
-      <section className="card home-trust">
+      <section className="discovery-section discovery-bottom" aria-label="Tutoring and safety">
         <div>
-          <p className="home-section-kicker">BOOKING WITH CONFIDENCE</p>
-          <h2>Know what to expect</h2>
-          <p>Tutor profiles are reviewed before publication. Secure payments are processed through Stripe, and your bookings appear in your account.</p>
-          <p className="muted">Profile approval does not guarantee credentials, suitability or a completed background check. Families should make their own assessment before booking.</p>
+          <h2>Teach with WE Learn</h2>
+          {canRegister ? <Link href="/register?role=tutor">Create a tutor account</Link> : <p>Tutor registration is temporarily paused. <Link href="/login">Existing tutors can sign in.</Link></p>}
         </div>
-        <Link href="/how-it-works">Learn about payments and safety</Link>
+        <div>
+          <h2>Booking with confidence</h2>
+          <p>Tutor profiles are reviewed before publication. Ask about experience and credentials to find the right fit for your family.</p>
+          <Link href="/how-it-works">Learn about payments and safety</Link>
+        </div>
       </section>
     </main>
   );

@@ -1,5 +1,6 @@
 
-import { db } from '../../lib/db';
+import { getPublishedTutors, tutorFilterOptions } from '../../lib/public-tutors';
+import '../tutor-discovery.css';
 import InquiryForm from './inquiry-form';
 import TutorAvailability from './tutor-availability';
 
@@ -14,23 +15,8 @@ type Filters = {
   online?: string;
   maxRate?: string;
   sort?: string;
+  profile?: string;
 };
-
-function uniqueOptions(values: string[][]): string[] {
-  return Array.from(
-    new Set(
-      values
-        .flat()
-        .map(value => value.trim())
-        .filter(Boolean)
-    )
-  ).sort((a, b) =>
-    a.localeCompare(b, 'en-CA', {
-      numeric: true,
-      sensitivity: 'base',
-    })
-  );
-}
 
 function Tags({ items }: { items: string[] }) {
   if (!items.length) {
@@ -55,50 +41,21 @@ export default async function Tutors({
 }) {
   const q = await searchParams;
 
-  // Load approved profiles once, so dropdown choices
-  // always reflect the tutors currently on the site.
-  const approvedTutors = await db.tutorProfile.findMany({
-    where: {
-      verification: 'APPROVED',
-    },
-    include: {
-      user: {
-        select: {
-          name: true,
-        },
-      },
-    },
-    orderBy: {
-      hourlyRateCents: 'asc',
-    },
-  });
+  const publishedTutors = await getPublishedTutors();
 
-  // Do not advertise an approved account that still lacks the minimum
-  // parent-facing profile details or a valid published hourly price.
-  const publishedTutors = approvedTutors.filter(tutor =>
-    tutor.bio.trim().length >= 30 &&
-    tutor.qualifications.trim().length >= 10 &&
-    tutor.subjects.length > 0 &&
-    tutor.grades.length > 0 &&
-    tutor.cities.length > 0 &&
-    tutor.languages.length > 0 &&
-    tutor.hourlyRateCents >= 2000 &&
-    tutor.hourlyRateCents <= 30000
-  );
-
-  const subjects = uniqueOptions(
+  const subjects = tutorFilterOptions(
     publishedTutors.map(tutor => tutor.subjects)
   );
 
-  const languages = uniqueOptions(
+  const languages = tutorFilterOptions(
     publishedTutors.map(tutor => tutor.languages)
   );
 
-  const grades = uniqueOptions(
+  const grades = tutorFilterOptions(
     publishedTutors.map(tutor => tutor.grades)
   );
 
-  const cities = uniqueOptions(
+  const cities = tutorFilterOptions(
     publishedTutors.map(tutor => tutor.cities)
   );
 
@@ -181,7 +138,7 @@ export default async function Tutors({
     .slice(0, 100);
 
   return (
-    <main style={{ maxWidth: 1150, margin: '0 auto' }}>
+    <main className="discovery-directory">
       <h1>Find your tutor</h1>
 
       <p className="muted">
@@ -191,10 +148,7 @@ export default async function Tutors({
 
       <form
         method="GET"
-        className="card"
-        style={{
-          marginBottom: 24,
-        }}
+        className="card discovery-filters"
       >
         <h2 style={{ marginTop: 0 }}>Find the right match</h2>
 
@@ -348,82 +302,33 @@ export default async function Tutors({
           : ''}
       </p>
 
-      <div
-        style={{
-          display: 'grid',
-          gap: 20,
-        }}
-      >
+      <div className="discovery-card-grid">
         {tutors.map(tutor => (
-          <article
-            className="card tutor-result-card"
-            key={tutor.id}
-            style={{
-              minWidth: 0,
-              overflowWrap: 'anywhere',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: 12,
-                flexWrap: 'wrap',
-              }}
-            >
+          <article className="discovery-card tutor-result-card" key={tutor.id} id={`tutor-${tutor.id}`}>
+            <div className="discovery-card-top">
               <div>
-                <h2 style={{ marginBottom: 6 }}>
-                  {tutor.user.name}
-                </h2>
-
-                <p className="muted">
-                  {tutor.cities.join(', ')}
-                </p>
+                <h2>{tutor.user.name}</h2>
+                <p className="muted">{tutor.cities.join(', ')}</p>
               </div>
-
-              <div>
-                <strong style={{ fontSize: '1.3rem' }}>
-                  ${(tutor.hourlyRateCents / 100).toFixed(2)}
-                </strong>
-
-                <div className="muted">
-                  CAD per hour
-                </div>
-              </div>
+              <p><strong>${(tutor.hourlyRateCents / 100).toFixed(2)}</strong> <small>CAD/hr</small></p>
             </div>
-
-            <p>
-              {tutor.online
-                ? 'Online tutoring available'
-                : 'Contact tutor about session location'}
-            </p>
-
-            <p style={{ whiteSpace: 'pre-wrap', marginTop: 12 }}>{tutor.bio}</p>
-
-            <div className="tutor-quick-facts">
+            <p className="discovery-format">{tutor.online ? 'Online available' : 'Ask about session location'}</p>
+            <div className="discovery-facts">
               <div><strong>Subjects</strong><Tags items={tutor.subjects} /></div>
               <div><strong>Grades</strong><Tags items={tutor.grades} /></div>
               <div><strong>Languages</strong><Tags items={tutor.languages} /></div>
             </div>
-
-            <details className="tutor-more-details">
-              <summary>Qualifications, experience and availability</summary>
-              <h3>Qualifications and experience</h3>
-              <p style={{ whiteSpace: 'pre-wrap' }}>
-                {tutor.qualifications || 'Contact this tutor for details.'}
-              </p>
-              <TutorAvailability tutorId={tutor.id} />
+            <details className="discovery-details" open={q.profile === tutor.id ? true : undefined}>
+              <summary>View profile <span className="sr-only">for {tutor.user.name}</span></summary>
+              <div className="discovery-profile-detail">
+                <p>{tutor.bio}</p>
+                <h3>Qualifications and experience</h3>
+                <p>{tutor.qualifications}</p>
+                <TutorAvailability tutorId={tutor.id} />
+                <p className="muted">Send an inquiry to discuss tutoring and scheduling. No payment required.</p>
+                <InquiryForm tutorId={tutor.id} name={tutor.user.name} />
+              </div>
             </details>
-
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #ddd' }}>
-              <p className="muted">Send an inquiry to discuss tutoring and scheduling. No payment required.</p>
-
-              <InquiryForm
-                tutorId={tutor.id}
-                name={tutor.user.name}
-              />
-            </div>
           </article>
         ))}
 
