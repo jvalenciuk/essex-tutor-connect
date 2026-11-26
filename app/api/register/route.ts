@@ -17,6 +17,10 @@ const schema = z.object({
 export async function POST(req: Request) {
   try {
     const v = schema.parse(await req.json());
+    if (!accountEmailConfig()) {
+      return fail('New account registration is temporarily unavailable while email verification is being configured.', 503);
+    }
+
     const email = v.email.toLowerCase();
     // A shared database throttle protects across serverless instances.
     // Only accept a direct connecting address supplied by Vercel's proxy.
@@ -40,10 +44,6 @@ export async function POST(req: Request) {
 
     if (existing) {
       return fail('Email already registered', 409);
-    }
-
-    if (!accountEmailConfig()) {
-      return fail('New account registration is temporarily unavailable while email verification is being configured.', 503);
     }
 
     const passwordHash = await bcrypt.hash(v.password, 12);
