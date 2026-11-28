@@ -28,7 +28,7 @@ jobs:
             exit 1
           fi
           # Hard-coded Preview branch URL: never call Production.
-          PREVIEW_URL="https://essex-tutor-connect-git-stripe-testing-essex-tutors.vercel.app/api/cron/expire-payments"
+          PREVIEW_URL="https://we-learn-stripe-preview.vercel.app/api/cron/expire-payments"
           curl --fail-with-body --show-error --silent \
             --retry 2 --retry-delay 5 --max-time 90 \
             -H "Authorization: Bearer $PREVIEW_CRON_SECRET" \
