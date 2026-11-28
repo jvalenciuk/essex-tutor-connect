@@ -46,8 +46,8 @@ export default async function Home() {
           </form>
           <p className="discovery-returning">Already have a tutor? <Link href="/dashboard">Book again</Link> <Link href="/dashboard/bookings">My Sessions</Link></p>
         </div>
-        <div className="discovery-photo">
-          <Image src="/we-learn-tutoring.webp" alt="A tutor and a student working through a problem together" fill sizes="(max-width: 800px) 100vw, 45vw" priority />
+        <div className="discovery-brand">
+          <Image src="/WE%20Learn%20Logo-%20Version%202.png" alt="WE Learn Windsor–Essex logo" width={300} height={300} sizes="(max-width: 800px) 210px, 300px" priority />
         </div>
       </section>
 

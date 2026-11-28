@@ -4,8 +4,8 @@
 .discovery-location { color: #ffda61; font-weight: 750; margin: 0 0 16px; }
 .discovery-hero h1 { color: #fff; font-size: clamp(42px, 5.3vw, 76px); line-height: 1.02; letter-spacing: -.052em; margin: 0; }
 .discovery-lead { color: #e5eef6; max-width: 38ch; font-size: clamp(17px, 1.7vw, 21px); line-height: 1.55; margin: 18px 0 24px; }
-.discovery-photo { position: relative; min-height: 420px; background: #214464; }
-.discovery-photo img { object-fit: cover; }
+.discovery-brand { display: grid; place-items: center; min-width: 0; padding: clamp(24px, 5vw, 64px); background: #123959; }
+.discovery-brand img { display: block; width: min(100%, 300px); height: auto; background: #fff; border: 3px solid var(--maize); border-radius: 18px; }
 .discovery-search { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .8fr); align-items: end; gap: 10px 12px; }
 .discovery-search label { display: grid; min-width: 0; gap: 6px; font-size: 14px; font-weight: 700; }
 .discovery-search .field { width: 100%; margin: 0; min-height: 46px; background: #fff; color: #082b4b; }
@@ -51,7 +51,8 @@
 .discovery-home .sr-only, .discovery-directory .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 800px) {
   .discovery-hero { grid-template-columns: 1fr; }
-  .discovery-photo { min-height: 0; aspect-ratio: 16 / 9; }
+  .discovery-brand { padding: 20px; }
+  .discovery-brand img { width: min(100%, 210px); }
 }
 @media (max-width: 520px) {
   .discovery-search, .discovery-steps, .discovery-bottom { grid-template-columns: 1fr; }
